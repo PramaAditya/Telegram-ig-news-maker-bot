@@ -27,6 +27,21 @@ async function saveMessage(chatId: string, role: string, content: string) {
   });
 }
 
+async function clearChatHistory(chatId: string) {
+  await db.delete(messages).where(eq(messages.chatId, chatId));
+}
+
+bot.command('clear', async (ctx) => {
+  const chatId = ctx.chat.id.toString();
+  try {
+    await clearChatHistory(chatId);
+    await ctx.reply('Riwayat percakapan berhasil dihapus! Mari mulai topik baru.');
+  } catch (error) {
+    console.error('Error clearing history:', error);
+    await ctx.reply('Terjadi kesalahan saat menghapus riwayat.');
+  }
+});
+
 bot.on(message('text'), async (ctx) => {
   const text = ctx.message.text;
   const chatId = ctx.chat.id.toString();

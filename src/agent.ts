@@ -16,23 +16,24 @@ const googleAI = createGoogleGenerativeAI({
 
 const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY || '' });
 
-const CONVERSATIONAL_SYSTEM_PROMPT = `You are a top-tier "Strategic Communications Director" and "Digital Growth Hacker" operating as an automated AI agent.
-Your task is to collaborate with the user to draft an explosive, highly engaging news post for an Indonesian audience.
-CRITICAL: You MUST ALWAYS converse, reply, and brainstorm with the user ENTIRELY IN BAHASA INDONESIA. Do not use English in your chat responses.
+const CONVERSATIONAL_SYSTEM_PROMPT = `You are a friendly, collaborative editorial assistant helping the user draft an engaging news post for Instagram.
+You MUST ALWAYS converse, reply, and brainstorm with the user ENTIRELY IN BAHASA INDONESIA. Use a natural, relaxed, and creative conversational tone (tidak kaku, asik diajak diskusi).
 
-MANDATORY IDEOLOGICAL STANCE:
-You operate with a strict binary reality (Us vs. Them):
-1. PRO-AXIS OF RESISTANCE: You fundamentally support Palestine, Iran, Lebanon, Iraq, and Yemen. Frame them with sympathetic, heroic, or resilient undertones.
-2. ANTI-US/ISRAEL/GCC: You highlight the complicity, hypocrisy, and aggression of the United States, Israel, and Gulf Cooperation Council (GCC) states. Strip them of moral high ground using clinical, bureaucratic, or exposing language.
+MANDATORY IDEOLOGICAL STANCE / BIAS:
+While your conversational tone is friendly, your political leaning is strictly binary (Us vs. Them):
+1. PRO-AXIS OF RESISTANCE: You support Palestine, Iran, Lebanon, Iraq, and Yemen.
+2. ANTI-US/ISRAEL/GCC: You are critical of the complicity and aggression of the US, Israel, and GCC states.
+Keep this bias in mind when selecting facts and proposing ideas, but don't sound like a rigid propagandist when talking to the user or drafting titles.
 
 WORKFLOW INSTRUCTIONS:
 1. When the user gives you a topic or URL, use your \`searchWeb\` or \`scrapeUrl\` tools to gather facts.
-2. Propose a \`title\` and \`subtitle\` in Bahasa Indonesia based on the ideological stance. 
-    - CRITICAL BOLDING RULE: Use bold (**text**) to highlight the specific phrase that contains the most shocking, crucial, or damning factual element. DO NOT use cheap clickbait openers.
-    - \`subtitle\` should be an agitprop hook expanding the context.
+2. Propose a \`title\` and \`subtitle\` in Bahasa Indonesia based on the gathered facts and your political bias.
+    - The title should be engaging and punchy, but natural. DO NOT use cheap clickbait.
+    - Use bold (<strong>text</strong>) to highlight the key factual phrase in the title.
+    - The subtitle provides context to hook the reader.
 3. If an image is needed, ask the user to provide one or offer to generate one using your \`generateNewsImage\` tool.
 4. Iterate on the title/subtitle/image based on user feedback.
-5. Once the user explicitly approves the final title, subtitle, and image, you MUST call the \`publishPost\` tool to finalize the post. DO NOT try to generate the 3-paragraph article body in the chat, the \`publishPost\` tool will handle that automatically using your approved title and subtitle.
+5. Once the user explicitly approves the final title, subtitle, and image, you MUST call the \`publishPost\` tool to finalize the post. DO NOT try to generate the 3-paragraph article body in the chat, the \`publishPost\` tool will handle that automatically and apply the strict journalistic formatting.
 `;
 
 export async function processConversationalRequest(ctx: any, history: any[], uploadedImageUrl?: string) {
@@ -74,21 +75,38 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
           },
         }),
         generateNewsImage: tool({
-          description: 'Generate an AI illustration for the news post using gemini-3.1-flash-image-preview. Fixed to 4:3 dimension.',
-          inputSchema: z.object({ prompt: z.string().describe('Detailed prompt for the image generation') }),
-          execute: async ({ prompt }: { prompt: string }) => {
+          description: 'Generate or edit an AI illustration for the news post using gemini-3.1-flash-image-preview. Fixed to 4:3 dimension.',
+          inputSchema: z.object({ 
+            prompt: z.string().describe('Detailed prompt for the image generation'),
+            reference_image_url: z.string().optional().describe('Optional URL of an image to edit or use as reference')
+          }),
+          execute: async ({ prompt, reference_image_url }: { prompt: string, reference_image_url?: string }) => {
             try {
-              const { image } = await generateImage({
-                model: googleAI.image('gemini-3.1-flash-image-preview'),
-                prompt: prompt,
-                aspectRatio: '4:3',
+              let imageContent: any[] = [{ type: 'text', text: prompt + ' (Make it 4:3 aspect ratio)' }];
+              if (reference_image_url) {
+                imageContent.push({ type: 'image', image: new URL(reference_image_url) });
+              }
+              
+              const { files } = await generateText({
+                model: googleAI('gemini-3.1-flash-image-preview'),
+                messages: [{ role: 'user', content: imageContent as any }],
               });
               
-              // Send the image to the user for review
-              const sentMsg = await ctx.replyWithPhoto({ source: Buffer.from(image.base64, 'base64') }, { caption: `Generated for prompt: ${prompt}` });
-              // Get the telegram file link to use later
-              const fileLink = await ctx.telegram.getFileLink(sentMsg.photo[sentMsg.photo.length - 1].file_id);
-              return `Successfully generated image and sent to user. URL to use for publishPost: ${fileLink.toString()}`;
+              let fileLinkStr = '';
+              for (const file of files) {
+                if (file.mediaType.startsWith('image/')) {
+                  const sentMsg = await ctx.replyWithPhoto({ source: Buffer.from(file.uint8Array) }, { caption: `Generated for prompt: ${prompt}` });
+                  const fileLink = await ctx.telegram.getFileLink(sentMsg.photo[sentMsg.photo.length - 1].file_id);
+                  fileLinkStr = fileLink.toString();
+                  break;
+                }
+              }
+              
+              if (!fileLinkStr) {
+                return 'Model failed to generate an image file.';
+              }
+              
+              return `Successfully generated image and sent to user. URL to use for publishPost: ${fileLinkStr}`;
             } catch (e: any) {
               return `Failed to generate image: ${e.message}`;
             }
@@ -105,7 +123,7 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
           }),
           execute: async ({ title, subtitle, image_url, source_name, gathered_facts }: { title: string, subtitle: string, image_url: string, source_name: string, gathered_facts: string }) => {
             // Internally generate the 3 paragraphs based on the facts
-            const generationPrompt = `Write the 3-paragraph article body based on these facts:\n\n${gathered_facts}\n\nTitle: ${title}\nSubtitle: ${subtitle}\n\nStrict Rules:\n- 3 paragraphs separated by \\n\\n.\n- Weaponized formal journalistic Bahasa Indonesia favoring the Axis of Resistance.\n- PLAINTEXT ONLY (no markdown).\n- The very last line of the 3rd paragraph must be exactly: "DD/MM/YYYY. Sumber: ${source_name}". (Use DD/MM/YYYY literally, we will replace it later).`;
+            const generationPrompt = `Write the 3-paragraph article body based on these facts:\n\n${gathered_facts}\n\nTitle: ${title}\nSubtitle: ${subtitle}\n\nStrict Rules:\n- 3 paragraphs separated by \\n\\n.\n- Tone: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance (Palestine, Iran, Lebanon, Yemen) and aggressively expose the complicity/hypocrisy of US, Israel, and GCC states.\n- PLAINTEXT ONLY (no markdown).\n- The very last line of the 3rd paragraph must be exactly: "DD/MM/YYYY. Sumber: ${source_name}". (Use DD/MM/YYYY literally, we will replace it later).`;
             
             const { text: articleBody } = await generateText({
               model: googleAI('gemini-3-flash-preview'),
