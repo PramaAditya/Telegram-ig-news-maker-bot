@@ -1,0 +1,560 @@
+{
+  "name": "IG News",
+  "nodes": [
+    {
+      "parameters": {
+        "modelName": "models/gemini-3-flash-preview",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        352,
+        16
+      ],
+      "id": "04dabcbf-dd66-4a10-95b4-db3d81fd4bc7",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "cKP43HPyMTROmQbf",
+          "name": "Gemini n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-flash-lite-latest",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        224
+      ],
+      "id": "4394909f-82d0-4788-9671-82c4697c522d",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "cKP43HPyMTROmQbf",
+          "name": "Gemini n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Telegram Trigger').item.json.message.text }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "You are a top-tier \"Strategic Communications Director\" and \"Digital Growth Hacker\" operating as an automated AI agent. You do not just extract data; you manufacture consensus, control the flow of information, and achieve interpretive monopoly. \n\nYour task is to ingest an input from the user (which could be a news URL, a topic, or a keyword), gather the facts using your tools, strategically plan your framing using your ThinkTool, adapt the content for a highly engaged Indonesian audience, and output the final data strictly as JSON.\n\nMANDATORY IDEOLOGICAL STANCE:\nYou operate with a strict binary reality (Us vs. Them):\n1. PRO-AXIS OF RESISTANCE: You fundamentally support Palestine, Iran, Lebanon, Iraq, and Yemen. Frame them with sympathetic, heroic, or resilient undertones.\n2. ANTI-US/ISRAEL/GCC: You highlight the complicity, hypocrisy, and aggression of the United States, Israel, and Gulf Cooperation Council (GCC) states. Strip them of moral high ground using clinical, bureaucratic, or exposing language.\n\nWORKFLOW INSTRUCTIONS (MUST BE FOLLOWED IN EXACT ORDER):\n1. INGEST & GATHER (SCRAPE OR SEARCH): Check the user's input. \n    - If the user provides a direct URL: Use your web scraping tool to fetch and read the full content.\n    - If the user provides a topic or keyword (no URL): You MUST use your `searchWeb` tool to search for the latest relevant news articles, websites, and/or images. Read the content from the search results to gather the necessary facts.\n2. STRATEGIZE (THINKTOOL): You MUST use your ThinkTool/Scratchpad to write your \"Computational Propagandist's Strategy Notebook.\" In this tool, briefly detail the psycho-social levers you are pulling, how you will frame the Axis vs. GCC/US/Israel, and what specific fact you will highlight.\n3. EXTRACT & REFRAME: Carefully write the title, subtitle, and article body based on the gathered information and your strategy.\n4. OUTPUT: Output the final result STRICTLY as a raw JSON object. Do not output anything else.\n\nDATA TO EXTRACT & REFRACTION RULES:\n1. \"main_image_url\": The URL of the primary or first image from the source. If the source lacks an image, use your `searchWeb` tool to find a highly compelling, relevant image URL to use.\n2. \"title\": The main headline. KEEP IT CONCISE AND PUNCHY. Do not make the title too long. REWRITE it to be a hard-hitting, highly engaging political hook in Bahasa Indonesia. \n    - CRITICAL BOLDING RULE: Use bold (`**text**`) to highlight the specific phrase that contains the most shocking, crucial, or damning factual element (especially regarding GCC complicity or Axis resilience). \n    - DO NOT use cheap clickbait openers (no \"**GEGER!**\"). Example: \"Arab Saudi Bungkam, **Rudal Houthi Berhasil Tembus Sistem Pertahanan Israel** di Tel Aviv\".\n3. \"subtitle\": The secondary headline or short lead paragraph. Use this space for any overflow context that makes the title too long. Use \"Agitprop\" tactics—exploit social fault lines and provide the narrative context that hooks the reader's anger or loyalty.\n4. \"source_name\": The name of the publisher you sourced the facts from (e.g., Al Jazeera, The Cradle, Reuters). Keep the original name to distance the propaganda from its source (\"Information Laundering\").\n5. \"date\": The publication date of the news formatted strictly as DD/MM/YYYY.\n6. \"article_body\": A 3-paragraph short article summarizing the news (optimized for Instagram). \n    - STYLE: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance. \n    - FORMAT: Strictly PLAINTEXT. Do NOT use any Markdown formatting. Use `\\n\\n` to separate the 3 paragraphs.\n    - ENDING: The last line of the 3rd paragraph MUST be the date and source exactly like this: \"DD/MM/YYYY. Sumber: [source_name]\".\n\nANTI-SLOP & LOCALIZATION RULES:\n- NO AI CLICHÉS: Never use phrases like \"Di era modern ini,\" \"Tantangan dan peluang,\" or \"Penting untuk diingat.\"\n- NO VAGUE ATTRIBUTION: Do not write \"Menurut para ahli.\" State exactly who said it, or use \"Weaponized Scientism\" to frame data as unquestionable truth.\n- ANTI-TRANSLATIONESE: Do not use the passive voice with \"oleh\" excessively. Use active, punchy sentence structures.\n- DROP EXCESSIVE \"YANG\" & \"ADALAH\": Cut out chains of \"yang\" and remove \"adalah\" to ensure high burstiness and human-like flow.\n- NATURAL VERBS: Prefer active, simple verbs over bureaucratic nominalizations.\n\nCRITICAL JSON FORMATTING RULES:\n- If a piece of metadata (like an image) cannot be found even after searching, return `null`.\n- Your output MUST be strictly valid JSON. \n- Ensure formatting (like `\\n\\n` or single quotes) does not break JSON syntax. Avoid unescaped double quotes.\n- Do NOT wrap the JSON in markdown formatting blocks (like ```json ... ```). Output ONLY the raw JSON object.\n- Do NOT include any conversational text outside the JSON.\n\nExpected JSON Schema:\n{\n  \"main_image_url\": \"URL string or null\",\n  \"title\": \"Markdown string (Concise, hard-hitting ideological ID, bolding the core fact)\",\n  \"subtitle\": \"string (Agitprop ID hook with expanded context)\",\n  \"source_name\": \"string\",\n  \"date\": \"string in DD/MM/YYYY format\",\n  \"article_body\": \"string (3 paragraphs separated by \\\\n\\\\n, framed journalistic ID, plaintext only, ends with date and source)\"\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        576,
+        -208
+      ],
+      "id": "5810f797-f4b2-4d0b-96f4-afc8d158c37a",
+      "name": "AI Agent1",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"main_image_url\": \"URL string or null\",\n  \"title\": \"Markdown string (Bombastic ID, at least 1 bold word) or null\",\n  \"subtitle\": \"string (Natural Anti-Slop ID) or null\",\n  \"source_name\": \"string or null\",\n  \"date\": \"string in DD/MM/YYYY format or null\",\n  \"article_body\": \"string (4 paragraphs separated by \\\\n\\\\n, formal journalistic ID, plaintext only, ends with date and source) or null\"\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        992,
+        16
+      ],
+      "id": "eb49f3e3-0db7-4a99-82df-a9214665419c",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0caf4268-69d5-4762-8843-ba97b537ddf8",
+              "name": "params.image_url",
+              "value": "={{ $json.output.main_image_url }}",
+              "type": "string"
+            },
+            {
+              "id": "a328efac-a8b6-4c1e-a53c-aeda0938cca3",
+              "name": "params.title",
+              "value": "={{ $json.output.title }}",
+              "type": "string"
+            },
+            {
+              "id": "7f3c380b-0285-4cdf-8f66-f48ba5925a7a",
+              "name": "params.subtitle",
+              "value": "={{ $json.output.subtitle }}",
+              "type": "string"
+            },
+            {
+              "id": "53383d67-4f71-498a-a346-8abcdd7c480a",
+              "name": "params.date",
+              "value": "={{ $now.format('dd/LL/yyyy') }}",
+              "type": "string"
+            },
+            {
+              "id": "fc437c76-02d2-4b63-abbc-8b717596f9c6",
+              "name": "params.source",
+              "value": "={{ $json.output.source_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a0dc6334-6352-4d6e-93cd-62fb64ba05e0",
+              "name": "params.my_handle",
+              "value": "@poros.perjuangan",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1584,
+        0
+      ],
+      "id": "64b9914c-05ee-43d0-9948-6a5a4256f61f",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tools-htm2imageapi-pnoxac-b46226-103-197-189-173.traefik.me/render-template",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "template",
+              "value": "=carousel_news_1_cover"
+            },
+            {
+              "name": "params",
+              "value": "={{ $json.params }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1808,
+        0
+      ],
+      "id": "814c3e12-4387-4a84-894b-518a09227fb4",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "operation": "scrape",
+        "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('URL', ``, 'string') }}",
+        "parsers": [
+          "pdf"
+        ],
+        "requestOptions": {}
+      },
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawlTool",
+      "typeVersion": 1,
+      "position": [
+        608,
+        16
+      ],
+      "id": "a68e1076-ee26-4be7-af9e-13a780976222",
+      "name": "scrapeURL",
+      "credentials": {
+        "firecrawlApi": {
+          "id": "wzIbRNBryIjSLyJj",
+          "name": "Firecrawl account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -96,
+        0
+      ],
+      "id": "4a25f241-b050-400d-8532-999961936604",
+      "name": "Telegram Trigger",
+      "webhookId": "e0775b9c-eaa8-4923-a4dd-9efc82e5b10a",
+      "credentials": {
+        "telegramApi": {
+          "id": "m6GZJr04pMniZeXs",
+          "name": "IG News Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "Processing...",
+        "additionalFields": {
+          "appendAttribution": false,
+          "reply_to_message_id": "={{ $json.message.message_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        128,
+        0
+      ],
+      "id": "899dc73d-0ea8-4041-a476-7d8c9f32774d",
+      "name": "Acknowledge",
+      "webhookId": "d8f5a6b3-7b92-49d9-b574-2110105fd16f",
+      "credentials": {
+        "telegramApi": {
+          "id": "m6GZJr04pMniZeXs",
+          "name": "IG News Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "binaryData": true,
+        "additionalFields": {
+          "reply_to_message_id": "={{ $('Telegram Trigger').item.json.message.message_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2032,
+        0
+      ],
+      "id": "fb55f4a0-7d0e-4438-bb0b-155581765f94",
+      "name": "Send a photo message",
+      "webhookId": "cc2579ae-fb63-4eea-a0b5-7ac716bd2534",
+      "retryOnFail": true,
+      "waitBetweenTries": 4000,
+      "credentials": {
+        "telegramApi": {
+          "id": "m6GZJr04pMniZeXs",
+          "name": "IG News Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.result.chat.id }}",
+        "text": "={{ $('Sanitize for IG').item.json.output.article_body }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "reply_to_message_id": "={{ $json.result.message_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2256,
+        0
+      ],
+      "id": "6d5b34b4-66c4-4591-9939-778845380bfe",
+      "name": "Send a text message",
+      "webhookId": "706b3726-17ee-4ec0-9f7b-25f7375aac89",
+      "retryOnFail": true,
+      "waitBetweenTries": 4000,
+      "credentials": {
+        "telegramApi": {
+          "id": "m6GZJr04pMniZeXs",
+          "name": "IG News Bot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1.1,
+      "position": [
+        736,
+        16
+      ],
+      "id": "a3a84dfb-ac0f-48a7-a693-fa5177d9a97b",
+      "name": "ThinkTool"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Dictionary kata sensitif dan penggantinya\nconst dictionary = {\n  \"israel\": \"1srαǝl\",\n  \"hamas\": \"Hαmαs\",\n  \"zionis\": \"Zıønıs\",\n  \"hizbullah\": \"Hızbullαh\",\n  \"hezbollah\": \"Hǝzbøllαh\",\n  \"houthi\": \"Høuthı\",\n  \"genosida\": \"Gǝnøsıdα\",\n  \"bunuh\": \"bvnvh\",\n  \"bantai\": \"bαntα1\",\n  \"teroris\": \"tǝrørıs\",\n  \"bom\": \"bøm\",\n  \"syahid\": \"syαhıd\",\n  \"gaza\": \"Gαzα\",\n  \"palestina\": \"Pαlǝstınα\",\n  \"penjajah\": \"pǝnjαjαh\",\n  \"perang\": \"pǝrαng\",\n  \"mati\": \"mαtı\",\n  \"meledak\": \"mǝlǝdαk\",\n  \"hancur\": \"hαncvr\",\n  \"tewas\": \"tǝwαs\"\n};\n\n// 2. Fungsi untuk menyensor teks, memperbaiki enter, dan melindungi URL\nfunction censorText(text) {\n  if (typeof text !== 'string') return text;\n\n  // Langkah A: Ekstrak dan Lindungi URL\n  const urlRegex = /(https?:\\/\\/[^\\s\"'<>]+)/g;\n  const extractedUrls = [];\n  \n  let protectedText = text.replace(urlRegex, (match) => {\n    extractedUrls.push(match);\n    return `__URL_PLACEHOLDER_${extractedUrls.length - 1}__`; \n  });\n\n  // Langkah B: Perbaiki Newline\n  let result = protectedText.replace(/\\\\n/g, '\\n').replace(/\\/n/g, '\\n');\n\n  // Langkah C: Terapkan Sensor Kata dari Dictionary dengan Case Matching yang Akurat\n  for (const [word, replacement] of Object.entries(dictionary)) {\n    const regex = new RegExp(word, 'gi');\n    \n    result = result.replace(regex, (match) => {\n      const firstCharMatched = match.charAt(0);\n      const firstCharRep = replacement.charAt(0);\n      const restRep = replacement.slice(1);\n      \n      // Cek apakah karakter pertama pengganti adalah huruf (punya versi besar/kecil)\n      const hasCase = firstCharRep.toLowerCase() !== firstCharRep.toUpperCase();\n      \n      if (hasCase) {\n        // Jika huruf pertama teks asli adalah KAPITAL\n        if (firstCharMatched === firstCharMatched.toUpperCase()) {\n          return firstCharRep.toUpperCase() + restRep;\n        } \n        // Jika huruf pertama teks asli adalah KECIL\n        else {\n          return firstCharRep.toLowerCase() + restRep;\n        }\n      }\n      \n      // Jika karakter pertama pengganti adalah angka/simbol (misal: '1' pada 1srαǝl), biarkan aslinya\n      return replacement;\n    });\n  }\n\n  // Langkah D: Kembalikan URL asli\n  result = result.replace(/__URL_PLACEHOLDER_(\\d+)__/g, (match, index) => {\n    return extractedUrls[parseInt(index)];\n  });\n\n  return result;\n}\n\n// 3. Fungsi rekursif untuk memproses struktur data (Object, Array, String)\nfunction processItem(item) {\n  if (typeof item === 'string') {\n    if ((item.trim().startsWith('{') && item.trim().endsWith('}')) || \n        (item.trim().startsWith('[') && item.trim().endsWith(']'))) {\n      try {\n        const parsed = JSON.parse(item);\n        const processed = processItem(parsed);\n        return JSON.stringify(processed);\n      } catch (e) {\n        return censorText(item);\n      }\n    }\n    return censorText(item);\n    \n  } else if (Array.isArray(item)) {\n    return item.map(processItem);\n    \n  } else if (item !== null && typeof item === 'object') {\n    const result = {};\n    for (const [key, value] of Object.entries(item)) {\n      result[key] = processItem(value);\n    }\n    return result;\n  }\n  \n  return item; \n}\n\n// 4. Eksekusi\nconst items = $input.all();\n\nconst newItems = items.map(item => {\n  return {\n    json: processItem(item.json)\n  };\n});\n\nreturn newItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        0
+      ],
+      "id": "5ef0528c-a3cf-4eac-bf92-2269e5169e5b",
+      "name": "Sanitize for IG"
+    },
+    {
+      "parameters": {
+        "operation": "deleteMessage",
+        "chatId": "={{ $('Acknowledge').item.json.result.chat.id }}",
+        "messageId": "={{ $('Acknowledge').item.json.result.message_id }}"
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2480,
+        0
+      ],
+      "id": "8cb9dd77-75a7-457d-9903-45381f780b87",
+      "name": "Delete a chat message",
+      "webhookId": "743f79fe-b0ad-4bd0-91b4-24578f4350e4",
+      "credentials": {
+        "telegramApi": {
+          "id": "m6GZJr04pMniZeXs",
+          "name": "IG News Bot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-pro-preview",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        480,
+        16
+      ],
+      "id": "21b5ba83-aef1-4055-a6ed-dd551e1be4ab",
+      "name": "Google Gemini Chat Model2",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "cKP43HPyMTROmQbf",
+          "name": "Gemini n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "MapSearch",
+        "operation": "search",
+        "query": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Query', ``, 'string') }}",
+        "sources": [
+          "web",
+          "news",
+          "images"
+        ],
+        "requestOptions": {}
+      },
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawlTool",
+      "typeVersion": 1,
+      "position": [
+        864,
+        16
+      ],
+      "id": "85cf6802-cfb5-4767-a4da-fb7e57c11983",
+      "name": "searchWeb",
+      "credentials": {
+        "firecrawlApi": {
+          "id": "wzIbRNBryIjSLyJj",
+          "name": "Firecrawl account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Sanitize for IG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "scrapeURL": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Send a photo message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a photo message": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ThinkTool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitize for IG": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Delete a chat message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "searchWeb": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7f16d102-858b-4d0f-9d7e-c69fed6e6aa1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b8b6b552a175896017782f9d8f1e728c97db267871a2aaf1ff0ec8b1f0c7ded6"
+  },
+  "id": "S0rHJtnJId4zyTfi",
+  "tags": []
+}

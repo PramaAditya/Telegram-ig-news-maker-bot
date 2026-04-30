@@ -1,0 +1,33 @@
+{
+  "name": "ig-news-maker-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsx src/bot.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@ai-sdk/google": "^3.0.65",
+    "@types/node": "^25.6.0",
+    "@types/pg": "^8.20.0",
+    "ai": "^6.0.169",
+    "axios": "^1.15.2",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
+    "firecrawl": "^4.20.0",
+    "telegraf": "^4.16.3",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "zod": "^4.3.6"
+  },
+  "type": "module",
+  "dependencies": {
+    "@mendable/firecrawl-js": "^4.20.0",
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.20.0"
+  }
+}
