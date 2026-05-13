@@ -47,6 +47,8 @@ export async function publishToBuffer(imageUrl: string, text: string) {
   const url = 'https://api.buffer.com/1/graphql';
 
   try {
+    // Note: Bearer token is standard, but sometimes buffer expects basic auth with token or just the token in header
+    // The docs say: 'Authorization': 'Bearer YOUR_API_KEY'
     const response = await axios.post(url, payload, {
       headers: {
         'Content-Type': 'application/json',

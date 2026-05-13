@@ -95,12 +95,13 @@ bot.on(message('text'), async (ctx) => {
   
   // Do not await processConversationalRequest to prevent Telegraf 90s timeout
   processConversationalRequest(ctx, history, undefined).catch(async (error) => {
-    console.error('Error processing text:', error);
+    console.error('[Bot] Error processing text in processConversationalRequest:', error);
     try { await ctx.reply('Terjadi kesalahan sistem.'); } catch (e) {}
   });
 });
 
 bot.on(message('photo'), async (ctx) => {
+  console.log(`[Bot] Received photo message from ${ctx.chat.id}`);
   const caption = ctx.message.caption || '';
   const photos = ctx.message.photo;
   const chatId = ctx.chat.id.toString();
@@ -114,7 +115,7 @@ bot.on(message('photo'), async (ctx) => {
   
   // Do not await processConversationalRequest to prevent Telegraf 90s timeout
   processConversationalRequest(ctx, history, fileLink.toString()).catch(async (error) => {
-    console.error('Error processing photo:', error);
+    console.error('[Bot] Error processing photo in processConversationalRequest:', error);
     try { await ctx.reply('Terjadi kesalahan sistem saat memproses foto.'); } catch (e) {}
   });
 });

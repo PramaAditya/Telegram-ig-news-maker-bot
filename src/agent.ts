@@ -53,6 +53,7 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
   }));
 
   try {
+    console.log(`[Step 2] Sending conversation history to Gemini (maxSteps: 5)...`);
     const { text, toolCalls, toolResults } = await generateText({
       model: googleAI('gemini-3-flash-preview'),
       system: CONVERSATIONAL_SYSTEM_PROMPT,
@@ -63,7 +64,9 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
           description: 'Search the web for latest news or facts about a topic.',
           inputSchema: z.object({ query: z.string() }),
           execute: async ({ query }: { query: string }) => {
+            console.log(`[Tool: searchWeb] Searching for: "${query}"`);
             const res = await firecrawl.search(query, { limit: 3, scrapeOptions: { formats: ['markdown'] } });
+            console.log(`[Tool: searchWeb] Search complete.`);
             return JSON.stringify(res);
           },
         }),
@@ -71,7 +74,9 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
           description: 'Read the full content of a specific URL.',
           inputSchema: z.object({ url: z.string() }),
           execute: async ({ url }: { url: string }) => {
+            console.log(`[Tool: scrapeUrl] Scraping URL: ${url}`);
             const res = await firecrawl.scrape(url, { formats: ['markdown'] });
+            console.log(`[Tool: scrapeUrl] Scrape complete.`);
             return (res as any).markdown || JSON.stringify(res);
           },
         }),
@@ -82,6 +87,7 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
             reference_image_url: z.string().optional().describe('Optional URL of an image to edit or use as reference')
           }),
           execute: async ({ prompt, reference_image_url }: { prompt: string, reference_image_url?: string }) => {
+            console.log(`[Tool: generateNewsImage] Generating image. Prompt: ${prompt}, RefURL: ${reference_image_url || 'none'}`);
             try {
               let imageContent: any[] = [{ type: 'text', text: prompt + ' (Make it 4:3 aspect ratio)' }];
               if (reference_image_url) {
@@ -96,19 +102,23 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
               let fileLinkStr = '';
               for (const file of files) {
                 if (file.mediaType.startsWith('image/')) {
+                  console.log(`[Tool: generateNewsImage] Image generated, sending to Telegram...`);
                   const sentMsg = await ctx.replyWithPhoto({ source: Buffer.from(file.uint8Array) }, { caption: `Generated for prompt: ${prompt}` });
                   const fileLink = await ctx.telegram.getFileLink(sentMsg.photo[sentMsg.photo.length - 1].file_id);
                   fileLinkStr = fileLink.toString();
+                  console.log(`[Tool: generateNewsImage] Image sent successfully. URL: ${fileLinkStr}`);
                   break;
                 }
               }
               
               if (!fileLinkStr) {
+                console.error(`[Tool: generateNewsImage] Failed: No image file in response.`);
                 return 'Model failed to generate an image file.';
               }
               
               return `Successfully generated image and sent to user. URL to use for publishPost: ${fileLinkStr}`;
             } catch (e: any) {
+              console.error(`[Tool: generateNewsImage] Error:`, e);
               return `Failed to generate image: ${e.message}`;
             }
           },
@@ -123,6 +133,7 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
             gathered_facts: z.string().describe('A summary of the facts to base the 2-paragraph article on')
           }),
           execute: async ({ title, subtitle, image_url, source_name, gathered_facts }: { title: string, subtitle: string, image_url: string, source_name: string, gathered_facts: string }) => {
+            console.log(`[Tool: publishPost] Triggered. Generating 2-paragraph article body...`);
             // Internally generate the 2 paragraphs based on the facts
             const generationPrompt = `Write the 2-paragraph article body based on these facts:\n\n${gathered_facts}\n\nTitle: ${title}\nSubtitle: ${subtitle}\n\nStrict Rules:\n- Exactly 2 paragraphs separated by \\n\\n.\n- Must be short enough to fit inside a Telegram photo caption (under 1024 characters total).\n- Tone: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance (Palestine, Iran, Lebanon, Yemen) and aggressively expose the complicity/hypocrisy of US, Israel, and GCC states.\n- PLAINTEXT ONLY (no markdown).\n- The very last line of the 2nd paragraph must be exactly: "DD/MM/YYYY. Sumber: ${source_name}". (Use DD/MM/YYYY literally, we will replace it later).`;
             
@@ -130,16 +141,20 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
               model: googleAI('gemini-3-flash-preview'),
               prompt: generationPrompt,
             });
+            console.log(`[Tool: publishPost] Body generated. Length: ${articleBody.length} chars.`);
 
             const currentDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
             
             // Replace literal DD/MM/YYYY with actual date
             const finalBody = articleBody.replace('DD/MM/YYYY', currentDate);
+            console.log(`[Tool: publishPost] Sanitizing body...`);
             const sanitizedBody = censorText(finalBody);
 
+            console.log(`[Tool: publishPost] Formatting and sanitizing title/subtitle...`);
             const formattedTitle = title.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             const formattedSubtitle = subtitle.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
+            console.log(`[Tool: publishPost] Requesting rendered image from API...`);
             const imageBuffer = await generateNewsImage({
               image_url,
               title: censorText(formattedTitle),
@@ -148,6 +163,7 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
               source: censorText(source_name),
               my_handle: '@poros.perjuangan'
             });
+            console.log(`[Tool: publishPost] Received image from API (${imageBuffer.length} bytes). Sending to Telegram with inline buttons...`);
 
             // Send photo with the sanitized body as caption and a publish button
             const state = JSON.stringify({
@@ -178,11 +194,14 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
               }
             );
 
+            console.log(`[Tool: publishPost] Preview sent successfully.`);
             return `Preview sent to user with Publish button. Waiting for user action.`;
           }
         })
       }
     });
+
+    console.log(`[Step 3] AI processing complete. Tool calls: ${toolCalls?.length || 0}. Text output length: ${text?.length || 0}`);
 
     clearInterval(typingInterval);
 
