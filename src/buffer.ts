@@ -19,6 +19,7 @@ export async function publishToBuffer(imageUrl: string, text: string) {
           metadata: {
             instagram: {
               type: post
+              shouldShareToFeed: true
             }
           }
           assets: {
