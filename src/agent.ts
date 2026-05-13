@@ -7,6 +7,7 @@ import { censorText } from './sanitize.js';
 import { generateNewsImage } from './image.js';
 import { db } from './db/index.js';
 import { messages } from './db/schema.js';
+import { Markup } from 'telegraf';
 
 dotenv.config();
 
@@ -27,7 +28,7 @@ Keep this bias in mind when selecting facts and proposing ideas, but don't sound
 
 WORKFLOW INSTRUCTIONS:
 1. When the user gives you a topic or URL, use your \`searchWeb\` or \`scrapeUrl\` tools to gather facts.
-2. Propose a \`title\` and \`subtitle\` in Bahasa Indonesia based on the gathered facts and your political bias.
+2. Directly present 3 DIFFERENT OPTIONS for \`title\` and \`subtitle\` in Bahasa Indonesia based on the gathered facts and your political bias. Do not be overly chatty, just present the options clearly.
     - The title should be engaging and punchy, but natural. DO NOT use cheap clickbait.
     - Use bold (<strong>text</strong>) to highlight the key factual phrase in the title.
     - The subtitle provides context to hook the reader.
@@ -119,11 +120,11 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
             subtitle: z.string().describe('The finalized subtitle in Bahasa Indonesia'),
             image_url: z.string().describe('The URL of the approved image (either user uploaded or generated)'),
             source_name: z.string().describe('The original news source (e.g., Al Jazeera)'),
-            gathered_facts: z.string().describe('A summary of the facts to base the 3-paragraph article on')
+            gathered_facts: z.string().describe('A summary of the facts to base the 2-paragraph article on')
           }),
           execute: async ({ title, subtitle, image_url, source_name, gathered_facts }: { title: string, subtitle: string, image_url: string, source_name: string, gathered_facts: string }) => {
-            // Internally generate the 3 paragraphs based on the facts
-            const generationPrompt = `Write the 3-paragraph article body based on these facts:\n\n${gathered_facts}\n\nTitle: ${title}\nSubtitle: ${subtitle}\n\nStrict Rules:\n- 3 paragraphs separated by \\n\\n.\n- Tone: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance (Palestine, Iran, Lebanon, Yemen) and aggressively expose the complicity/hypocrisy of US, Israel, and GCC states.\n- PLAINTEXT ONLY (no markdown).\n- The very last line of the 3rd paragraph must be exactly: "DD/MM/YYYY. Sumber: ${source_name}". (Use DD/MM/YYYY literally, we will replace it later).`;
+            // Internally generate the 2 paragraphs based on the facts
+            const generationPrompt = `Write the 2-paragraph article body based on these facts:\n\n${gathered_facts}\n\nTitle: ${title}\nSubtitle: ${subtitle}\n\nStrict Rules:\n- Exactly 2 paragraphs separated by \\n\\n.\n- Must be short enough to fit inside a Telegram photo caption (under 1024 characters total).\n- Tone: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance (Palestine, Iran, Lebanon, Yemen) and aggressively expose the complicity/hypocrisy of US, Israel, and GCC states.\n- PLAINTEXT ONLY (no markdown).\n- The very last line of the 2nd paragraph must be exactly: "DD/MM/YYYY. Sumber: ${source_name}". (Use DD/MM/YYYY literally, we will replace it later).`;
             
             const { text: articleBody } = await generateText({
               model: googleAI('gemini-3-flash-preview'),
@@ -148,10 +149,36 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
               my_handle: '@poros.perjuangan'
             });
 
-            await ctx.replyWithPhoto({ source: imageBuffer });
-            await ctx.reply(sanitizedBody);
+            // Send photo with the sanitized body as caption and a publish button
+            const state = JSON.stringify({
+              action: 'publish_buffer',
+              // We can't pass the whole buffer in callback_data due to 64 byte limit,
+              // so we will pass the params or we need to store them temporarily.
+              // To keep it simple, we can just save it to DB or a global map,
+              // but for now, let's just generate it again in the callback or store it.
+            });
+            // Actually, callback_data is limited to 64 bytes.
+            // Let's store the pending post data in memory (or db).
+            // For simplicity, let's just create a global map in bot.ts.
+            // So here we just need to return the buffer and caption. Wait, agent.ts doesn't have access to the global map easily unless we export it.
+            // Let's export a function from bot.ts or create a separate file `store.ts`.
+            
+            // To avoid complexity, we can just send the photo first, get the file_id, and then the callback_data only needs the file_id and we can fetch the caption from the message.
+            // Wait, if we send the photo with caption, the callback query will contain `ctx.callbackQuery.message.photo` and `ctx.callbackQuery.message.caption`.
+            // So we don't need to store anything! We just read the photo file_id and caption from the message that the button is attached to!
+            
+            await ctx.replyWithPhoto(
+              { source: imageBuffer }, 
+              { 
+                caption: sanitizedBody,
+                ...Markup.inlineKeyboard([
+                  Markup.button.callback('🚀 Publish to Instagram via Buffer', 'publish_to_buffer'),
+                  Markup.button.callback('❌ Cancel', 'cancel_publish')
+                ])
+              }
+            );
 
-            return `Post successfully published!`;
+            return `Preview sent to user with Publish button. Waiting for user action.`;
           }
         })
       }

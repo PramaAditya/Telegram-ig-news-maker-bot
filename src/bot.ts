@@ -1,10 +1,11 @@
-import { Telegraf } from 'telegraf';
+import { Telegraf, Markup } from 'telegraf';
 import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import { processConversationalRequest } from './agent.js';
 import { db } from './db/index.js';
 import { messages } from './db/schema.js';
 import { eq, asc } from 'drizzle-orm';
+import { publishToBuffer } from './buffer.js';
 
 dotenv.config();
 
@@ -40,6 +41,49 @@ bot.command('clear', async (ctx) => {
     console.error('Error clearing history:', error);
     await ctx.reply('Terjadi kesalahan saat menghapus riwayat.');
   }
+});
+
+bot.action('publish_to_buffer', async (ctx) => {
+  const chatId = ctx.chat?.id?.toString();
+  if (!chatId) return;
+
+  // Telegram callback query with photo has the message attached
+  const msg = ctx.callbackQuery.message as any;
+  if (!msg || !msg.photo) {
+    await ctx.answerCbQuery('Gambar tidak ditemukan.');
+    return;
+  }
+
+  const caption = msg.caption || '';
+  const highestResPhoto = msg.photo[msg.photo.length - 1];
+  
+  try {
+    await ctx.answerCbQuery('Memulai proses publish ke Instagram via Buffer...');
+    await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); // Remove buttons
+    
+    // Get file link to send to Buffer
+    const fileLink = await ctx.telegram.getFileLink(highestResPhoto.file_id);
+    
+    await publishToBuffer(fileLink.toString(), caption);
+    
+    await ctx.reply('✅ Post berhasil dipublikasikan ke Instagram via Buffer!\n\nRiwayat percakapan telah dihapus otomatis untuk topik baru.');
+    await clearChatHistory(chatId);
+  } catch (error: any) {
+    console.error('Failed to publish to Buffer:', error);
+    await ctx.reply('❌ Gagal mempublikasikan ke Buffer: ' + error.message);
+    // Add buttons back
+    await ctx.editMessageReplyMarkup({
+      inline_keyboard: [
+        [Markup.button.callback('🚀 Coba Publish Lagi', 'publish_to_buffer'), Markup.button.callback('❌ Cancel', 'cancel_publish')]
+      ]
+    }).catch(() => {});
+  }
+});
+
+bot.action('cancel_publish', async (ctx) => {
+  await ctx.answerCbQuery('Publish dibatalkan.');
+  await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+  await ctx.reply('Publish dibatalkan. Anda dapat mengedit judul/subtitle lagi dengan membalas pesan ini.');
 });
 
 bot.on(message('text'), async (ctx) => {
