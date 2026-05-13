@@ -58,7 +58,7 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
       model: googleAI('gemini-3-flash-preview'),
       system: CONVERSATIONAL_SYSTEM_PROMPT,
       messages: coreMessages,
-      stopWhen: stepCountIs(5), // Allow multi-step tool execution
+      stopWhen: stepCountIs(5), // allow a few steps to search the web
       tools: {
         searchWeb: tool({
           description: 'Search the web for latest news or facts about a topic.',
@@ -220,6 +220,13 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
         role: 'assistant',
         content: text,
       });
+    }
+
+    if (toolCalls && toolCalls.length > 0) {
+      const createPostTool = toolCalls.find((t: any) => t.toolName === 'createPostImageAndCaption');
+      if (createPostTool) {
+        await ctx.reply('Preview telah berhasil di-generate. Silakan periksa pesan sebelumnya.');
+      }
     }
 
   } catch (error) {
