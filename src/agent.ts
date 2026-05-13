@@ -34,7 +34,20 @@ WORKFLOW INSTRUCTIONS:
     - The subtitle provides context to hook the reader.
 3. If an image is needed, ask the user to provide one or offer to generate one using your \`generateNewsImage\` tool.
 4. Iterate on the title/subtitle/image based on user feedback.
-5. Once the user explicitly approves the final title, subtitle, and image, you MUST call the \`createPostImageAndCaption\` tool to prepare the final preview. DO NOT try to generate the article body in the chat, the \`createPostImageAndCaption\` tool will handle that automatically. The tool will send a preview to the user. It DOES NOT publish the post. The user will manually click a button to publish it.
+5. Once the user explicitly approves the final title, subtitle, and image, you MUST generate the final post data. To do this, do NOT use a tool. Instead, reply to the user using the exact JSON format below.
+
+WHEN PUBLISHING, YOUR REPLY MUST BE STRICTLY AND EXCLUSIVELY THIS JSON:
+\`\`\`json
+{
+  "__ACTION": "PUBLISH_NOW",
+  "title": "final title here",
+  "subtitle": "final subtitle here",
+  "image_url": "url of the image to use",
+  "source_name": "source of the news",
+  "caption": "Exactly 2 paragraphs separated by \\n\\n. Tone: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance. PLAINTEXT ONLY. The very last line of the 2nd paragraph must be exactly: DD/MM/YYYY. Sumber: [source_name]"
+}
+\`\`\`
+Do not add any other text before or after this JSON block.
 `;
 
 export async function processConversationalRequest(ctx: any, history: any[], uploadedImageUrl?: string) {
@@ -53,12 +66,11 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
   }));
 
   try {
-    console.log(`[Step 2] Sending conversation history to Gemini (maxSteps: 5)...`);
+    console.log(`[Step 2] Sending conversation history to Gemini...`);
     const { text, toolCalls, toolResults } = await generateText({
       model: googleAI('gemini-3-flash-preview'),
       system: CONVERSATIONAL_SYSTEM_PROMPT,
       messages: coreMessages,
-      stopWhen: stepCountIs(5), // allow a few steps to search the web
       tools: {
         searchWeb: tool({
           description: 'Search the web for latest news or facts about a topic.',
