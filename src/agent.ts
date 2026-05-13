@@ -34,7 +34,7 @@ WORKFLOW INSTRUCTIONS:
     - The subtitle provides context to hook the reader.
 3. If an image is needed, ask the user to provide one or offer to generate one using your \`generateNewsImage\` tool.
 4. Iterate on the title/subtitle/image based on user feedback.
-5. Once the user explicitly approves the final title, subtitle, and image, you MUST call the \`publishPost\` tool to finalize the post. DO NOT try to generate the 3-paragraph article body in the chat, the \`publishPost\` tool will handle that automatically and apply the strict journalistic formatting.
+5. Once the user explicitly approves the final title, subtitle, and image, you MUST call the \`createPostImageAndCaption\` tool to prepare the final preview. DO NOT try to generate the article body in the chat, the \`createPostImageAndCaption\` tool will handle that automatically. The tool will send a preview to the user. It DOES NOT publish the post. The user will manually click a button to publish it.
 `;
 
 export async function processConversationalRequest(ctx: any, history: any[], uploadedImageUrl?: string) {
@@ -116,15 +116,15 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
                 return 'Model failed to generate an image file.';
               }
               
-              return `Successfully generated image and sent to user. URL to use for publishPost: ${fileLinkStr}`;
+              return `Successfully generated image and sent to user. URL to use for createPostImageAndCaption: ${fileLinkStr}`;
             } catch (e: any) {
               console.error(`[Tool: generateNewsImage] Error:`, e);
               return `Failed to generate image: ${e.message}`;
             }
           },
         }),
-        publishPost: tool({
-          description: 'Call this ONLY when the user explicitly approves the final title, subtitle, and image. This will generate the full article, render the image, and publish it.',
+        createPostImageAndCaption: tool({
+          description: 'Call this ONLY when the user explicitly approves the final title, subtitle, and image. This generates the article body and renders the image for user preview. It DOES NOT publish the post.',
           inputSchema: z.object({
             title: z.string().describe('The finalized bolded title in Bahasa Indonesia'),
             subtitle: z.string().describe('The finalized subtitle in Bahasa Indonesia'),
@@ -133,7 +133,7 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
             gathered_facts: z.string().describe('A summary of the facts to base the 2-paragraph article on')
           }),
           execute: async ({ title, subtitle, image_url, source_name, gathered_facts }: { title: string, subtitle: string, image_url: string, source_name: string, gathered_facts: string }) => {
-            console.log(`[Tool: publishPost] Triggered. Generating 2-paragraph article body...`);
+            console.log(`[Tool: createPostImageAndCaption] Triggered. Generating 2-paragraph article body...`);
             // Internally generate the 2 paragraphs based on the facts
             const generationPrompt = `Write the 2-paragraph article body based on these facts:\n\n${gathered_facts}\n\nTitle: ${title}\nSubtitle: ${subtitle}\n\nStrict Rules:\n- Exactly 2 paragraphs separated by \\n\\n.\n- Must be short enough to fit inside a Telegram photo caption (under 1024 characters total).\n- Tone: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance (Palestine, Iran, Lebanon, Yemen) and aggressively expose the complicity/hypocrisy of US, Israel, and GCC states.\n- PLAINTEXT ONLY (no markdown).\n- The very last line of the 2nd paragraph must be exactly: "DD/MM/YYYY. Sumber: ${source_name}". (Use DD/MM/YYYY literally, we will replace it later).`;
             
@@ -141,20 +141,20 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
               model: googleAI('gemini-3-flash-preview'),
               prompt: generationPrompt,
             });
-            console.log(`[Tool: publishPost] Body generated. Length: ${articleBody.length} chars.`);
+            console.log(`[Tool: createPostImageAndCaption] Body generated. Length: ${articleBody.length} chars.`);
 
             const currentDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
             
             // Replace literal DD/MM/YYYY with actual date
             const finalBody = articleBody.replace('DD/MM/YYYY', currentDate);
-            console.log(`[Tool: publishPost] Sanitizing body...`);
+            console.log(`[Tool: createPostImageAndCaption] Sanitizing body...`);
             const sanitizedBody = censorText(finalBody);
 
-            console.log(`[Tool: publishPost] Formatting and sanitizing title/subtitle...`);
+            console.log(`[Tool: createPostImageAndCaption] Formatting and sanitizing title/subtitle...`);
             const formattedTitle = title.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             const formattedSubtitle = subtitle.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-            console.log(`[Tool: publishPost] Requesting rendered image from API...`);
+            console.log(`[Tool: createPostImageAndCaption] Requesting rendered image from API...`);
             const imageBuffer = await generateNewsImage({
               image_url,
               title: censorText(formattedTitle),
@@ -163,7 +163,7 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
               source: censorText(source_name),
               my_handle: '@poros.perjuangan'
             });
-            console.log(`[Tool: publishPost] Received image from API (${imageBuffer.length} bytes). Sending to Telegram with inline buttons...`);
+            console.log(`[Tool: createPostImageAndCaption] Received image from API (${imageBuffer.length} bytes). Sending to Telegram with inline buttons...`);
 
             // Send photo with the sanitized body as caption and a publish button
             const state = JSON.stringify({
@@ -194,8 +194,8 @@ export async function processConversationalRequest(ctx: any, history: any[], upl
               }
             );
 
-            console.log(`[Tool: publishPost] Preview sent successfully.`);
-            return `Preview sent to user with Publish button. Waiting for user action.`;
+            console.log(`[Tool: createPostImageAndCaption] Preview sent successfully.`);
+            return `SUCCESS_STOP_NOW: Preview sent to user. You MUST stop generating now. Do not call this tool again.`;
           }
         })
       }
