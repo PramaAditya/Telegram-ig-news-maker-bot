@@ -16,13 +16,18 @@ export async function publishToBuffer(imageUrl: string, text: string) {
           channelId: "${channelId}"
           schedulingType: automatic
           mode: addToQueue
-          assets: [
-            {
-              image: {
+          metadata: {
+            instagram: {
+              type: post
+            }
+          }
+          assets: {
+            images: [
+              {
                 url: "${imageUrl}"
               }
-            }
-          ]
+            ]
+          }
         }
       ) {
         ... on PostActionSuccess {
