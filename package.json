@@ -13,6 +13,7 @@
   "devDependencies": {
     "@ai-sdk/google": "^3.0.65",
     "@types/node": "^25.6.0",
+    "@types/uuid": "^10.0.0",
     "ai": "^6.0.169",
     "axios": "^1.15.2",
     "dotenv": "^17.4.2",
@@ -24,6 +25,9 @@
   },
   "type": "module",
   "dependencies": {
-    "@mendable/firecrawl-js": "^4.20.0"
+    "@aws-sdk/client-s3": "^3.1048.0",
+    "@mendable/firecrawl-js": "^4.20.0",
+    "sharp": "^0.34.5",
+    "uuid": "^14.0.0"
   }
 }

@@ -3,7 +3,10 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import FirecrawlApp from '@mendable/firecrawl-js';
 import dotenv from 'dotenv';
+import axios from 'axios';
 import { censorText } from './sanitize.js';
+import { processImageTo4x5 } from './media-processor.js';
+import { uploadToS3 } from './s3.js';
 import { generateNewsImage } from './image.js';
 import { publishToBuffer } from './buffer.js';
 
@@ -29,7 +32,14 @@ MANDATORY IDEOLOGICAL STANCE / BIAS:
 Keep this bias in mind when selecting facts and composing the final text.
 `;
 
-export async function runAutomatedPipeline(ctx: any, userInput: string, uploadedImageUrls?: string[]) {
+export interface MediaItem {
+  type: 'image' | 'video';
+  url: string;
+  mimeType?: string;
+  buffer?: Buffer;
+}
+
+export async function runAutomatedPipeline(ctx: any, userInput: string, uploadedMedia?: MediaItem[]) {
   try {
     let statusMsg = await ctx.reply('🔍 Mencari informasi...');
 
@@ -38,13 +48,49 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
     const currentDateObj = new Date();
     const currentYear = currentDateObj.getFullYear();
     const currentDateStr = currentDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
+    const currentDate = currentDateStr;
     
     const SYSTEM_PROMPT = getSystemPrompt(currentDateStr, currentYear);
 
+    const messageContent: any[] = [
+      { type: 'text', text: `User Input: ${userInput}` }
+    ];
+
+    if (uploadedMedia && uploadedMedia.length > 0) {
+      for (const media of uploadedMedia) {
+        console.log(`[Phase 1] Downloading media for Gemini: ${media.url}`);
+        try {
+          const response = await axios.get(media.url, { responseType: 'arraybuffer' });
+          const buffer = Buffer.from(response.data);
+          media.buffer = buffer; // Cache for later use
+          
+          if (media.type === 'video') {
+            messageContent.push({
+              type: 'file',
+              data: buffer,
+              mimeType: media.mimeType || 'video/mp4'
+            });
+          } else {
+            messageContent.push({
+              type: 'image',
+              image: buffer
+            });
+          }
+        } catch (err: any) {
+          console.error(`[Phase 1] Failed to download media for AI context:`, err.message);
+        }
+      }
+    }
+
     const { text: researchResult } = await generateText({
       model: googleAI('gemini-3.1-pro-preview'),
-      system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If it's a topic, search the web. If it's a URL, scrape it. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`,
-      prompt: `User Input: ${userInput}`,
+      system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If it's a topic, search the web. If it's a URL, scrape it. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`,
+      messages: [
+        {
+          role: 'user',
+          content: messageContent
+        }
+      ],
       tools: {
         searchWeb: tool({
           description: 'Search the web for latest news or facts about a topic.',
@@ -93,15 +139,17 @@ Your task is to parse the gathered facts into final components for an Instagram 
       prompt: `Gathered Facts:\n\n${researchResult}`,
     });
     
-    const currentDate = currentDateStr;
     let finalCaption = `${contentParams.caption_body.trim()}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
     finalCaption = censorText(finalCaption);
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...');
 
     // Phase 3: Image Sourcing
-    let coverImageUrl = uploadedImageUrls && uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : undefined;
+    let coverImageUrl = uploadedMedia && uploadedMedia.length > 0 && uploadedMedia[0].type === 'image' ? uploadedMedia[0].url : undefined;
+    let coverWasGenerated = false;
+
     if (!coverImageUrl) {
+      coverWasGenerated = true;
       console.log(`[Phase 3] Generating image with prompt: ${contentParams.image_prompt}`);
       
       const imageGenerationPrompt = `${contentParams.image_prompt}. Ensure the image has the style of real life stock photography with NO TEXT whatsoever, similar to a photo taken by a newspaper photographer or stock photographer. (Make it 4:3 aspect ratio).`;
@@ -149,7 +197,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
     const formattedTitle = contentParams.title.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     const formattedSubtitle = contentParams.subtitle.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-    const imageBuffer = await generateNewsImage({
+    let imageBuffer = await generateNewsImage({
       image_url: coverImageUrl,
       title: censorText(formattedTitle),
       subtitle: censorText(formattedSubtitle),
@@ -158,10 +206,16 @@ Your task is to parse the gathered facts into final components for an Instagram 
       my_handle: '@poros.perjuangan'
     });
 
+    console.log(`[Phase 4] Processing cover image to 4:5 aspect ratio`);
+    imageBuffer = await processImageTo4x5(imageBuffer);
+
+    console.log(`[Phase 4] Uploading cover image to S3`);
+    const coverS3Url = await uploadToS3(imageBuffer, 'image/jpeg', '.jpg');
+
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🚀 Mempublikasikan ke Buffer...');
 
     // Phase 5: Publishing via Buffer
-    console.log(`[Phase 5] Sending rendered photo to user and Buffer`);
+    console.log(`[Phase 5] Sending rendered photo to user and preparing Buffer URLs`);
     let previewMsg;
     if (finalCaption.length > 1024) {
       previewMsg = await ctx.replyWithPhoto({ source: imageBuffer });
@@ -172,16 +226,31 @@ Your task is to parse the gathered facts into final components for an Instagram 
         { caption: finalCaption }
       );
     }
-    
-    const publishedCoverPhotoId = previewMsg.photo[previewMsg.photo.length - 1].file_id;
-    const publishedCoverPhotoUrl = (await ctx.telegram.getFileLink(publishedCoverPhotoId)).toString();
 
-    // Prepare array of URLs for Buffer (Rendered Cover + Rest of the unmodified uploaded images)
-    const allPublishUrls = [publishedCoverPhotoUrl];
-    if (uploadedImageUrls && uploadedImageUrls.length > 1) {
-      allPublishUrls.push(...uploadedImageUrls.slice(1));
+    // Prepare array of media for Buffer
+    const allPublishUrls: { type: 'image' | 'video', url: string }[] = [{ type: 'image', url: coverS3Url }];
+    
+    if (uploadedMedia && uploadedMedia.length > 0) {
+      const mediaToProcess = coverWasGenerated ? uploadedMedia : uploadedMedia.slice(1);
+      
+      for (const m of mediaToProcess) {
+        if (!m.buffer) continue; // Skip if download failed in Phase 1
+        
+        let uploadUrl = '';
+        if (m.type === 'image') {
+          console.log(`[Phase 5] Processing additional image to 4:5 aspect ratio`);
+          const processedBuffer = await processImageTo4x5(m.buffer);
+          uploadUrl = await uploadToS3(processedBuffer, 'image/jpeg', '.jpg');
+        } else {
+          console.log(`[Phase 5] Uploading video to S3`);
+          uploadUrl = await uploadToS3(m.buffer, m.mimeType || 'video/mp4', '.mp4');
+        }
+        
+        allPublishUrls.push({ type: m.type, url: uploadUrl });
+      }
     }
 
+    console.log(`[Phase 5] Publishing to Buffer with ${allPublishUrls.length} media items`);
     await publishToBuffer(allPublishUrls, finalCaption);
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Berhasil dipublikasikan ke Buffer!');

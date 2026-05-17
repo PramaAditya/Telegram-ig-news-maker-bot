@@ -13,7 +13,7 @@ if (!botToken) {
 const bot = new Telegraf(botToken);
 
 const activeProcessing = new Set<string>();
-const mediaGroupAccumulator = new Map<string, { timer: NodeJS.Timeout, items: { fileId: string, caption?: string, msgId: number }[] }>();
+const mediaGroupAccumulator = new Map<string, { timer: NodeJS.Timeout, items: { fileId: string, caption?: string, msgId: number, type: 'image' | 'video', mimeType?: string }[] }>();
 
 bot.on(message('text'), async (ctx) => {
   const chatId = ctx.chat.id.toString();
@@ -35,7 +35,7 @@ bot.on(message('text'), async (ctx) => {
     });
 });
 
-bot.on(message('photo'), async (ctx) => {
+async function handleMediaMessage(ctx: any, isVideo: boolean) {
   const chatId = ctx.chat.id.toString();
   
   if (activeProcessing.has(chatId)) {
@@ -43,13 +43,22 @@ bot.on(message('photo'), async (ctx) => {
   }
 
   const caption = ctx.message.caption || '';
-  const photos = ctx.message.photo;
-  const highestResPhoto = photos[photos.length - 1];
+  let fileId = '';
+  let mimeType: string | undefined;
+
+  if (isVideo) {
+    fileId = ctx.message.video.file_id;
+    mimeType = ctx.message.video.mime_type;
+  } else {
+    const photos = ctx.message.photo;
+    fileId = photos[photos.length - 1].file_id;
+    mimeType = 'image/jpeg';
+  }
   
   const mediaGroupId = ctx.message.media_group_id;
   
   if (mediaGroupId) {
-    console.log(`[Bot] Received photo part of media group ${mediaGroupId}`);
+    console.log(`[Bot] Received ${isVideo ? 'video' : 'photo'} part of media group ${mediaGroupId}`);
     if (!mediaGroupAccumulator.has(mediaGroupId)) {
       mediaGroupAccumulator.set(mediaGroupId, {
         items: [],
@@ -59,23 +68,24 @@ bot.on(message('photo'), async (ctx) => {
           if (!groupData) return;
           
           activeProcessing.add(chatId);
-          console.log(`[Bot] Processing accumulated media group ${mediaGroupId} with ${groupData.items.length} photos`);
+          console.log(`[Bot] Processing accumulated media group ${mediaGroupId} with ${groupData.items.length} items`);
           
           try {
             // Sort by message ID to preserve original order
             groupData.items.sort((a, b) => a.msgId - b.msgId);
             
-            const fileLinks = await Promise.all(groupData.items.map(async item => {
-              return (await ctx.telegram.getFileLink(item.fileId)).toString();
+            const mediaItems = await Promise.all(groupData.items.map(async item => {
+              const url = (await ctx.telegram.getFileLink(item.fileId)).toString();
+              return { type: item.type, url, mimeType: item.mimeType };
             }));
             
             // Find the first caption in the group to use as the text prompt
-            const groupCaption = groupData.items.find(item => item.caption)?.caption || 'No specific text provided, analyze the image context if possible.';
+            const groupCaption = groupData.items.find(item => item.caption)?.caption || 'No specific text provided, analyze the media context if possible.';
             
-            await runAutomatedPipeline(ctx, groupCaption, fileLinks);
+            await runAutomatedPipeline(ctx, groupCaption, mediaItems);
           } catch (error) {
             console.error('[Bot] Error processing media group:', error);
-            try { await ctx.reply('Terjadi kesalahan sistem saat memproses album foto.'); } catch (e) {}
+            try { await ctx.reply('Terjadi kesalahan sistem saat memproses album.'); } catch (e) {}
           } finally {
             activeProcessing.delete(chatId);
           }
@@ -83,33 +93,38 @@ bot.on(message('photo'), async (ctx) => {
       });
     }
     
-    // Add this photo to the accumulator
+    // Add this media to the accumulator
     const group = mediaGroupAccumulator.get(mediaGroupId)!;
     group.items.push({
-      fileId: highestResPhoto.file_id,
+      fileId,
       caption: ctx.message.caption,
-      msgId: ctx.message.message_id
+      msgId: ctx.message.message_id,
+      type: isVideo ? 'video' : 'image',
+      mimeType
     });
     
     return; // Don't process immediately, wait for the timer
   }
 
-  // Single photo case (no media_group_id)
-  console.log(`[Bot] Received single photo message from ${ctx.chat.id}`);
-  const fileLink = await ctx.telegram.getFileLink(highestResPhoto.file_id);
-  const text = caption ? caption : 'No specific text provided, analyze the image context if possible.';
+  // Single media case (no media_group_id)
+  console.log(`[Bot] Received single ${isVideo ? 'video' : 'photo'} message from ${ctx.chat.id}`);
+  const fileLink = await ctx.telegram.getFileLink(fileId);
+  const text = caption ? caption : 'No specific text provided, analyze the media context if possible.';
   
   activeProcessing.add(chatId);
   // Do not await to prevent Telegraf 90s timeout
-  runAutomatedPipeline(ctx, text, [fileLink.toString()])
+  runAutomatedPipeline(ctx, text, [{ type: isVideo ? 'video' : 'image', url: fileLink.toString(), mimeType }])
     .catch(async (error) => {
-      console.error('[Bot] Error processing photo:', error);
-      try { await ctx.reply('Terjadi kesalahan sistem saat memproses foto.'); } catch (e) {}
+      console.error(`[Bot] Error processing single media:`, error);
+      try { await ctx.reply('Terjadi kesalahan sistem saat memproses media.'); } catch (e) {}
     })
     .finally(() => {
       activeProcessing.delete(chatId);
     });
-});
+}
+
+bot.on(message('photo'), (ctx) => handleMediaMessage(ctx, false));
+bot.on(message('video'), (ctx) => handleMediaMessage(ctx, true));
 
 bot.launch();
 console.log('Bot is running in automated mode...');
