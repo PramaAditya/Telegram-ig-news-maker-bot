@@ -30,10 +30,13 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
 
     // Phase 1: Research (Fact Gathering)
     console.log(`[Phase 1] Researching: ${userInput}`);
+    const currentDateObj = new Date();
+    const currentDateStr = currentDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
+
     const { text: researchResult } = await generateText({
       model: googleAI('gemini-3-flash-preview'),
-      system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If it's a topic, search the web. If it's a URL, scrape it. Return a comprehensive summary of all relevant facts.`,
-      prompt: `User Input: ${userInput}`,
+      system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If it's a topic, search the web. If it's a URL, scrape it. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date or year if necessary to get the latest news.`,
+      prompt: `Current Date: ${currentDateStr}\n\nUser Input: ${userInput}`,
       tools: {
         searchWeb: tool({
           description: 'Search the web for latest news or facts about a topic.',
@@ -82,7 +85,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
       prompt: `Gathered Facts:\n\n${researchResult}`,
     });
     
-    const currentDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
+    const currentDate = currentDateStr;
     let finalCaption = `${contentParams.caption_body.trim()}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
     finalCaption = censorText(finalCaption);
 
