@@ -147,7 +147,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
       subtitle: censorText(formattedSubtitle),
       date: currentDate,
       source: censorText(contentParams.source_name),
-      my_handle: '@poros.perjuangan'
+      my_handle: '@kabar.perjuangan'
     });
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🚀 Mempublikasikan ke Buffer...');
