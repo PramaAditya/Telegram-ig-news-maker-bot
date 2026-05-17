@@ -150,7 +150,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
 
     if (!coverImageUrl) {
       coverWasGenerated = true;
-      console.log(`[Phase 3] Generating image with prompt: ${contentParams.image_prompt}`);
+      console.log(`[Phase 3] Generating cover image with prompt: ${contentParams.image_prompt}`);
       
       const imageGenerationPrompt = `${contentParams.image_prompt}. Ensure the image has the style of real life stock photography with NO TEXT whatsoever, similar to a photo taken by a newspaper photographer or stock photographer. (Make it 4:3 aspect ratio).`;
 
@@ -194,8 +194,14 @@ Your task is to parse the gathered facts into final components for an Instagram 
 
     // Phase 4: Image Rendering
     console.log(`[Phase 4] Rendering cover image via API`);
-    const formattedTitle = contentParams.title.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    const formattedSubtitle = contentParams.subtitle.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Remove emojis from title and subtitle using a robust regex
+    const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}]/gu;
+    const cleanTitle = contentParams.title.replace(emojiRegex, '');
+    const cleanSubtitle = contentParams.subtitle.replace(emojiRegex, '');
+
+    const formattedTitle = cleanTitle.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    const formattedSubtitle = cleanSubtitle.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
     let imageBuffer = await generateNewsImage({
       image_url: coverImageUrl,
@@ -231,7 +237,11 @@ Your task is to parse the gathered facts into final components for an Instagram 
     const allPublishUrls: { type: 'image' | 'video', url: string }[] = [{ type: 'image', url: coverS3Url }];
     
     if (uploadedMedia && uploadedMedia.length > 0) {
-      const mediaToProcess = coverWasGenerated ? uploadedMedia : uploadedMedia.slice(1);
+      // If we used the user's first image as cover (coverWasGenerated = false), 
+      // we still want to include it AGAIN as the second slide (so it acts as both cover and slide 2).
+      // If coverWasGenerated is true, it means all uploadedMedia are just additional slides (like videos).
+      // In both cases, we process the entirety of uploadedMedia.
+      const mediaToProcess = uploadedMedia;
       
       for (const m of mediaToProcess) {
         if (!m.buffer) continue; // Skip if download failed in Phase 1
