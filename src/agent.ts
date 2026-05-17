@@ -238,13 +238,57 @@ Your task is to parse the gathered facts into final components for an Instagram 
     const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}]/gu;
     const cleanTitle = contentParams.title.replace(emojiRegex, '');
 
+    // Pagination step to ensure slides are not too long
+    const MAX_SLIDE_LENGTH = 300;
+    
+    function paginateText(text: string, maxLength: number): string[] {
+      const paragraphs = text.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+      const slides: string[] = [];
+      let currentSlide = '';
+
+      for (const p of paragraphs) {
+        if (p.length > maxLength) {
+          if (currentSlide) {
+            slides.push(currentSlide);
+            currentSlide = '';
+          }
+          const sentences = p.match(/[^.!?]+[.!?]+/g) || [p];
+          for (const sentence of sentences) {
+            const s = sentence.trim();
+            if (!s) continue;
+            if (!currentSlide) {
+              currentSlide = s;
+            } else if (currentSlide.length + s.length + 1 <= maxLength) {
+              currentSlide += ' ' + s;
+            } else {
+              slides.push(currentSlide);
+              currentSlide = s;
+            }
+          }
+        } else {
+          if (!currentSlide) {
+            currentSlide = p;
+          } else if (currentSlide.length + p.length + 2 <= maxLength) {
+            currentSlide += '\n\n' + p;
+          } else {
+            slides.push(currentSlide);
+            currentSlide = p;
+          }
+        }
+      }
+      if (currentSlide) slides.push(currentSlide);
+      return slides;
+    }
+
+    const paginatedSlides = paginateText(contentParams.slide_text, MAX_SLIDE_LENGTH);
+
     const renderedUrls = await generateImageSequence({
       logo: 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
       cover_image: coverImageUrl,
       title: censorText(cleanTitle),
-      slides: [{
-        text: censorText(contentParams.slide_text)
-      }]
+      slides: paginatedSlides.map(text => ({
+        text: censorText(text)
+      }))
     });
 
     if (!renderedUrls || renderedUrls.length === 0) {
