@@ -149,25 +149,21 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
       model: googleAI('gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `
 Your task is to parse the gathered facts into final components for an Instagram news carousel.
-- title: A professional, clear, and engaging headline for the cover. Can use bold (**text**) if necessary.
-- slides: An array of text for each slide to explain the news. EACH SLIDE MUST CONTAIN MAXIMUM 3 SENTENCES. Separate the sentences/ideas with double newlines (\\n\\n) for readability. Aim for 2-5 slides total.
+- title: A professional, clear, and engaging headline for the cover. PLAINTEXT ONLY. NO markdown or HTML tags.
+- slide_text: A single string of text for the slide explaining the news. IT MUST CONTAIN MAXIMUM 3 SENTENCES. Separate the sentences/ideas with double newlines (\\n\\n) for readability.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
-- caption_body: Exactly 2 paragraphs separated by \\n\\n. MUST BE CONCISE, STRICTLY UNDER 800 CHARACTERS TOTAL. Tone: Formal journalistic Bahasa Indonesia with subtle bias. PLAINTEXT ONLY (no markdown). Do NOT include the "DD/MM/YYYY. Sumber: ..." line.
 - image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "real life stock photography, no text whatsoever, similar to photo taken by newspaper photographer or stock photographer".
 `,
       schema: z.object({
         title: z.string(),
-        slides: z.array(z.object({
-          text: z.string()
-        })),
+        slide_text: z.string(),
         source_name: z.string(),
-        caption_body: z.string(),
         image_prompt: z.string(),
       }),
       prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchResult}`,
     });
     
-    let finalCaption = `${contentParams.caption_body.trim()}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
+    let finalCaption = `${contentParams.slide_text.trim()}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
     finalCaption = censorText(finalCaption);
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...');
@@ -229,9 +225,9 @@ Your task is to parse the gathered facts into final components for an Instagram 
       logo: 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
       cover_image: coverImageUrl,
       title: censorText(cleanTitle),
-      slides: contentParams.slides.map(slide => ({
-        text: censorText(slide.text)
-      }))
+      slides: [{
+        text: censorText(contentParams.slide_text)
+      }]
     });
 
     if (!renderedUrls || renderedUrls.length === 0) {
