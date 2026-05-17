@@ -282,11 +282,35 @@ Your task is to parse the gathered facts into final components for an Instagram 
 
     const paginatedSlides = paginateText(contentParams.slide_text, MAX_SLIDE_LENGTH);
 
+    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...');
+    console.log(`[Phase 4] Enhancing slides with markdown bolding via gemini-3.1-flash-lite...`);
+    
+    const boldedSlides = await Promise.all(paginatedSlides.map(async (text) => {
+      try {
+        const { text: boldedText } = await generateText({
+          model: googleAI('gemini-3.1-flash-lite-preview'),
+          system: `You are an editor for an Instagram news carousel. Your task is to add bold markdown (using **text**) to the most important or shocking words, phrases, or clauses in the provided slide text. 
+This helps readers scan the text and prevents it from being monotonous.
+RULES:
+1. Do not change any original words, only add ** around the important parts.
+2. Output ONLY the modified text, nothing else.
+3. Don't bold everything, just the key highlights (maximum 20-30% of the text).`,
+          prompt: text
+        });
+        return boldedText.trim() || text;
+      } catch (err) {
+        console.warn('Failed to add bolding to slide, falling back to original text:', err);
+        return text;
+      }
+    }));
+
+    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
+
     const renderedUrls = await generateImageSequence({
       logo: 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
       cover_image: coverImageUrl,
       title: censorText(cleanTitle),
-      slides: paginatedSlides.map(text => ({
+      slides: boldedSlides.map(text => ({
         text: censorText(text)
       }))
     });
