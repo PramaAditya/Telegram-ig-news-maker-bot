@@ -239,7 +239,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
     const cleanTitle = contentParams.title.replace(emojiRegex, '');
 
     // Pagination step to ensure slides are not too long
-    const MAX_SLIDE_LENGTH = 300;
+    const MAX_SLIDE_LENGTH = 200;
     
     function paginateText(text: string, maxLength: number): string[] {
       const paragraphs = text.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
