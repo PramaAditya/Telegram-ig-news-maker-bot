@@ -87,6 +87,31 @@ export async function mergeImageAndVideo(imageBuffer: Buffer, videoBuffer: Buffe
   }
 }
 
+export async function extractFirstFrame(videoBuffer: Buffer): Promise<Buffer> {
+  const tempId = uuidv4();
+  const inputPath = path.join(os.tmpdir(), `${tempId}_input.mp4`);
+  const outputPath = path.join(os.tmpdir(), `${tempId}_output.jpg`);
+
+  try {
+    await fs.writeFile(inputPath, videoBuffer);
+    
+    await execFileAsync('ffmpeg', [
+      '-v', 'error',
+      '-i', inputPath,
+      '-vframes', '1',
+      '-q:v', '2',
+      '-y',
+      outputPath
+    ], { maxBuffer: 10 * 1024 * 1024 });
+
+    const outputBuffer = await fs.readFile(outputPath);
+    return outputBuffer;
+  } finally {
+    try { await fs.unlink(inputPath); } catch (e) {}
+    try { await fs.unlink(outputPath); } catch (e) {}
+  }
+}
+
 export async function processVideoTo4x5(buffer: Buffer): Promise<Buffer> {
   const tempId = uuidv4();
   const inputPath = path.join(os.tmpdir(), `${tempId}_input.mp4`);

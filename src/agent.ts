@@ -5,7 +5,7 @@ import FirecrawlApp from '@mendable/firecrawl-js';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import { censorText } from './sanitize.js';
-import { processImageTo4x5, processVideoTo4x5, mergeImageAndVideo } from './media-processor.js';
+import { processImageTo4x5, processVideoTo4x5, mergeImageAndVideo, extractFirstFrame } from './media-processor.js';
 import { uploadToS3 } from './s3.js';
 import { generateNewsImage } from './image.js';
 import { publishToBuffer } from './buffer.js';
@@ -161,8 +161,26 @@ Your task is to parse the gathered facts into final components for an Instagram 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...');
 
     // Phase 3: Image Sourcing
-    let coverImageUrl = uploadedMedia && uploadedMedia.length > 0 && uploadedMedia[0].type === 'image' ? uploadedMedia[0].s3Url || uploadedMedia[0].url : undefined;
+    let coverImageUrl: string | undefined = undefined;
     let coverWasGenerated = false;
+
+    if (uploadedMedia && uploadedMedia.length > 0) {
+      const firstMedia = uploadedMedia[0];
+      if (firstMedia.type === 'image') {
+        coverImageUrl = firstMedia.s3Url || firstMedia.url;
+        console.log(`[Phase 3] Using uploaded cover image URL: ${coverImageUrl}`);
+      } else if (firstMedia.type === 'video' && firstMedia.buffer) {
+        try {
+          console.log(`[Phase 3] Extracting first frame from video to use as cover...`);
+          const firstFrameBuffer = await extractFirstFrame(firstMedia.buffer);
+          console.log(`[Phase 3] Uploading extracted frame to S3...`);
+          coverImageUrl = await uploadToS3(firstFrameBuffer, 'image/jpeg', '.jpg');
+          console.log(`[Phase 3] Using extracted frame URL: ${coverImageUrl}`);
+        } catch (err: any) {
+          console.error(`[Phase 3] Failed to extract frame, falling back to AI generation:`, err.message);
+        }
+      }
+    }
 
     if (!coverImageUrl) {
       coverWasGenerated = true;
@@ -194,8 +212,6 @@ Your task is to parse the gathered facts into final components for an Instagram 
       // It will be rendered and then resized in Phase 4
       coverImageUrl = await uploadToS3(generatedFileBuffer, 'image/jpeg', '.jpg');
       
-    } else {
-      console.log(`[Phase 3] Using uploaded cover image URL: ${coverImageUrl}`);
     }
 
     if (!coverImageUrl) {
