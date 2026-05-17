@@ -2,6 +2,9 @@ FROM node:22-alpine
 
 WORKDIR /app
 
+# Install ffmpeg for video processing
+RUN apk update && apk add --no-cache ffmpeg
+
 # Copy package.json and package-lock.json
 COPY package*.json ./
 

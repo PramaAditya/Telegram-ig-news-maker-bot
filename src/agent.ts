@@ -5,7 +5,7 @@ import FirecrawlApp from '@mendable/firecrawl-js';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import { censorText } from './sanitize.js';
-import { processImageTo4x5 } from './media-processor.js';
+import { processImageTo4x5, processVideoTo4x5 } from './media-processor.js';
 import { uploadToS3 } from './s3.js';
 import { generateNewsImage } from './image.js';
 import { publishToBuffer } from './buffer.js';
@@ -37,6 +37,7 @@ export interface MediaItem {
   url: string;
   mimeType?: string;
   buffer?: Buffer;
+  s3Url?: string;
 }
 
 export async function runAutomatedPipeline(ctx: any, userInput: string, uploadedMedia?: MediaItem[]) {
@@ -56,35 +57,46 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
       { type: 'text', text: `User Input: ${userInput}` }
     ];
 
-    if (uploadedMedia && uploadedMedia.length > 0) {
-      for (const media of uploadedMedia) {
-        console.log(`[Phase 1] Downloading media for Gemini: ${media.url}`);
-        try {
-            const response = await axios.get(media.url, { responseType: 'arraybuffer' });
-            const buffer = Buffer.from(response.data);
-            media.buffer = buffer; // Cache for later use
-            
-            if (media.type === 'video') {
-              console.log(`[Phase 1] Uploading video to S3 for Gemini Context...`);
-              const s3Url = await uploadToS3(buffer, media.mimeType || 'video/mp4', '.mp4');
-              console.log(`[Phase 1] S3 URL: ${s3Url}`);
+      if (uploadedMedia && uploadedMedia.length > 0) {
+        for (const media of uploadedMedia) {
+          console.log(`[Phase 1] Downloading media for Gemini: ${media.url}`);
+          try {
+              const response = await axios.get(media.url, { responseType: 'arraybuffer' });
+              let buffer = Buffer.from(response.data);
               
-              messageContent.push({
-                type: 'file',
-                data: s3Url,
-                mediaType: media.mimeType || 'video/mp4'
-              });
-            } else {
-              messageContent.push({
-              type: 'image',
-              image: buffer
-            });
+              if (media.type === 'video') {
+                console.log(`[Phase 1] Resizing video to 4:5 aspect ratio...`);
+                buffer = await processVideoTo4x5(buffer);
+                media.buffer = buffer;
+                
+                console.log(`[Phase 1] Uploading video to S3...`);
+                const s3Url = await uploadToS3(buffer, media.mimeType || 'video/mp4', '.mp4');
+                media.s3Url = s3Url;
+                console.log(`[Phase 1] S3 URL: ${s3Url}`);
+                
+                messageContent.push({
+                  type: 'file',
+                  data: s3Url,
+                  mediaType: media.mimeType || 'video/mp4'
+                });
+              } else {
+                console.log(`[Phase 1] Resizing image to 4:5 aspect ratio...`);
+                buffer = await processImageTo4x5(buffer);
+                media.buffer = buffer;
+                
+                console.log(`[Phase 1] Uploading image to S3...`);
+                media.s3Url = await uploadToS3(buffer, 'image/jpeg', '.jpg');
+
+                messageContent.push({
+                  type: 'image',
+                  image: buffer
+                });
+            }
+          } catch (err: any) {
+            console.error(`[Phase 1] Failed to process media:`, err.message);
           }
-        } catch (err: any) {
-          console.error(`[Phase 1] Failed to download media for AI context:`, err.message);
         }
       }
-    }
 
     const { text: researchResult } = await generateText({
       model: googleAI('gemini-3.1-pro-preview'),
@@ -149,7 +161,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...');
 
     // Phase 3: Image Sourcing
-    let coverImageUrl = uploadedMedia && uploadedMedia.length > 0 && uploadedMedia[0].type === 'image' ? uploadedMedia[0].url : undefined;
+    let coverImageUrl = uploadedMedia && uploadedMedia.length > 0 && uploadedMedia[0].type === 'image' ? uploadedMedia[0].s3Url || uploadedMedia[0].url : undefined;
     let coverWasGenerated = false;
 
     if (!coverImageUrl) {
@@ -240,29 +252,16 @@ Your task is to parse the gathered facts into final components for an Instagram 
     // Prepare array of media for Buffer
     const allPublishUrls: { type: 'image' | 'video', url: string }[] = [{ type: 'image', url: coverS3Url }];
     
-    if (uploadedMedia && uploadedMedia.length > 0) {
-      // If we used the user's first image as cover (coverWasGenerated = false), 
-      // we still want to include it AGAIN as the second slide (so it acts as both cover and slide 2).
-      // If coverWasGenerated is true, it means all uploadedMedia are just additional slides (like videos).
-      // In both cases, we process the entirety of uploadedMedia.
-      const mediaToProcess = uploadedMedia;
-      
-      for (const m of mediaToProcess) {
-        if (!m.buffer) continue; // Skip if download failed in Phase 1
-        
-        let uploadUrl = '';
-        if (m.type === 'image') {
-          console.log(`[Phase 5] Processing additional image to 4:5 aspect ratio`);
-          const processedBuffer = await processImageTo4x5(m.buffer);
-          uploadUrl = await uploadToS3(processedBuffer, 'image/jpeg', '.jpg');
-        } else {
-          console.log(`[Phase 5] Uploading video to S3`);
-          uploadUrl = await uploadToS3(m.buffer, m.mimeType || 'video/mp4', '.mp4');
+      if (uploadedMedia && uploadedMedia.length > 0) {
+        // If we used the user's first image as cover (coverWasGenerated = false), 
+        // we still want to include it AGAIN as the second slide (so it acts as both cover and slide 2).
+        // If coverWasGenerated is true, it means all uploadedMedia are just additional slides (like videos).
+        // In both cases, we process the entirety of uploadedMedia.
+        for (const m of uploadedMedia) {
+          if (!m.s3Url) continue; // Skip if processing failed in Phase 1
+          allPublishUrls.push({ type: m.type, url: m.s3Url });
         }
-        
-        allPublishUrls.push({ type: m.type, url: uploadUrl });
       }
-    }
 
     console.log(`[Phase 5] Publishing to Buffer with ${allPublishUrls.length} media items`);
     await publishToBuffer(allPublishUrls, finalCaption);
