@@ -21,7 +21,21 @@ bot.on(message('text'), async (ctx) => {
     return; // Ignore if already processing
   }
   
-  const text = ctx.message.text;
+  // Reconstruct text with original URLs using message entities
+  let text = ctx.message.text;
+  if (ctx.message.entities) {
+    let offset = 0;
+    const entities = ctx.message.entities;
+    for (const entity of entities) {
+      if (entity.type === 'text_link') {
+        const linkText = text.substring(entity.offset + offset, entity.offset + entity.length + offset);
+        const url = entity.url;
+        const replacement = `${linkText} (${url})`;
+        text = text.substring(0, entity.offset + offset) + replacement + text.substring(entity.offset + entity.length + offset);
+        offset += replacement.length - linkText.length;
+      }
+    }
+  }
   
   activeProcessing.add(chatId);
   // Do not await to prevent Telegraf 90s timeout
@@ -42,7 +56,22 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
     return; // Ignore if already processing
   }
 
-  const caption = ctx.message.caption || '';
+  const baseCaption = ctx.message.caption || '';
+  let caption = baseCaption;
+  
+  if (ctx.message.caption_entities) {
+    let offset = 0;
+    const entities = ctx.message.caption_entities;
+    for (const entity of entities) {
+      if (entity.type === 'text_link') {
+        const linkText = caption.substring(entity.offset + offset, entity.offset + entity.length + offset);
+        const url = entity.url;
+        const replacement = `${linkText} (${url})`;
+        caption = caption.substring(0, entity.offset + offset) + replacement + caption.substring(entity.offset + entity.length + offset);
+        offset += replacement.length - linkText.length;
+      }
+    }
+  }
   let fileId = '';
   let mimeType: string | undefined;
 
@@ -110,7 +139,7 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
     const group = mediaGroupAccumulator.get(mediaGroupId)!;
     group.items.push({
       fileId,
-      caption: ctx.message.caption,
+      caption: caption,
       msgId: ctx.message.message_id,
       type: isVideo ? 'video' : 'image',
       mimeType
