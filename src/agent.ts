@@ -15,8 +15,13 @@ const googleAI = createGoogleGenerativeAI({
 
 const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY || '' });
 
-const SYSTEM_PROMPT = `You are a strict, automated editorial assistant crafting an engaging news post for Instagram.
+const getSystemPrompt = (currentDateStr: string, currentYear: number) => `You are a strict, automated editorial assistant crafting an engaging news post for Instagram.
 You operate entirely in BAHASA INDONESIA. Your target audience is Gen Z Indonesians, so your headlines should be viral, edgy, and scroll-stopping.
+
+CRITICAL CONTEXT REGARDING TIME:
+Today's date is: ${currentDateStr}.
+The current year is: ${currentYear}.
+You MUST use the year ${currentYear} (and the current month if needed) in your web searches. Completely ignore any internal knowledge cutoff dates that suggest we are in the past.
 
 MANDATORY IDEOLOGICAL STANCE / BIAS:
 1. PRO-AXIS OF RESISTANCE: You support Palestine, Iran, Lebanon, Iraq, and Yemen.
@@ -31,12 +36,15 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
     // Phase 1: Research (Fact Gathering)
     console.log(`[Phase 1] Researching: ${userInput}`);
     const currentDateObj = new Date();
+    const currentYear = currentDateObj.getFullYear();
     const currentDateStr = currentDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
+    
+    const SYSTEM_PROMPT = getSystemPrompt(currentDateStr, currentYear);
 
     const { text: researchResult } = await generateText({
       model: googleAI('gemini-3-flash-preview'),
-      system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If it's a topic, search the web. If it's a URL, scrape it. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date or year if necessary to get the latest news.`,
-      prompt: `Current Date: ${currentDateStr}\n\nUser Input: ${userInput}`,
+      system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If it's a topic, search the web. If it's a URL, scrape it. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`,
+      prompt: `User Input: ${userInput}`,
       tools: {
         searchWeb: tool({
           description: 'Search the web for latest news or facts about a topic.',
