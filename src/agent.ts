@@ -199,6 +199,13 @@ Your task is to parse the gathered facts into final components for an Instagram 
     const { files } = await generateText({
       model: googleAI('gemini-3.1-flash-image-preview'),
       messages: [{ role: 'user', content: imageGenMessageContent as any }],
+      providerOptions: {
+        google: {
+          imageConfig: {
+            aspectRatio: '4:5'
+          }
+        }
+      }
     });
     
     let generatedFileBuffer: Buffer | null = null;
