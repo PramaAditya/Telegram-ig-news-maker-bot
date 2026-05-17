@@ -72,7 +72,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
 - title: Engaging and punchy, natural. DO NOT use cheap clickbait. Highlight the key factual phrase with bold (**text**).
 - subtitle: Provides context to hook the reader. Can also use bold (**text**) if necessary.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
-- caption_body: Exactly 2 paragraphs separated by \\n\\n. Must be short enough to fit inside a Telegram photo caption (under 1024 characters total). Tone: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance. PLAINTEXT ONLY (no markdown). Do NOT include the "DD/MM/YYYY. Sumber: ..." line.
+- caption_body: Exactly 2 paragraphs separated by \\n\\n. MUST BE CONCISE, STRICTLY UNDER 800 CHARACTERS TOTAL. Tone: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance. PLAINTEXT ONLY (no markdown). Do NOT include the "DD/MM/YYYY. Sumber: ..." line.
 - image_prompt: A prompt for an AI image generator to create an accompanying image. MUST specify: "real life stock photography, no text whatsoever, similar to photo taken by newspaper photographer or stock photographer".
 `,
       schema: z.object({
@@ -154,10 +154,17 @@ Your task is to parse the gathered facts into final components for an Instagram 
 
     // Phase 5: Publishing via Buffer
     console.log(`[Phase 5] Sending rendered photo to user and Buffer`);
-    const previewMsg = await ctx.replyWithPhoto(
-      { source: imageBuffer },
-      { caption: finalCaption }
-    );
+    let previewMsg;
+    if (finalCaption.length > 1024) {
+      previewMsg = await ctx.replyWithPhoto({ source: imageBuffer });
+      await ctx.reply(finalCaption);
+    } else {
+      previewMsg = await ctx.replyWithPhoto(
+        { source: imageBuffer },
+        { caption: finalCaption }
+      );
+    }
+    
     const publishedPhotoId = previewMsg.photo[previewMsg.photo.length - 1].file_id;
     const publishedPhotoUrl = (await ctx.telegram.getFileLink(publishedPhotoId)).toString();
 
