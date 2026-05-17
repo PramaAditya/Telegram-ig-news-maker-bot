@@ -42,7 +42,7 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
     const SYSTEM_PROMPT = getSystemPrompt(currentDateStr, currentYear);
 
     const { text: researchResult } = await generateText({
-      model: googleAI('gemini-3-flash-preview'),
+      model: googleAI('gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If it's a topic, search the web. If it's a URL, scrape it. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`,
       prompt: `User Input: ${userInput}`,
       tools: {
@@ -74,7 +74,7 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
     // Phase 2: Content Generation
     console.log(`[Phase 2] Generating content`);
     const { object: contentParams } = await generateObject({
-      model: googleAI('gemini-3-flash-preview'),
+      model: googleAI('gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `
 Your task is to parse the gathered facts into final components for an Instagram news post.
 - title: Scroll-stopping, highly sensational, and provocative (clickbait-style but factual). Target audience is Gen Z Indonesians. Use impactful, edgy, and casual terms (e.g., 'Bikin Panik', 'Kena Mental', 'Skakmat', 'Hancur Lebur', 'Gila!') to make it sound like a viral breaking news alert. Highlight the key factual phrase with bold (**text**).
