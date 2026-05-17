@@ -47,7 +47,7 @@ export async function mergeImageAndVideo(imageBuffer: Buffer, videoBuffer: Buffe
 
     const filterComplex = hasAudio 
       ? `[0:v]scale=1080:1350:force_original_aspect_ratio=decrease,pad=1080:1350:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v0];` +
-        `anullsrc=channel_layout=stereo:sample_rate=44100[a0];` +
+        `anullsrc=channel_layout=stereo:sample_rate=44100:d=3[a0];` +
         `[1:v]scale=1080:1350:force_original_aspect_ratio=decrease,pad=1080:1350:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v1];` +
         `[1:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[a1];` +
         `[v0][a0][v1][a1]concat=n=2:v=1:a=1[outv][outa]`
@@ -56,6 +56,7 @@ export async function mergeImageAndVideo(imageBuffer: Buffer, videoBuffer: Buffe
         `[v0][v1]concat=n=2:v=1:a=0[outv]`;
 
     const args = [
+      '-v', 'error',
       '-loop', '1', '-framerate', '30', '-t', '3', '-i', imagePath,
       '-i', videoPath,
       '-filter_complex', filterComplex,
@@ -75,7 +76,7 @@ export async function mergeImageAndVideo(imageBuffer: Buffer, videoBuffer: Buffe
       outputPath
     );
 
-    await execFileAsync('ffmpeg', args);
+    await execFileAsync('ffmpeg', args, { maxBuffer: 10 * 1024 * 1024 });
 
     const outputBuffer = await fs.readFile(outputPath);
     return outputBuffer;
@@ -96,6 +97,7 @@ export async function processVideoTo4x5(buffer: Buffer): Promise<Buffer> {
     
     // Scale and pad to 1080x1350 with black background
     await execFileAsync('ffmpeg', [
+      '-v', 'error',
       '-i', inputPath,
       '-vf', 'scale=1080:1350:force_original_aspect_ratio=decrease,pad=1080:1350:(ow-iw)/2:(oh-ih)/2:color=black',
       '-c:v', 'libx264',
@@ -103,7 +105,7 @@ export async function processVideoTo4x5(buffer: Buffer): Promise<Buffer> {
       '-c:a', 'copy',
       '-y', // overwrite output if exists
       outputPath
-    ]);
+    ], { maxBuffer: 10 * 1024 * 1024 });
 
     const outputBuffer = await fs.readFile(outputPath);
     return outputBuffer;
