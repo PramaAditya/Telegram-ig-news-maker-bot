@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export async function publishToBuffer(imageUrl: string, text: string) {
+export async function publishToBuffer(imageUrls: string[], text: string) {
   const bufferToken = process.env.BUFFER_API_KEY;
   const channelId = process.env.BUFFER_INSTAGRAM_CHANNEL_ID;
 
@@ -23,11 +23,7 @@ export async function publishToBuffer(imageUrl: string, text: string) {
             }
           }
           assets: [
-            {
-              image: {
-                url: "${imageUrl}"
-              }
-            }
+            ${imageUrls.map(url => `{ image: { url: "${url}" } }`).join(',\n            ')}
           ]
         }
       ) {

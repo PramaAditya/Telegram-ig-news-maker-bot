@@ -29,7 +29,7 @@ MANDATORY IDEOLOGICAL STANCE / BIAS:
 Keep this bias in mind when selecting facts and composing the final text.
 `;
 
-export async function runAutomatedPipeline(ctx: any, userInput: string, uploadedImageUrl?: string) {
+export async function runAutomatedPipeline(ctx: any, userInput: string, uploadedImageUrls?: string[]) {
   try {
     let statusMsg = await ctx.reply('🔍 Mencari informasi...');
 
@@ -77,7 +77,7 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
       model: googleAI('gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `
 Your task is to parse the gathered facts into final components for an Instagram news post.
-- title: Scroll-stopping, highly sensational, and provocative (clickbait-style but factual). Target audience is Gen Z Indonesians. Use impactful, edgy, and casual terms (e.g., 'Bikin Panik', 'Kena Mental', 'Skakmat', 'Hancur Lebur', 'Gila!') to make it sound like a viral breaking news alert. Highlight the key factual phrase with bold (**text**).
+- title: Scroll-stopping, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with bold (**text**).
 - subtitle: Sarcastic, sharp, or mind-blowing context that hooks the reader instantly. Connect with Gen Z energy. Can also use bold (**text**) if necessary.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
 - caption_body: Exactly 2 paragraphs separated by \\n\\n. MUST BE CONCISE, STRICTLY UNDER 800 CHARACTERS TOTAL. Tone: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance. PLAINTEXT ONLY (no markdown). Do NOT include the "DD/MM/YYYY. Sumber: ..." line.
@@ -100,8 +100,8 @@ Your task is to parse the gathered facts into final components for an Instagram 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...');
 
     // Phase 3: Image Sourcing
-    let finalImageUrl = uploadedImageUrl;
-    if (!finalImageUrl) {
+    let coverImageUrl = uploadedImageUrls && uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : undefined;
+    if (!coverImageUrl) {
       console.log(`[Phase 3] Generating image with prompt: ${contentParams.image_prompt}`);
       
       const imageGenerationPrompt = `${contentParams.image_prompt}. Ensure the image has the style of real life stock photography with NO TEXT whatsoever, similar to a photo taken by a newspaper photographer or stock photographer. (Make it 4:3 aspect ratio).`;
@@ -129,33 +129,33 @@ Your task is to parse the gathered facts into final components for an Instagram 
       const tempMsg = await ctx.replyWithPhoto({ source: generatedFileBuffer }, { caption: `[Internal Use] Generated Image` });
       const photoArray = tempMsg.photo;
       const fileId = photoArray[photoArray.length - 1].file_id;
-      finalImageUrl = (await ctx.telegram.getFileLink(fileId)).toString();
+      coverImageUrl = (await ctx.telegram.getFileLink(fileId)).toString();
       
       try {
         await ctx.telegram.deleteMessage(tempMsg.chat.id, tempMsg.message_id);
       } catch(e) {}
     } else {
-      console.log(`[Phase 3] Using uploaded image URL: ${finalImageUrl}`);
+      console.log(`[Phase 3] Using uploaded cover image URL: ${coverImageUrl}`);
     }
 
-    if (!finalImageUrl) {
+    if (!coverImageUrl) {
       throw new Error('Gagal mendapatkan URL gambar.');
     }
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
 
     // Phase 4: Image Rendering
-    console.log(`[Phase 4] Rendering image via API`);
+    console.log(`[Phase 4] Rendering cover image via API`);
     const formattedTitle = contentParams.title.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     const formattedSubtitle = contentParams.subtitle.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
     const imageBuffer = await generateNewsImage({
-      image_url: finalImageUrl,
+      image_url: coverImageUrl,
       title: censorText(formattedTitle),
       subtitle: censorText(formattedSubtitle),
       date: currentDate,
       source: censorText(contentParams.source_name),
-      my_handle: '@kabar.perjuangan'
+      my_handle: '@poros.perjuangan'
     });
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🚀 Mempublikasikan ke Buffer...');
@@ -173,10 +173,16 @@ Your task is to parse the gathered facts into final components for an Instagram 
       );
     }
     
-    const publishedPhotoId = previewMsg.photo[previewMsg.photo.length - 1].file_id;
-    const publishedPhotoUrl = (await ctx.telegram.getFileLink(publishedPhotoId)).toString();
+    const publishedCoverPhotoId = previewMsg.photo[previewMsg.photo.length - 1].file_id;
+    const publishedCoverPhotoUrl = (await ctx.telegram.getFileLink(publishedCoverPhotoId)).toString();
 
-    await publishToBuffer(publishedPhotoUrl, finalCaption);
+    // Prepare array of URLs for Buffer (Rendered Cover + Rest of the unmodified uploaded images)
+    const allPublishUrls = [publishedCoverPhotoUrl];
+    if (uploadedImageUrls && uploadedImageUrls.length > 1) {
+      allPublishUrls.push(...uploadedImageUrls.slice(1));
+    }
+
+    await publishToBuffer(allPublishUrls, finalCaption);
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Berhasil dipublikasikan ke Buffer!');
     console.log(`[Done] Pipeline finished successfully.`);
