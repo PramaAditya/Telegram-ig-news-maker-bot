@@ -60,18 +60,22 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
       for (const media of uploadedMedia) {
         console.log(`[Phase 1] Downloading media for Gemini: ${media.url}`);
         try {
-          const response = await axios.get(media.url, { responseType: 'arraybuffer' });
-          const buffer = Buffer.from(response.data);
-          media.buffer = buffer; // Cache for later use
-          
-          if (media.type === 'video') {
-            messageContent.push({
-              type: 'file',
-              data: buffer,
-              mimeType: media.mimeType || 'video/mp4'
-            });
-          } else {
-            messageContent.push({
+            const response = await axios.get(media.url, { responseType: 'arraybuffer' });
+            const buffer = Buffer.from(response.data);
+            media.buffer = buffer; // Cache for later use
+            
+            if (media.type === 'video') {
+              console.log(`[Phase 1] Uploading video to S3 for Gemini Context...`);
+              const s3Url = await uploadToS3(buffer, media.mimeType || 'video/mp4', '.mp4');
+              console.log(`[Phase 1] S3 URL: ${s3Url}`);
+              
+              messageContent.push({
+                type: 'file',
+                data: s3Url,
+                mediaType: media.mimeType || 'video/mp4'
+              });
+            } else {
+              messageContent.push({
               type: 'image',
               image: buffer
             });
