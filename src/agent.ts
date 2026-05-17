@@ -5,7 +5,6 @@ import FirecrawlApp from '@mendable/firecrawl-js';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import { censorText } from './sanitize.js';
-import { processImageTo4x5, processVideoTo4x5 } from './media-processor.js';
 import { uploadToS3 } from './s3.js';
 import { generateImageSequence } from './image.js';
 import { publishToBuffer } from './buffer.js';
@@ -78,8 +77,7 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
                 let buffer = Buffer.from(response!.data);
               
               if (media.type === 'video') {
-                console.log(`[Phase 1] Resizing video to 4:5 aspect ratio...`);
-                buffer = await processVideoTo4x5(buffer);
+                console.log(`[Phase 1] Saving original video...`);
                 media.buffer = buffer;
                 
                 console.log(`[Phase 1] Uploading video to S3...`);
@@ -93,8 +91,7 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
                   mediaType: media.mimeType || 'video/mp4'
                 });
               } else {
-                console.log(`[Phase 1] Resizing image to 4:5 aspect ratio...`);
-                buffer = await processImageTo4x5(buffer);
+                console.log(`[Phase 1] Saving original image...`);
                 media.buffer = buffer;
                 
                 console.log(`[Phase 1] Uploading image to S3...`);
