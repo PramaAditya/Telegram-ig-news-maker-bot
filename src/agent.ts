@@ -169,44 +169,54 @@ Your task is to parse the gathered facts into final components for an Instagram 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...');
 
     // Phase 3: Image Sourcing
-    let coverImageUrl: string | undefined = undefined;
+    let baseImageBuffer: Buffer | null = null;
 
     if (uploadedMedia && uploadedMedia.length > 0) {
       const firstMedia = uploadedMedia[0];
-      if (firstMedia.type === 'image') {
-        coverImageUrl = firstMedia.s3Url || firstMedia.url;
-        console.log(`[Phase 3] Using uploaded cover image URL: ${coverImageUrl}`);
+      if (firstMedia.type === 'image' && firstMedia.buffer) {
+        baseImageBuffer = firstMedia.buffer;
+        console.log(`[Phase 3] Using uploaded cover image for enhancement`);
       }
     }
 
-    if (!coverImageUrl) {
-      console.log(`[Phase 3] Generating cover image with prompt: ${contentParams.image_prompt}`);
-      
-      const imageGenerationPrompt = `${contentParams.image_prompt}. Ensure the image has the style of real life stock photography with NO TEXT whatsoever, similar to a photo taken by a newspaper photographer or stock photographer. (Make it 4:3 aspect ratio).`;
+    let imageGenerationPrompt = "";
+    const promptSuffix = "Enhance and sharpen the image. Relayout and ensure it is strictly in 4:5 aspect ratio. Ensure the image has the style of real life stock photography with NO TEXT whatsoever, similar to a photo taken by a newspaper photographer or stock photographer.";
 
-      const { files } = await generateText({
-        model: googleAI('gemini-3.1-flash-image-preview'),
-        messages: [{ role: 'user', content: [{ type: 'text', text: imageGenerationPrompt } as any] }],
-      });
-      
-      let generatedFileBuffer: Buffer | null = null;
-      if (files) {
-        for (const file of files) {
-          if (file.mediaType.startsWith('image/')) {
-            generatedFileBuffer = Buffer.from(file.uint8Array);
-            break;
-          }
+    if (baseImageBuffer) {
+      console.log(`[Phase 3] Enhancing cover image with Gemini...`);
+      imageGenerationPrompt = `Based on the provided image, ${promptSuffix}`;
+    } else {
+      console.log(`[Phase 3] Generating cover image with prompt: ${contentParams.image_prompt}`);
+      imageGenerationPrompt = `${contentParams.image_prompt}. ${promptSuffix}`;
+    }
+
+    const imageGenMessageContent: any[] = [];
+    if (baseImageBuffer) {
+      imageGenMessageContent.push({ type: 'image', image: baseImageBuffer });
+    }
+    imageGenMessageContent.push({ type: 'text', text: imageGenerationPrompt });
+
+    const { files } = await generateText({
+      model: googleAI('gemini-3.1-flash-image-preview'),
+      messages: [{ role: 'user', content: imageGenMessageContent as any }],
+    });
+    
+    let generatedFileBuffer: Buffer | null = null;
+    if (files) {
+      for (const file of files) {
+        if (file.mediaType.startsWith('image/')) {
+          generatedFileBuffer = Buffer.from(file.uint8Array);
+          break;
         }
       }
-
-      if (!generatedFileBuffer) {
-        throw new Error('Gagal menghasilkan gambar dari AI.');
-      }
-
-      console.log(`[Phase 3] Uploading generated image to S3...`);
-      coverImageUrl = await uploadToS3(generatedFileBuffer, 'image/jpeg', '.jpg');
-      
     }
+
+    if (!generatedFileBuffer) {
+      throw new Error('Gagal menghasilkan atau memproses gambar dari AI.');
+    }
+
+    console.log(`[Phase 3] Uploading generated/enhanced image to S3...`);
+    const coverImageUrl = await uploadToS3(generatedFileBuffer, 'image/jpeg', '.jpg');
 
     if (!coverImageUrl) {
       throw new Error('Gagal mendapatkan URL gambar.');
