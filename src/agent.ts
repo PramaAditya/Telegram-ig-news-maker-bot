@@ -152,7 +152,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
         caption_body: z.string(),
         image_prompt: z.string(),
       }),
-      prompt: `Gathered Facts:\n\n${researchResult}`,
+      prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchResult}`,
     });
     
     let finalCaption = `${contentParams.caption_body.trim()}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
@@ -189,15 +189,11 @@ Your task is to parse the gathered facts into final components for an Instagram 
         throw new Error('Gagal menghasilkan gambar dari AI.');
       }
 
-      console.log(`[Phase 3] Uploading generated image to Telegram to get URL`);
-      const tempMsg = await ctx.replyWithPhoto({ source: generatedFileBuffer }, { caption: `[Internal Use] Generated Image` });
-      const photoArray = tempMsg.photo;
-      const fileId = photoArray[photoArray.length - 1].file_id;
-      coverImageUrl = (await ctx.telegram.getFileLink(fileId)).toString();
+      console.log(`[Phase 3] Uploading generated image to S3...`);
+      // No need to resize yet, we just need a public URL for the image renderer API
+      // It will be rendered and then resized in Phase 4
+      coverImageUrl = await uploadToS3(generatedFileBuffer, 'image/jpeg', '.jpg');
       
-      try {
-        await ctx.telegram.deleteMessage(tempMsg.chat.id, tempMsg.message_id);
-      } catch(e) {}
     } else {
       console.log(`[Phase 3] Using uploaded cover image URL: ${coverImageUrl}`);
     }
