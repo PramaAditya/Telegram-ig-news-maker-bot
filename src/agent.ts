@@ -110,7 +110,7 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
 
     const { text: researchResult } = await generateText({
       model: googleAI('gemini-3.1-pro-preview'),
-      system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If it's a topic, search the web. If it's a URL, scrape it. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`,
+      system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If the user input contains an http/https URL, you MUST prioritize using the \`scrapeUrl\` tool on that specific URL to read its content. If it's just a topic or keywords, use the \`searchWeb\` tool. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`,
       messages: [
         {
           role: 'user',
