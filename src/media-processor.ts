@@ -20,6 +20,72 @@ export async function processImageTo4x5(buffer: Buffer): Promise<Buffer> {
     .toBuffer();
 }
 
+export async function mergeImageAndVideo(imageBuffer: Buffer, videoBuffer: Buffer): Promise<Buffer> {
+  const tempId = uuidv4();
+  const imagePath = path.join(os.tmpdir(), `${tempId}_image.jpg`);
+  const videoPath = path.join(os.tmpdir(), `${tempId}_video.mp4`);
+  const outputPath = path.join(os.tmpdir(), `${tempId}_output.mp4`);
+
+  try {
+    await fs.writeFile(imagePath, imageBuffer);
+    await fs.writeFile(videoPath, videoBuffer);
+    
+    // Check if video has audio stream
+    let hasAudio = false;
+    try {
+      const { stdout } = await execFileAsync('ffprobe', [
+        '-v', 'error',
+        '-select_streams', 'a',
+        '-show_entries', 'stream=codec_type',
+        '-of', 'default=nw=1:nk=1',
+        videoPath
+      ]);
+      hasAudio = stdout.trim().length > 0;
+    } catch (e) {
+      console.log('Error checking audio stream, assuming no audio');
+    }
+
+    const filterComplex = hasAudio 
+      ? `[0:v]scale=1080:1350:force_original_aspect_ratio=decrease,pad=1080:1350:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v0];` +
+        `anullsrc=channel_layout=stereo:sample_rate=44100[a0];` +
+        `[1:v]scale=1080:1350:force_original_aspect_ratio=decrease,pad=1080:1350:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v1];` +
+        `[1:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[a1];` +
+        `[v0][a0][v1][a1]concat=n=2:v=1:a=1[outv][outa]`
+      : `[0:v]scale=1080:1350:force_original_aspect_ratio=decrease,pad=1080:1350:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v0];` +
+        `[1:v]scale=1080:1350:force_original_aspect_ratio=decrease,pad=1080:1350:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v1];` +
+        `[v0][v1]concat=n=2:v=1:a=0[outv]`;
+
+    const args = [
+      '-loop', '1', '-framerate', '30', '-t', '3', '-i', imagePath,
+      '-i', videoPath,
+      '-filter_complex', filterComplex,
+      '-map', '[outv]'
+    ];
+
+    if (hasAudio) {
+      args.push('-map', '[outa]');
+    }
+
+    args.push(
+      '-c:v', 'libx264',
+      '-preset', 'fast',
+      '-c:a', 'aac',
+      '-vsync', '2',
+      '-y',
+      outputPath
+    );
+
+    await execFileAsync('ffmpeg', args);
+
+    const outputBuffer = await fs.readFile(outputPath);
+    return outputBuffer;
+  } finally {
+    try { await fs.unlink(imagePath); } catch (e) {}
+    try { await fs.unlink(videoPath); } catch (e) {}
+    try { await fs.unlink(outputPath); } catch (e) {}
+  }
+}
+
 export async function processVideoTo4x5(buffer: Buffer): Promise<Buffer> {
   const tempId = uuidv4();
   const inputPath = path.join(os.tmpdir(), `${tempId}_input.mp4`);

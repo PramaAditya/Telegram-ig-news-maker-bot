@@ -5,7 +5,7 @@ import FirecrawlApp from '@mendable/firecrawl-js';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import { censorText } from './sanitize.js';
-import { processImageTo4x5, processVideoTo4x5 } from './media-processor.js';
+import { processImageTo4x5, processVideoTo4x5, mergeImageAndVideo } from './media-processor.js';
 import { uploadToS3 } from './s3.js';
 import { generateNewsImage } from './image.js';
 import { publishToBuffer } from './buffer.js';
@@ -250,8 +250,32 @@ Your task is to parse the gathered facts into final components for an Instagram 
     }
 
     // Prepare array of media for Buffer
-    const allPublishUrls: { type: 'image' | 'video', url: string }[] = [{ type: 'image', url: coverS3Url }];
+    let allPublishUrls: { type: 'image' | 'video', url: string }[] = [];
     
+    // Check if there is any video in the uploaded media
+    const hasVideo = uploadedMedia && uploadedMedia.some(m => m.type === 'video');
+
+    if (hasVideo) {
+      console.log(`[Phase 5] Video detected! Merging cover image and video into a single video file...`);
+      // Get the first video buffer
+      const videoItem = uploadedMedia.find(m => m.type === 'video');
+      if (videoItem && videoItem.buffer) {
+        try {
+          const mergedVideoBuffer = await mergeImageAndVideo(imageBuffer, videoItem.buffer);
+          console.log(`[Phase 5] Uploading merged video to S3...`);
+          const mergedS3Url = await uploadToS3(mergedVideoBuffer, 'video/mp4', '.mp4');
+          allPublishUrls.push({ type: 'video', url: mergedS3Url });
+        } catch (e: any) {
+          console.error(`[Phase 5] Failed to merge video:`, e.message);
+          throw new Error('Gagal menggabungkan cover dan video.');
+        }
+      } else {
+        throw new Error('Video buffer tidak ditemukan.');
+      }
+    } else {
+      // Normal Image Carousel mode
+      allPublishUrls.push({ type: 'image', url: coverS3Url });
+      
       if (uploadedMedia && uploadedMedia.length > 0) {
         // If we used the user's first image as cover (coverWasGenerated = false), 
         // we still want to include it AGAIN as the second slide (so it acts as both cover and slide 2).
@@ -262,6 +286,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
           allPublishUrls.push({ type: m.type, url: m.s3Url });
         }
       }
+    }
 
     console.log(`[Phase 5] Publishing to Buffer with ${allPublishUrls.length} media items`);
     await publishToBuffer(allPublishUrls, finalCaption);
