@@ -138,7 +138,7 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
     const { object: contentParams } = await generateObject({
       model: googleAI('gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `
-Your task is to parse the gathered facts into final components for an Instagram news post.
+Your task is to parse the gathered facts into final components for an Instagram news post
 - title: Scroll-stopping, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with bold (**text**).
 - subtitle: Sarcastic, sharp, or mind-blowing context that hooks the reader instantly. Connect with Gen Z energy. Can also use bold (**text**) if necessary.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
