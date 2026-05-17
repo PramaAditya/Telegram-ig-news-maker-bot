@@ -20,7 +20,7 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string) {
           text: ${JSON.stringify(text)}
           channelId: "${channelId}"
           schedulingType: automatic
-          mode: shareNow
+          mode: addToQueue
           metadata: {
             instagram: {
               type: post
