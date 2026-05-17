@@ -194,7 +194,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
             subtitle: censorText(formattedSubtitle),
             date: currentDate,
             source: censorText(contentParams.source_name),
-            my_handle: '@poros.perjuangan'
+            my_handle: '@kabar.perjuangan'
         });
         console.log(`[Phase 4] Processing cover image to 4:5 aspect ratio`);
         imageBuffer = await processImageTo4x5(imageBuffer);
