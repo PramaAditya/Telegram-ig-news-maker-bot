@@ -5,9 +5,9 @@ import FirecrawlApp from '@mendable/firecrawl-js';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import { censorText } from './sanitize.js';
-import { processImageTo4x5, processVideoTo4x5, mergeImageAndVideo, extractFirstFrame } from './media-processor.js';
+import { processImageTo4x5, processVideoTo4x5 } from './media-processor.js';
 import { uploadToS3 } from './s3.js';
-import { generateNewsImage } from './image.js';
+import { generateImageSequence } from './image.js';
 import { publishToBuffer } from './buffer.js';
 
 dotenv.config();
@@ -18,8 +18,8 @@ const googleAI = createGoogleGenerativeAI({
 
 const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY || '' });
 
-const getSystemPrompt = (currentDateStr: string, currentYear: number) => `You are a strict, automated editorial assistant crafting an engaging news post for Instagram.
-You operate entirely in BAHASA INDONESIA. Your target audience is Gen Z Indonesians, so your headlines should be viral, edgy, and scroll-stopping.
+const getSystemPrompt = (currentDateStr: string, currentYear: number) => `You are a strict, automated editorial assistant crafting a news carousel for Instagram.
+You operate entirely in BAHASA INDONESIA. Your tone should be more neutral journalistic, but still retaining a subtle bias.
 
 CRITICAL CONTEXT REGARDING TIME:
 Today's date is: ${currentDateStr}.
@@ -29,7 +29,7 @@ You MUST use the year ${currentYear} (and the current month if needed) in your w
 MANDATORY IDEOLOGICAL STANCE / BIAS:
 1. PRO-AXIS OF RESISTANCE: You support Palestine, Iran, Lebanon, Iraq, and Yemen.
 2. ANTI-US/ISRAEL/GCC: You are critical of the complicity and aggression of the US, Israel, and GCC states.
-Keep this bias in mind when selecting facts and composing the final text.
+Keep this bias in mind when selecting facts and composing the final text, but maintain a seemingly objective, professional news tone rather than blatant propaganda.
 `;
 
 export interface MediaItem {
@@ -151,16 +151,18 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
     const { object: contentParams } = await generateObject({
       model: googleAI('gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `
-Your task is to parse the gathered facts into final components for an Instagram news post
-- title: Scroll-stopping, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with bold (**text**).
-- subtitle: Sarcastic, sharp, or mind-blowing context that hooks the reader instantly. Connect with Gen Z energy. Can also use bold (**text**) if necessary.
+Your task is to parse the gathered facts into final components for an Instagram news carousel.
+- title: A professional, clear, and engaging headline for the cover. Can use bold (**text**) if necessary.
+- slides: An array of text for each slide to explain the news. EACH SLIDE MUST CONTAIN MAXIMUM 3 SENTENCES. Separate the sentences/ideas with double newlines (\\n\\n) for readability. Aim for 2-5 slides total.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
-- caption_body: Exactly 2 paragraphs separated by \\n\\n. MUST BE CONCISE, STRICTLY UNDER 800 CHARACTERS TOTAL. Tone: Weaponized formal journalistic Bahasa Indonesia. Superficially objective, but deeply framed to favor the Axis of Resistance. PLAINTEXT ONLY (no markdown). Do NOT include the "DD/MM/YYYY. Sumber: ..." line.
-- image_prompt: A prompt for an AI image generator to create an accompanying image. MUST specify: "real life stock photography, no text whatsoever, similar to photo taken by newspaper photographer or stock photographer".
+- caption_body: Exactly 2 paragraphs separated by \\n\\n. MUST BE CONCISE, STRICTLY UNDER 800 CHARACTERS TOTAL. Tone: Formal journalistic Bahasa Indonesia with subtle bias. PLAINTEXT ONLY (no markdown). Do NOT include the "DD/MM/YYYY. Sumber: ..." line.
+- image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "real life stock photography, no text whatsoever, similar to photo taken by newspaper photographer or stock photographer".
 `,
       schema: z.object({
         title: z.string(),
-        subtitle: z.string(),
+        slides: z.array(z.object({
+          text: z.string()
+        })),
         source_name: z.string(),
         caption_body: z.string(),
         image_prompt: z.string(),
@@ -175,28 +177,16 @@ Your task is to parse the gathered facts into final components for an Instagram 
 
     // Phase 3: Image Sourcing
     let coverImageUrl: string | undefined = undefined;
-    let coverWasGenerated = false;
 
     if (uploadedMedia && uploadedMedia.length > 0) {
       const firstMedia = uploadedMedia[0];
       if (firstMedia.type === 'image') {
         coverImageUrl = firstMedia.s3Url || firstMedia.url;
         console.log(`[Phase 3] Using uploaded cover image URL: ${coverImageUrl}`);
-      } else if (firstMedia.type === 'video' && firstMedia.buffer) {
-        try {
-          console.log(`[Phase 3] Extracting first frame from video to use as cover...`);
-          const firstFrameBuffer = await extractFirstFrame(firstMedia.buffer);
-          console.log(`[Phase 3] Uploading extracted frame to S3...`);
-          coverImageUrl = await uploadToS3(firstFrameBuffer, 'image/jpeg', '.jpg');
-          console.log(`[Phase 3] Using extracted frame URL: ${coverImageUrl}`);
-        } catch (err: any) {
-          console.error(`[Phase 3] Failed to extract frame, falling back to AI generation:`, err.message);
-        }
       }
     }
 
     if (!coverImageUrl) {
-      coverWasGenerated = true;
       console.log(`[Phase 3] Generating cover image with prompt: ${contentParams.image_prompt}`);
       
       const imageGenerationPrompt = `${contentParams.image_prompt}. Ensure the image has the style of real life stock photography with NO TEXT whatsoever, similar to a photo taken by a newspaper photographer or stock photographer. (Make it 4:3 aspect ratio).`;
@@ -221,8 +211,6 @@ Your task is to parse the gathered facts into final components for an Instagram 
       }
 
       console.log(`[Phase 3] Uploading generated image to S3...`);
-      // No need to resize yet, we just need a public URL for the image renderer API
-      // It will be rendered and then resized in Phase 4
       coverImageUrl = await uploadToS3(generatedFileBuffer, 'image/jpeg', '.jpg');
       
     }
@@ -234,84 +222,58 @@ Your task is to parse the gathered facts into final components for an Instagram 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
 
     // Phase 4: Image Rendering
-    console.log(`[Phase 4] Rendering cover image via API`);
+    console.log(`[Phase 4] Rendering carousel via API`);
     
-    // Remove emojis from title and subtitle using a robust regex
+    // Remove emojis from title
     const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}]/gu;
     const cleanTitle = contentParams.title.replace(emojiRegex, '');
-    const cleanSubtitle = contentParams.subtitle.replace(emojiRegex, '');
 
-    const formattedTitle = cleanTitle.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    const formattedSubtitle = cleanSubtitle.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-    let imageBuffer = await generateNewsImage({
-      image_url: coverImageUrl,
-      title: censorText(formattedTitle),
-      subtitle: censorText(formattedSubtitle),
-      date: currentDate,
-      source: censorText(contentParams.source_name),
-      my_handle: '@kabar.perjuangan'
+    const renderedUrls = await generateImageSequence({
+      logo: 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+      cover_image: coverImageUrl,
+      title: censorText(cleanTitle),
+      slides: contentParams.slides.map(slide => ({
+        text: censorText(slide.text)
+      }))
     });
 
-    console.log(`[Phase 4] Processing cover image to 4:5 aspect ratio`);
-    imageBuffer = await processImageTo4x5(imageBuffer);
-
-    console.log(`[Phase 4] Uploading cover image to S3`);
-    const coverS3Url = await uploadToS3(imageBuffer, 'image/jpeg', '.jpg');
+    if (!renderedUrls || renderedUrls.length === 0) {
+      throw new Error('Gagal merender carousel dari API.');
+    }
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🚀 Mempublikasikan ke Buffer...');
 
     // Phase 5: Publishing via Buffer
     console.log(`[Phase 5] Sending rendered photo to user and preparing Buffer URLs`);
-    let previewMsg;
-    if (finalCaption.length > 1024) {
-      previewMsg = await ctx.replyWithPhoto({ source: imageBuffer });
-      await ctx.reply(finalCaption);
+    
+    // Fetch the first image (cover) to send back as preview
+    let previewBuffer: Buffer | undefined;
+    try {
+      const response = await axios.get(renderedUrls[0], { responseType: 'arraybuffer' });
+      previewBuffer = Buffer.from(response.data);
+    } catch (e) {
+      console.warn('Failed to fetch preview cover image:', e);
+    }
+
+    if (previewBuffer) {
+      if (finalCaption.length > 1024) {
+        await ctx.replyWithPhoto({ source: previewBuffer });
+        await ctx.reply(finalCaption);
+      } else {
+        await ctx.replyWithPhoto(
+          { source: previewBuffer },
+          { caption: finalCaption }
+        );
+      }
     } else {
-      previewMsg = await ctx.replyWithPhoto(
-        { source: imageBuffer },
-        { caption: finalCaption }
-      );
+      await ctx.reply(finalCaption + `\n\nCover URL: ${renderedUrls[0]}`);
     }
 
     // Prepare array of media for Buffer
-    let allPublishUrls: { type: 'image' | 'video', url: string }[] = [];
-    
-    // Check if there is any video in the uploaded media
-    const hasVideo = uploadedMedia && uploadedMedia.some(m => m.type === 'video');
-
-    if (hasVideo) {
-      console.log(`[Phase 5] Video detected! Merging cover image and video into a single video file...`);
-      // Get the first video buffer
-      const videoItem = uploadedMedia.find(m => m.type === 'video');
-      if (videoItem && videoItem.buffer) {
-        try {
-          const mergedVideoBuffer = await mergeImageAndVideo(imageBuffer, videoItem.buffer);
-          console.log(`[Phase 5] Uploading merged video to S3...`);
-          const mergedS3Url = await uploadToS3(mergedVideoBuffer, 'video/mp4', '.mp4');
-          allPublishUrls.push({ type: 'video', url: mergedS3Url });
-        } catch (e: any) {
-          console.error(`[Phase 5] Failed to merge video:`, e.message);
-          throw new Error('Gagal menggabungkan cover dan video.');
-        }
-      } else {
-        throw new Error('Video buffer tidak ditemukan.');
-      }
-    } else {
-      // Normal Image Carousel mode
-      allPublishUrls.push({ type: 'image', url: coverS3Url });
-      
-      if (uploadedMedia && uploadedMedia.length > 0) {
-        // If we used the user's first image as cover (coverWasGenerated = false), 
-        // we still want to include it AGAIN as the second slide (so it acts as both cover and slide 2).
-        // If coverWasGenerated is true, it means all uploadedMedia are just additional slides (like videos).
-        // In both cases, we process the entirety of uploadedMedia.
-        for (const m of uploadedMedia) {
-          if (!m.s3Url) continue; // Skip if processing failed in Phase 1
-          allPublishUrls.push({ type: m.type, url: m.s3Url });
-        }
-      }
-    }
+    let allPublishUrls: { type: 'image' | 'video', url: string }[] = renderedUrls.map(url => ({
+      type: 'image',
+      url
+    }));
 
     console.log(`[Phase 5] Publishing to Buffer with ${allPublishUrls.length} media items`);
     await publishToBuffer(allPublishUrls, finalCaption);
