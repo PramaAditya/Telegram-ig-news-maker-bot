@@ -22,13 +22,13 @@ export async function publishToBuffer(imageUrl: string, text: string) {
               shouldShareToFeed: true
             }
           }
-          assets: {
-            images: [
-              {
+          assets: [
+            {
+              image: {
                 url: "${imageUrl}"
               }
-            ]
-          }
+            }
+          ]
         }
       ) {
         ... on PostActionSuccess {
