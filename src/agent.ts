@@ -58,11 +58,24 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
     ];
 
       if (uploadedMedia && uploadedMedia.length > 0) {
-        for (const media of uploadedMedia) {
-          console.log(`[Phase 1] Downloading media for Gemini: ${media.url}`);
-          try {
-              const response = await axios.get(media.url, { responseType: 'arraybuffer' });
-              let buffer = Buffer.from(response.data);
+          for (const media of uploadedMedia) {
+            console.log(`[Phase 1] Downloading media for Gemini: ${media.url}`);
+            try {
+                let response;
+                let retries = 3;
+                while (retries > 0) {
+                  try {
+                    response = await axios.get(media.url, { responseType: 'arraybuffer' });
+                    break;
+                  } catch (e: any) {
+                    retries--;
+                    console.warn(`[Phase 1] Download failed, retries left: ${retries}. Error: ${e.message}`);
+                    if (retries === 0) throw e;
+                    await new Promise(res => setTimeout(res, 2000));
+                  }
+                }
+                
+                let buffer = Buffer.from(response!.data);
               
               if (media.type === 'video') {
                 console.log(`[Phase 1] Resizing video to 4:5 aspect ratio...`);

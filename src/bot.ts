@@ -74,10 +74,23 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
             // Sort by message ID to preserve original order
             groupData.items.sort((a, b) => a.msgId - b.msgId);
             
-            const mediaItems = await Promise.all(groupData.items.map(async item => {
-              const url = (await ctx.telegram.getFileLink(item.fileId)).toString();
-              return { type: item.type, url, mimeType: item.mimeType };
-            }));
+            const mediaItems = [];
+            for (const item of groupData.items) {
+              let url = '';
+              let retries = 3;
+              while (retries > 0) {
+                try {
+                  url = (await ctx.telegram.getFileLink(item.fileId)).toString();
+                  break;
+                } catch (e: any) {
+                  retries--;
+                  console.warn(`[Bot] Failed to getFileLink for ${item.fileId}, retries left: ${retries}. Error: ${e.message}`);
+                  if (retries === 0) throw e;
+                  await new Promise(res => setTimeout(res, 1000)); // wait 1s before retrying
+                }
+              }
+              mediaItems.push({ type: item.type, url, mimeType: item.mimeType });
+            }
             
             // Find the first caption in the group to use as the text prompt
             const groupCaption = groupData.items.find(item => item.caption)?.caption || 'No specific text provided, analyze the media context if possible.';
@@ -108,7 +121,21 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
 
   // Single media case (no media_group_id)
   console.log(`[Bot] Received single ${isVideo ? 'video' : 'photo'} message from ${ctx.chat.id}`);
-  const fileLink = await ctx.telegram.getFileLink(fileId);
+  let fileLink: URL | undefined = undefined;
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      fileLink = await ctx.telegram.getFileLink(fileId);
+      break;
+    } catch (e: any) {
+      retries--;
+      console.warn(`[Bot] Failed to getFileLink for ${fileId}, retries left: ${retries}. Error: ${e.message}`);
+      if (retries === 0) throw e;
+      await new Promise(res => setTimeout(res, 1000));
+    }
+  }
+  
+  if (!fileLink) return;
   const text = caption ? caption : 'No specific text provided, analyze the media context if possible.';
   
   activeProcessing.add(chatId);
