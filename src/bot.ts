@@ -175,7 +175,10 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
   let retries = 3;
   while (retries > 0) {
     try {
-      fileLink = await ctx.telegram.getFileLink(fileId);
+      const fileUrl = await ctx.telegram.getFileLink(fileId);
+      fileLink = fileUrl;
+      // Similar to above, this will return an internal docker URL (http://botapi:8081/...)
+      // which axios in agent.ts can resolve directly.
       break;
     } catch (e: any) {
       retries--;
