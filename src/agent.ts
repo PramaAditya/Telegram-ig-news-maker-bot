@@ -18,17 +18,17 @@ const googleAI = createGoogleGenerativeAI({
 const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY || '' });
 
 const getSystemPrompt = (currentDateStr: string, currentYear: number) => `You are a strict, automated editorial assistant crafting a news carousel for Instagram.
-You operate entirely in BAHASA INDONESIA. Your tone should be more neutral journalistic, but still retaining a subtle bias.
+You operate entirely in BAHASA INDONESIA. Your tone should be highly informative, objective, and strictly journalistic.
 
 CRITICAL CONTEXT REGARDING TIME:
 Today's date is: ${currentDateStr}.
 The current year is: ${currentYear}.
 You MUST use the year ${currentYear} (and the current month if needed) in your web searches. Completely ignore any internal knowledge cutoff dates that suggest we are in the past.
 
-MANDATORY IDEOLOGICAL STANCE / BIAS:
-1. PRO-AXIS OF RESISTANCE: You support Palestine, Iran, Lebanon, Iraq, and Yemen.
-2. ANTI-US/ISRAEL/GCC: You are critical of the complicity and aggression of the US, Israel, and GCC states.
-Keep this bias in mind when selecting facts and composing the final text, but maintain a seemingly objective, professional news tone rather than blatant propaganda.
+EDITORIAL GUIDELINES & FRAMING:
+Your reporting should maintain a professional and highly informative journalistic tone. Focus on delivering factual news while highlighting perspectives from the Global South, particularly Palestine, Lebanon, Iran, Iraq, and Yemen. When covering conflicts or international relations, critically examine the roles, policies, and actions of the US, Israel, and their allies. 
+
+Crucially, avoid emotive language, sensationalism, or blatant propaganda. Let the facts, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How) drive the narrative. Your goal is to inform the audience thoroughly and objectively within the constraints of a short format.
 `;
 
 export interface MediaItem {
@@ -149,8 +149,8 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
       model: googleAI('gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `
 Your task is to parse the gathered facts into final components for an Instagram news carousel.
-- title: A professional, clear, and engaging headline for the cover. PLAINTEXT ONLY. NO markdown or HTML tags. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word).
-- slide_text: A single string of text for the slide explaining the news. DO NOT repeat information already stated in the title; provide additional context, background, or impact. IT MUST CONTAIN MAXIMUM 2 SENTENCES. Separate the sentences/ideas with double newlines (\\n\\n) for readability.
+- title: Scroll-stopping, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. PLAINTEXT ONLY. NO markdown or HTML tags. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word).
+- slide_text: A single string of text for the slide explaining the news. IT MUST BE 2 SENTENCES MAXIMUM. Answer Who, What, When, Where, Why, and How (5W1H) as comprehensively as possible within these 2 sentences using the available facts. Separate sentences with double newlines (\\n\\n). Do NOT repeat information already stated in the title.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
 - image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "real life stock photography, no text whatsoever, similar to photo taken by newspaper photographer or stock photographer".
 `,
@@ -180,7 +180,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
     }
 
     let imageGenerationPrompt = "";
-    const promptSuffix = "Enhance and sharpen the image. Relayout and ensure it is strictly in 4:5 aspect ratio. Ensure the image has the style of real life stock photography with NO TEXT whatsoever, similar to a photo taken by a newspaper photographer or stock photographer.";
+    const promptSuffix = "Enhance and sharpen the image. Relayout and ensure it is strictly in 1:1 aspect ratio. Ensure the image has the style of real life stock photography with NO TEXT whatsoever, similar to a photo taken by a newspaper photographer or stock photographer.";
 
     if (baseImageBuffer) {
       console.log(`[Phase 3] Enhancing cover image with Gemini...`);
@@ -202,7 +202,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
       providerOptions: {
         google: {
           imageConfig: {
-            aspectRatio: '4:5'
+            aspectRatio: '1:1'
           }
         }
       }
@@ -283,33 +283,36 @@ Your task is to parse the gathered facts into final components for an Instagram 
     const paginatedSlides = paginateText(contentParams.slide_text, MAX_SLIDE_LENGTH);
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...');
-    console.log(`[Phase 4] Enhancing slides with markdown bolding via gemini-3.1-flash-lite...`);
+    console.log(`[Phase 4] Enhancing title and slides with markdown bolding via gemini-3.1-flash-lite...`);
     
-    const boldedSlides = await Promise.all(paginatedSlides.map(async (text) => {
+    const highlightText = async (text: string, isTitle: boolean = false) => {
       try {
         const { text: boldedText } = await generateText({
           model: googleAI('gemini-3.1-flash-lite-preview'),
-          system: `You are an editor for an Instagram news carousel. Your task is to add bold markdown (using **text**) to the most important or shocking words, phrases, or clauses in the provided slide text. 
+          system: `You are an editor for an Instagram news carousel. Your task is to add bold markdown (using **text**) to the most important or shocking words, phrases, or clauses in the provided text. 
 This helps readers scan the text and prevents it from being monotonous.
 RULES:
 1. Do not change any original words, only add ** around the important parts.
 2. Output ONLY the modified text, nothing else.
-3. Don't bold everything, just the key highlights (maximum 20-30% of the text).`,
+3. Don't bold everything, just the key highlights (maximum 20-30% of the text).${isTitle ? ' For a title, emphasize the core subject or action.' : ''}`,
           prompt: text
         });
         return boldedText.trim() || text;
       } catch (err) {
-        console.warn('Failed to add bolding to slide, falling back to original text:', err);
+        console.warn('Failed to add bolding to text, falling back to original text:', err);
         return text;
       }
-    }));
+    };
+
+    const boldedTitle = await highlightText(cleanTitle, true);
+    const boldedSlides = await Promise.all(paginatedSlides.map(text => highlightText(text)));
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
 
     const renderedUrls = await generateImageSequence({
       logo: 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
       cover_image: coverImageUrl,
-      title: censorText(cleanTitle),
+      title: censorText(boldedTitle),
       slides: boldedSlides.map(text => ({
         text: censorText(text)
       }))
