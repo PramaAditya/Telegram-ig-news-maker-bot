@@ -108,6 +108,8 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
         }
       }
 
+    let scrapedImageUrl: string | null = null;
+
     const { text: researchResult } = await generateText({
       model: googleAI('gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If the user input contains an http/https URL, you MUST prioritize using the \`scrapeUrl\` tool on that specific URL to read its content. If it's just a topic or keywords, use the \`searchWeb\` tool. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`,
@@ -133,6 +135,11 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
           execute: async ({ url }: { url: string }) => {
             console.log(`[Tool: scrapeUrl] Scraping URL: ${url}`);
             const res = await firecrawl.scrape(url, { formats: ['markdown'] });
+            const metadata = (res as any).metadata;
+            if (metadata && (metadata.ogImage || metadata.image)) {
+               scrapedImageUrl = metadata.ogImage || metadata.image;
+               console.log(`[Tool: scrapeUrl] Found image URL in metadata: ${scrapedImageUrl}`);
+            }
             return (res as any).markdown || JSON.stringify(res);
           },
         }),
@@ -176,6 +183,14 @@ Your task is to parse the gathered facts into final components for an Instagram 
       if (firstMedia.type === 'image' && firstMedia.buffer) {
         baseImageBuffer = firstMedia.buffer;
         console.log(`[Phase 3] Using uploaded cover image for enhancement`);
+      }
+    } else if (scrapedImageUrl) {
+      console.log(`[Phase 3] Using scraped image URL as base: ${scrapedImageUrl}`);
+      try {
+        const response = await axios.get(scrapedImageUrl, { responseType: 'arraybuffer' });
+        baseImageBuffer = Buffer.from(response.data);
+      } catch (err: any) {
+        console.warn(`[Phase 3] Failed to download scraped image: ${err.message}`);
       }
     }
 
