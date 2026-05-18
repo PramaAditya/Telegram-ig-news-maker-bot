@@ -22,5 +22,5 @@ COPY . .
 
 ENV NODE_ENV=production
 
-# Command to run the bot
-CMD ["npm", "run", "start"]
+# Command to run the bot by default (can be overridden by compose)
+CMD ["npm", "run", "start:bot"]

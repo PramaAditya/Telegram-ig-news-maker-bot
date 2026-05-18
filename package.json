@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "tsx src/bot.ts",
+    "start": "npm run start:bot & npm run start:worker",
+    "start:bot": "tsx src/bot.ts",
+    "start:worker": "tsx src/worker.ts",
+    "db:push": "drizzle-kit push",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

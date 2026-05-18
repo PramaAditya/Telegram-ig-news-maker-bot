@@ -39,9 +39,9 @@ export interface MediaItem {
   s3Url?: string;
 }
 
-export async function runAutomatedPipeline(ctx: any, userInput: string, uploadedMedia?: MediaItem[]) {
+export async function runAutomatedPipeline(chatId: string, messageId: number, userInput: string, uploadedMedia: MediaItem[] | undefined, telegram: any) {
   try {
-    let statusMsg = await ctx.reply('🔍 Mencari informasi...');
+    let statusMsg = await telegram.sendMessage(chatId, '🔍 Mencari informasi...', { reply_to_message_id: messageId });
 
     // Phase 1: Research (Fact Gathering)
     console.log(`[Phase 1] Researching: ${userInput}`);
@@ -148,7 +148,7 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
     });
 
     console.log(`[Phase 1] Research Complete. Text length: ${researchResult.length}`);
-    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✍️ Menyusun konten...');
+    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✍️ Menyusun konten...');
 
     // Phase 2: Content Generation
     console.log(`[Phase 2] Generating content`);
@@ -173,7 +173,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
     let finalCaption = `${contentParams.slide_text.trim()}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
     finalCaption = censorText(finalCaption);
 
-    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...');
+    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...');
 
     // Phase 3: Image Sourcing
     let baseImageBuffer: Buffer | null = null;
@@ -244,7 +244,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
       throw new Error('Gagal mendapatkan URL gambar.');
     }
 
-    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
+    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
 
     // Phase 4: Image Rendering
     console.log(`[Phase 4] Rendering carousel via API`);
@@ -297,7 +297,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
 
     const paginatedSlides = paginateText(contentParams.slide_text, MAX_SLIDE_LENGTH);
 
-    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...');
+    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...');
     console.log(`[Phase 4] Enhancing slides with markdown bolding via gemini-3.1-flash-lite...`);
     
     const highlightText = async (text: string) => {
@@ -321,7 +321,7 @@ RULES:
 
     const boldedSlides = await Promise.all(paginatedSlides.map(text => highlightText(text)));
 
-    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
+    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
 
     const renderedUrls = await generateImageSequence({
       logo: process.env.LOGO_IMAGE_URL || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
@@ -336,7 +336,7 @@ RULES:
       throw new Error('Gagal merender carousel dari API.');
     }
 
-    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🚀 Mempublikasikan ke Buffer...');
+    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🚀 Mempublikasikan ke Buffer...');
 
     // Phase 5: Publishing via Buffer
     console.log(`[Phase 5] Sending rendered photo to user and preparing Buffer URLs`);
@@ -352,16 +352,16 @@ RULES:
 
     if (previewBuffer) {
       if (finalCaption.length > 1024) {
-        await ctx.replyWithPhoto({ source: previewBuffer });
-        await ctx.reply(finalCaption);
+        await telegram.sendPhoto(chatId, { source: previewBuffer }, { reply_to_message_id: messageId });
+        await telegram.sendMessage(chatId, finalCaption, { reply_to_message_id: messageId });
       } else {
-        await ctx.replyWithPhoto(
+        await telegram.sendPhoto(chatId, 
           { source: previewBuffer },
-          { caption: finalCaption }
+          { caption: finalCaption, reply_to_message_id: messageId }
         );
       }
     } else {
-      await ctx.reply(finalCaption + `\n\nCover URL: ${renderedUrls[0]}`);
+      await telegram.sendMessage(chatId, finalCaption + `\n\nCover URL: ${renderedUrls[0]}`, { reply_to_message_id: messageId });
     }
 
     // Prepare array of media for Queue
@@ -386,11 +386,12 @@ RULES:
       status: 'pending'
     });
 
-    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Berhasil disimpan ke antrian (Queue)!');
+    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Berhasil diselesaikan dan masuk Queue untuk di-publish!');
     console.log(`[Done] Pipeline finished successfully.`);
 
   } catch (error: any) {
     console.error('[Pipeline Error]', error);
-    await ctx.reply(`❌ Terjadi kesalahan: ${error.message}`);
+    await telegram.sendMessage(chatId, `❌ Terjadi kesalahan: ${error.message}`, { reply_to_message_id: messageId });
+    throw error;
   }
 }

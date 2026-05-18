@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  bot:
+    build: .
+    container_name: ignews_bot
+    restart: always
+    env_file: .env
+    command: npm run start:bot
+    ports:
+      - "3000:3000"
+    
+  worker:
+    build: .
+    container_name: ignews_worker
+    restart: always
+    env_file: .env
+    command: npm run start:worker

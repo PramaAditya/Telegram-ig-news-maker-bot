@@ -1,8 +1,10 @@
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
-import { runAutomatedPipeline } from './agent.js';
 import { startServer } from './server.js';
+import { db } from './db/index.js';
+import { jobsTable } from './db/schema.js';
+import { eq } from 'drizzle-orm';
 
 dotenv.config();
 
@@ -17,14 +19,10 @@ if (!botToken) {
 
 const bot = new Telegraf(botToken);
 
-const activeProcessing = new Set<string>();
 const mediaGroupAccumulator = new Map<string, { timer: NodeJS.Timeout, items: { fileId: string, caption?: string, msgId: number, type: 'image' | 'video', mimeType?: string }[] }>();
 
 bot.on(message('text'), async (ctx) => {
   const chatId = ctx.chat.id.toString();
-  if (activeProcessing.has(chatId)) {
-    return; // Ignore if already processing
-  }
   
   // Reconstruct text with original URLs using message entities
   let text = ctx.message.text;
@@ -42,24 +40,23 @@ bot.on(message('text'), async (ctx) => {
     }
   }
   
-  activeProcessing.add(chatId);
-  // Do not await to prevent Telegraf 90s timeout
-  runAutomatedPipeline(ctx, text, undefined)
-    .catch(async (error) => {
-      console.error('[Bot] Error processing text:', error);
-      try { await ctx.reply('Terjadi kesalahan sistem.'); } catch (e) {}
-    })
-    .finally(() => {
-      activeProcessing.delete(chatId);
+  try {
+    await db.insert(jobsTable).values({
+      chatId,
+      messageId: ctx.message.message_id,
+      text,
+      media: [],
+      status: 'pending'
     });
+    await ctx.reply('⏳ Pesan diterima dan masuk antrean sistem.');
+  } catch (err: any) {
+    console.error('[Bot] Error saving text job:', err);
+    await ctx.reply('Terjadi kesalahan sistem saat menyimpan antrean.');
+  }
 });
 
 async function handleMediaMessage(ctx: any, isVideo: boolean) {
   const chatId = ctx.chat.id.toString();
-  
-  if (activeProcessing.has(chatId)) {
-    return; // Ignore if already processing
-  }
 
   const baseCaption = ctx.message.caption || '';
   let caption = baseCaption;
@@ -101,7 +98,6 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
           mediaGroupAccumulator.delete(mediaGroupId);
           if (!groupData) return;
           
-          activeProcessing.add(chatId);
           console.log(`[Bot] Processing accumulated media group ${mediaGroupId} with ${groupData.items.length} items`);
           
           try {
@@ -129,12 +125,18 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
             // Find the first caption in the group to use as the text prompt
             const groupCaption = groupData.items.find(item => item.caption)?.caption || 'No specific text provided, analyze the media context if possible.';
             
-            await runAutomatedPipeline(ctx, groupCaption, mediaItems);
+            await db.insert(jobsTable).values({
+              chatId,
+              messageId: groupData.items[0].msgId,
+              text: groupCaption,
+              media: mediaItems,
+              status: 'pending'
+            });
+            await ctx.reply('⏳ Album media diterima dan masuk antrean sistem.', { reply_to_message_id: groupData.items[0].msgId });
+            
           } catch (error) {
-            console.error('[Bot] Error processing media group:', error);
-            try { await ctx.reply('Terjadi kesalahan sistem saat memproses album.'); } catch (e) {}
-          } finally {
-            activeProcessing.delete(chatId);
+            console.error('[Bot] Error saving media group job:', error);
+            try { await ctx.reply('Terjadi kesalahan sistem saat menyimpan antrean album.'); } catch (e) {}
           }
         }, 2000) // Wait 2 seconds for all parts of the album to arrive
       });
@@ -172,16 +174,19 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
   if (!fileLink) return;
   const text = caption ? caption : 'No specific text provided, analyze the media context if possible.';
   
-  activeProcessing.add(chatId);
-  // Do not await to prevent Telegraf 90s timeout
-  runAutomatedPipeline(ctx, text, [{ type: isVideo ? 'video' : 'image', url: fileLink.toString(), mimeType }])
-    .catch(async (error) => {
-      console.error(`[Bot] Error processing single media:`, error);
-      try { await ctx.reply('Terjadi kesalahan sistem saat memproses media.'); } catch (e) {}
-    })
-    .finally(() => {
-      activeProcessing.delete(chatId);
+  try {
+    await db.insert(jobsTable).values({
+      chatId,
+      messageId: ctx.message.message_id,
+      text,
+      media: [{ type: isVideo ? 'video' : 'image', url: fileLink.toString(), mimeType }],
+      status: 'pending'
     });
+    await ctx.reply('⏳ Media diterima dan masuk antrean sistem.', { reply_to_message_id: ctx.message.message_id });
+  } catch (error) {
+    console.error(`[Bot] Error saving single media job:`, error);
+    try { await ctx.reply('Terjadi kesalahan sistem saat menyimpan antrean media.'); } catch (e) {}
+  }
 }
 
 bot.on(message('photo'), (ctx) => handleMediaMessage(ctx, false));
