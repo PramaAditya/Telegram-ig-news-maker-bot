@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Queue Dashboard - IG News Bot</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.css" />
   <style>
     [v-cloak] { display: none; }
   </style>
@@ -51,7 +51,7 @@
               </td>
               <td class="p-3">
                 <div class="flex flex-wrap gap-2 w-48">
-                  <a v-for="(media, mIndex) in item.media" :key="mIndex" :href="media.url" class="glightbox" :data-gallery="'gallery-' + item.id">
+                  <a v-for="(media, mIndex) in item.media" :key="mIndex" :href="media.url" :data-fancybox="item.id" :data-caption="item.text.substring(0, 50) + '...'">
                     <img v-if="media.type === 'image'" :src="media.url" class="w-12 h-12 object-cover rounded shadow hover:opacity-80 transition cursor-zoom-in">
                     <video v-else-if="media.type === 'video'" :src="media.url" class="w-12 h-12 object-cover rounded shadow hover:opacity-80 transition cursor-zoom-in" muted></video>
                   </a>
@@ -86,11 +86,12 @@
   </div>
 
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/mcstudios/glightbox/dist/js/glightbox.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.umd.js"></script>
   <script>
     const { createApp, ref, onMounted, nextTick } = Vue;
 
-    let lightbox = null;
+    // Fancybox handles initialization automatically via the Fancybox.bind method using event delegation
+    // We bind it globally once the application mounts.
 
     createApp({
       setup() {
@@ -142,13 +143,6 @@
           loading.value = true;
           try {
             queue.value = await apiCall('/api/queue');
-            nextTick(() => {
-              if (lightbox) {
-                lightbox.reload();
-              } else {
-                lightbox = GLightbox({ selector: '.glightbox' });
-              }
-            });
           } catch (e) {
             console.error(e);
           } finally {
@@ -209,6 +203,9 @@
 
         onMounted(() => {
           if (apiKey.value) fetchQueue();
+          Fancybox.bind("[data-fancybox]", {
+            // Your custom options
+          });
         });
 
         return {
