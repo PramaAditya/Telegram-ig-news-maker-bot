@@ -324,7 +324,7 @@ RULES:
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
 
     const renderedUrls = await generateImageSequence({
-      logo: 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+      logo: process.env.LOGO_IMAGE_URL || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
       cover_image: coverImageUrl,
       title: censorText(cleanTitle),
       slides: boldedSlides.map(text => ({
@@ -369,6 +369,10 @@ RULES:
       type: 'image',
       url
     }));
+
+    if (process.env.CTA_IMAGE_URL) {
+      allPublishUrls.push({ type: 'image', url: process.env.CTA_IMAGE_URL });
+    }
 
     console.log(`[Phase 5] Saving to Queue with ${allPublishUrls.length} media items`);
     
