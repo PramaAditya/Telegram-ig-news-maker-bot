@@ -106,7 +106,7 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
     const items = await db.select()
       .from(queueTable)
       .where(eq(queueTable.status, 'pending'))
-      .orderBy(desc(queueTable.createdAt));
+      .orderBy(asc(queueTable.createdAt)); // Oldest first = top of queue
     res.json(items);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -165,6 +165,45 @@ app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
 
       return res.status(500).json({ error: 'Failed to publish to Buffer', details: publishError.message });
     }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/queue/:id/move - Move item up, down, or to top
+app.post('/api/queue/:id/move', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const { direction } = req.body; // 'up', 'down', 'top'
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    // Fetch all pending to determine neighbors
+    const pending = await db.select().from(queueTable)
+      .where(eq(queueTable.status, 'pending'))
+      .orderBy(asc(queueTable.createdAt));
+      
+    const index = pending.findIndex(p => p.id === id);
+    if (index === -1) return res.status(404).json({ error: 'Post not found in pending queue' });
+
+    if (direction === 'top' && index > 0) {
+      const firstItem = pending[0];
+      const newDate = new Date(firstItem.createdAt.getTime() - 1000); // 1 second before the first item
+      await db.update(queueTable).set({ createdAt: newDate }).where(eq(queueTable.id, id));
+    } else if (direction === 'up' && index > 0) {
+      const prevItem = pending[index - 1];
+      const currentItem = pending[index];
+      // Swap createdAt timestamps to swap order
+      await db.update(queueTable).set({ createdAt: prevItem.createdAt }).where(eq(queueTable.id, currentItem.id));
+      await db.update(queueTable).set({ createdAt: currentItem.createdAt }).where(eq(queueTable.id, prevItem.id));
+    } else if (direction === 'down' && index < pending.length - 1) {
+      const nextItem = pending[index + 1];
+      const currentItem = pending[index];
+      // Swap createdAt timestamps to swap order
+      await db.update(queueTable).set({ createdAt: nextItem.createdAt }).where(eq(queueTable.id, currentItem.id));
+      await db.update(queueTable).set({ createdAt: currentItem.createdAt }).where(eq(queueTable.id, nextItem.id));
+    }
+
+    res.json({ message: 'Moved successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

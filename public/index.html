@@ -32,7 +32,7 @@
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-gray-50 border-b">
-              <th class="p-3">ID</th>
+              <th class="p-3 w-16 text-center">Order</th>
               <th class="p-3">Cover</th>
               <th class="p-3 w-1/2">Caption</th>
               <th class="p-3">Media</th>
@@ -40,8 +40,15 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in queue" :key="item.id" class="border-b hover:bg-gray-50">
-              <td class="p-3">{{ item.id }}</td>
+            <tr v-for="(item, index) in queue" :key="item.id" class="border-b hover:bg-gray-50">
+              <td class="p-3 text-center align-middle">
+                <div class="flex flex-col items-center text-xl space-y-1">
+                  <button v-if="index > 0" @click="moveItem(item.id, 'top')" class="text-blue-500 hover:text-blue-700 leading-none" title="Move to Top">⇈</button>
+                  <button v-if="index > 0" @click="moveItem(item.id, 'up')" class="text-gray-400 hover:text-gray-700 leading-none" title="Move Up">▲</button>
+                  <span class="text-sm font-bold text-gray-700 my-1">{{ index + 1 }}</span>
+                  <button v-if="index < queue.length - 1" @click="moveItem(item.id, 'down')" class="text-gray-400 hover:text-gray-700 leading-none" title="Move Down">▼</button>
+                </div>
+              </td>
               <td class="p-3">
                 <img v-if="item.media && item.media.length > 0 && item.media[0].type === 'image'" :src="item.media[0].url" class="w-16 h-16 object-cover rounded shadow">
                 <video v-else-if="item.media && item.media.length > 0 && item.media[0].type === 'video'" :src="item.media[0].url" class="w-16 h-16 object-cover rounded shadow" muted></video>
@@ -158,6 +165,17 @@
           }
         };
 
+        const moveItem = async (id, direction) => {
+          try {
+            // Optimistic UI update could be added here, but re-fetching is safer
+            await apiCall(`/api/queue/${id}/move`, {
+              method: 'POST',
+              body: JSON.stringify({ direction })
+            });
+            await fetchQueue();
+          } catch (e) {}
+        };
+
         const startEdit = (item) => {
           editingId.value = item.id;
           editForm.value.text = item.text;
@@ -184,7 +202,7 @@
 
         return {
           queue, loading, apiKey, tempKey, saveKey, logout, fetchQueue,
-          deleteItem, publishNow, editingId, editForm, startEdit, cancelEdit, saveEdit
+          deleteItem, publishNow, moveItem, editingId, editForm, startEdit, cancelEdit, saveEdit
         };
       }
     }).mount('#app');
