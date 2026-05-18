@@ -185,7 +185,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
 - title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
 - slide_text: A single string of text for the slide explaining the news. IT MUST BE 2 SENTENCES MAXIMUM. Answer Who, What, When, Where, Why, and How (5W1H) as comprehensively as possible within these 2 sentences using the available facts. Separate sentences with double newlines (\\n\\n). Do NOT repeat information already stated in the title.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
-- image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "real life stock photography, no text whatsoever, similar to photo taken by newspaper photographer or stock photographer".
+- image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "masterpiece professional photography, dramatic backlighting, heavy chiaroscuro, extreme low key".
 `,
       schema: z.object({
         title: z.string(),
@@ -221,7 +221,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
     }
 
     let imageGenerationPrompt = "";
-    const promptSuffix = "Enhance and sharpen the image. Relayout and ensure it is strictly in 1:1 aspect ratio. Ensure the image has the style of real life stock photography with NO TEXT whatsoever, similar to a photo taken by a newspaper photographer or stock photographer.";
+    const promptSuffix = "analyze input image, focus on main subject, masterpiece professional photography, dramatic backlighting, strong rim lighting from behind, intense edge light, front of subject in deep shadow, heavy chiaroscuro photohraphy, extreme low key, edges fading completely into pitch black void. 4K ultra HD. Render in extreme detail with high-end remastering, sharp focus, accurate textures. Ensure it is strictly in 1:1 aspect ratio. NO TEXT whatsoever. DO NOT INCLUDE: front lighting, direct lighting, top lighting, overhead light, painting, bright background, daylight, flat lighting, overexposed, visible room edges, cutout, text, logo, signature.";
 
     if (baseImageBuffer) {
       console.log(`[Phase 3] Enhancing cover image with Gemini...`);
