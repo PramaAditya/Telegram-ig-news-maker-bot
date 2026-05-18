@@ -150,7 +150,7 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
       system: SYSTEM_PROMPT + `
 Your task is to parse the gathered facts into final components for an Instagram news carousel.
 - title: A professional, clear, and engaging headline for the cover. PLAINTEXT ONLY. NO markdown or HTML tags. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word).
-- slide_text: A single string of text for the slide explaining the news. IT MUST CONTAIN MAXIMUM 3 SENTENCES. Separate the sentences/ideas with double newlines (\\n\\n) for readability.
+- slide_text: A single string of text for the slide explaining the news. IT MUST CONTAIN MAXIMUM 2 SENTENCES. Separate the sentences/ideas with double newlines (\\n\\n) for readability.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
 - image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "real life stock photography, no text whatsoever, similar to photo taken by newspaper photographer or stock photographer".
 `,
