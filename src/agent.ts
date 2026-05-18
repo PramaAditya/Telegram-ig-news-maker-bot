@@ -149,7 +149,7 @@ export async function runAutomatedPipeline(ctx: any, userInput: string, uploaded
       model: googleAI('gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `
 Your task is to parse the gathered facts into final components for an Instagram news carousel.
-- title: Scroll-stopping, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. PLAINTEXT ONLY. NO markdown or HTML tags. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word).
+- title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
 - slide_text: A single string of text for the slide explaining the news. IT MUST BE 2 SENTENCES MAXIMUM. Answer Who, What, When, Where, Why, and How (5W1H) as comprehensively as possible within these 2 sentences using the available facts. Separate sentences with double newlines (\\n\\n). Do NOT repeat information already stated in the title.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
 - image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "real life stock photography, no text whatsoever, similar to photo taken by newspaper photographer or stock photographer".
@@ -283,9 +283,9 @@ Your task is to parse the gathered facts into final components for an Instagram 
     const paginatedSlides = paginateText(contentParams.slide_text, MAX_SLIDE_LENGTH);
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...');
-    console.log(`[Phase 4] Enhancing title and slides with markdown bolding via gemini-3.1-flash-lite...`);
+    console.log(`[Phase 4] Enhancing slides with markdown bolding via gemini-3.1-flash-lite...`);
     
-    const highlightText = async (text: string, isTitle: boolean = false) => {
+    const highlightText = async (text: string) => {
       try {
         const { text: boldedText } = await generateText({
           model: googleAI('gemini-3.1-flash-lite-preview'),
@@ -294,7 +294,7 @@ This helps readers scan the text and prevents it from being monotonous.
 RULES:
 1. Do not change any original words, only add ** around the important parts.
 2. Output ONLY the modified text, nothing else.
-3. Don't bold everything, just the key highlights (maximum 20-30% of the text).${isTitle ? ' For a title, emphasize the core subject or action.' : ''}`,
+3. Don't bold everything, just the key highlights (maximum 20-30% of the text).`,
           prompt: text
         });
         return boldedText.trim() || text;
@@ -304,7 +304,6 @@ RULES:
       }
     };
 
-    const boldedTitle = await highlightText(cleanTitle, true);
     const boldedSlides = await Promise.all(paginatedSlides.map(text => highlightText(text)));
 
     await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
@@ -312,7 +311,7 @@ RULES:
     const renderedUrls = await generateImageSequence({
       logo: 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
       cover_image: coverImageUrl,
-      title: censorText(boldedTitle),
+      title: censorText(cleanTitle),
       slides: boldedSlides.map(text => ({
         text: censorText(text)
       }))
