@@ -65,8 +65,14 @@ app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
     console.log(`[API] Triggering publish for post ID ${post.id}`);
 
     try {
+      let mediaToPublish = [...post.media];
+      const ctaUrl = process.env.CTA_IMAGE_URL;
+      if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
+        mediaToPublish.push({ type: 'image', url: ctaUrl });
+      }
+
       // Publish to buffer (using shareNow in buffer.ts)
-      const result = await publishToBuffer(post.media, post.text);
+      const result = await publishToBuffer(mediaToPublish, post.text);
       
       // Update DB
       await db.update(queueTable)
@@ -145,7 +151,13 @@ app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
     const post = items[0];
     
     try {
-      const result = await publishToBuffer(post.media, post.text);
+      let mediaToPublish = [...post.media];
+      const ctaUrl = process.env.CTA_IMAGE_URL;
+      if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
+        mediaToPublish.push({ type: 'image', url: ctaUrl });
+      }
+
+      const result = await publishToBuffer(mediaToPublish, post.text);
       
       await db.update(queueTable)
         .set({
