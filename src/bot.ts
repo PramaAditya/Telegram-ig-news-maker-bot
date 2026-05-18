@@ -187,8 +187,24 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
 bot.on(message('photo'), (ctx) => handleMediaMessage(ctx, false));
 bot.on(message('video'), (ctx) => handleMediaMessage(ctx, true));
 
-bot.launch();
-console.log('Bot is running in automated mode...');
+const startBotWithRetry = async (retries = 10, delayMs = 3000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await bot.launch();
+      console.log('Bot is running in automated mode...');
+      return;
+    } catch (err: any) {
+      console.error(`[Bot] Failed to launch bot (Attempt ${i + 1}/${retries}): ${err.message}`);
+      if (i === retries - 1) throw err;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+};
+
+startBotWithRetry().catch(err => {
+  console.error('[Bot] Failed to start after multiple retries', err);
+  process.exit(1);
+});
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
