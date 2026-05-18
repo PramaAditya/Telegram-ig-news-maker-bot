@@ -347,16 +347,25 @@ RULES:
       await ctx.reply(finalCaption + `\n\nCover URL: ${renderedUrls[0]}`);
     }
 
-    // Prepare array of media for Buffer
+    // Prepare array of media for Queue
     let allPublishUrls: { type: 'image' | 'video', url: string }[] = renderedUrls.map(url => ({
       type: 'image',
       url
     }));
 
-    console.log(`[Phase 5] Publishing to Buffer with ${allPublishUrls.length} media items`);
-    await publishToBuffer(allPublishUrls, finalCaption);
+    console.log(`[Phase 5] Saving to Queue with ${allPublishUrls.length} media items`);
+    
+    // Save to DB instead of direct Buffer publishing
+    const { db } = await import('./db/index.js');
+    const { queueTable } = await import('./db/schema.js');
+    
+    await db.insert(queueTable).values({
+      text: finalCaption,
+      media: allPublishUrls,
+      status: 'pending'
+    });
 
-    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Berhasil dipublikasikan ke Buffer!');
+    await ctx.telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Berhasil disimpan ke antrian (Queue)!');
     console.log(`[Done] Pipeline finished successfully.`);
 
   } catch (error: any) {

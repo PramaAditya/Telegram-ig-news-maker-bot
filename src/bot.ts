@@ -2,8 +2,13 @@ import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import { runAutomatedPipeline } from './agent.js';
+import { startServer } from './server.js';
 
 dotenv.config();
+
+// Start the Express API server
+const PORT = parseInt(process.env.PORT || '3000', 10);
+startServer(PORT);
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
 if (!botToken) {
