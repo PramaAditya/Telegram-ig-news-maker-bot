@@ -183,20 +183,20 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
       system: SYSTEM_PROMPT + `
 Your task is to parse the gathered facts into final components for an Instagram news carousel.
 - title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
-- slide_text: A single string of text for the slide explaining the news. IT MUST BE 2 SENTENCES MAXIMUM. Answer Who, What, When, Where, Why, and How (5W1H) as comprehensively as possible within these 2 sentences using the available facts. Separate sentences with double newlines (\\n\\n). Do NOT repeat information already stated in the title.
+- slides: An array of exactly 2 strings, representing two slides explaining the news. Write in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). AVOID complex political or academic jargon (e.g. instead of "hak kedaulatan", use "hak penuh sebagai negara merdeka"; instead of "sikap hegemonik", use "memaksakan kehendak"). Break down complex ideas so the wider Indonesian public can easily grasp the context. Each slide should contain exactly 1 paragraph (which can have multiple sentences). Answer Who, What, When, Where, Why, and How (5W1H) comprehensively across the two slides. Do NOT repeat information already stated in the title.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
 - image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "masterpiece professional photography, dramatic backlighting, heavy chiaroscuro, extreme low key".
 `,
       schema: z.object({
         title: z.string(),
-        slide_text: z.string(),
+        slides: z.array(z.string()).length(2),
         source_name: z.string(),
         image_prompt: z.string(),
       }),
       prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchResult}`,
     });
     
-    let finalCaption = `${contentParams.slide_text.trim()}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
+    let finalCaption = `${contentParams.slides.join('\n\n')}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
     finalCaption = censorText(finalCaption);
 
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...'));
@@ -279,50 +279,6 @@ Your task is to parse the gathered facts into final components for an Instagram 
     const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}]/gu;
     const cleanTitle = contentParams.title.replace(emojiRegex, '');
 
-    // Pagination step to ensure slides are not too long
-    const MAX_SLIDE_LENGTH = 200;
-    
-    function paginateText(text: string, maxLength: number): string[] {
-      const paragraphs = text.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
-      const slides: string[] = [];
-      let currentSlide = '';
-
-      for (const p of paragraphs) {
-        if (p.length > maxLength) {
-          if (currentSlide) {
-            slides.push(currentSlide);
-            currentSlide = '';
-          }
-          const sentences = p.match(/[^.!?]+[.!?]+/g) || [p];
-          for (const sentence of sentences) {
-            const s = sentence.trim();
-            if (!s) continue;
-            if (!currentSlide) {
-              currentSlide = s;
-            } else if (currentSlide.length + s.length + 1 <= maxLength) {
-              currentSlide += ' ' + s;
-            } else {
-              slides.push(currentSlide);
-              currentSlide = s;
-            }
-          }
-        } else {
-          if (!currentSlide) {
-            currentSlide = p;
-          } else if (currentSlide.length + p.length + 2 <= maxLength) {
-            currentSlide += '\n\n' + p;
-          } else {
-            slides.push(currentSlide);
-            currentSlide = p;
-          }
-        }
-      }
-      if (currentSlide) slides.push(currentSlide);
-      return slides;
-    }
-
-    const paginatedSlides = paginateText(contentParams.slide_text, MAX_SLIDE_LENGTH);
-
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...'));
     console.log(`[Phase 4] Enhancing slides with markdown bolding via gemini-3.1-flash-lite...`);
     
@@ -345,7 +301,7 @@ RULES:
       }
     };
 
-    const boldedSlides = await Promise.all(paginatedSlides.map(text => highlightText(text)));
+    const boldedSlides = await Promise.all(contentParams.slides.map(text => highlightText(text)));
 
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
 
@@ -425,3 +381,4 @@ RULES:
     throw error;
   }
 }
+
