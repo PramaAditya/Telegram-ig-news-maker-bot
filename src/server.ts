@@ -103,7 +103,10 @@ app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
 // GET /api/queue - List all queue items
 app.get('/api/queue', requireDashboardAuth, async (req, res) => {
   try {
-    const items = await db.select().from(queueTable).orderBy(desc(queueTable.createdAt));
+    const items = await db.select()
+      .from(queueTable)
+      .where(eq(queueTable.status, 'pending'))
+      .orderBy(desc(queueTable.createdAt));
     res.json(items);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -114,18 +117,54 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
 app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { text, status } = req.body;
+    const { text } = req.body;
     
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
 
-    await db.update(queueTable)
-      .set({
-        ...(text !== undefined && { text }),
-        ...(status !== undefined && { status }),
-      })
-      .where(eq(queueTable.id, id));
+    if (text !== undefined) {
+      await db.update(queueTable)
+        .set({ text })
+        .where(eq(queueTable.id, id));
+    }
 
     res.json({ message: 'Updated successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/queue/:id/publish - Publish immediately from dashboard
+app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const items = await db.select().from(queueTable).where(eq(queueTable.id, id));
+    if (items.length === 0) return res.status(404).json({ error: 'Post not found in queue' });
+    
+    const post = items[0];
+    
+    try {
+      const result = await publishToBuffer(post.media, post.text);
+      
+      await db.update(queueTable)
+        .set({
+          status: 'published',
+          publishedAt: new Date()
+        })
+        .where(eq(queueTable.id, id));
+        
+      res.json({ message: 'Published successfully', result });
+    } catch (publishError: any) {
+      await db.update(queueTable)
+        .set({
+          status: 'error',
+          errorLog: publishError.message || String(publishError)
+        })
+        .where(eq(queueTable.id, post.id));
+
+      return res.status(500).json({ error: 'Failed to publish to Buffer', details: publishError.message });
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
