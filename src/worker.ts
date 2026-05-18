@@ -1,9 +1,11 @@
 import { db } from './db/index.js';
-import { jobsTable } from './db/schema.js';
-import { eq, sql } from 'drizzle-orm';
+import { jobsTable, queueTable } from './db/schema.js';
+import { eq, sql, asc } from 'drizzle-orm';
 import { runAutomatedPipeline } from './agent.js';
+import { publishToBuffer } from './buffer.js';
 import { Telegraf } from 'telegraf';
 import dotenv from 'dotenv';
+import cron from 'node-cron';
 
 dotenv.config();
 
@@ -17,6 +19,8 @@ const telegram = new Telegraf(botToken).telegram;
 let isShuttingDown = false;
 let activeJobs = 0;
 const MAX_CONCURRENT_JOBS = 3;
+
+// --- Telegram Jobs Processing ---
 
 async function processNextJob() {
   if (isShuttingDown) return;
@@ -112,6 +116,68 @@ console.log(`[Worker] Starting background worker (Concurrency: ${MAX_CONCURRENT_
 for (let i = 0; i < MAX_CONCURRENT_JOBS; i++) {
   setTimeout(processNextJob, i * 500); // Stagger initial starts slightly
 }
+
+// --- Auto Publish Queue ---
+
+async function autoPublishQueue() {
+  if (isShuttingDown) return;
+  
+  console.log('[Worker] Checking queue for auto-publish...');
+  try {
+    // Find the oldest pending post
+    const pendingPosts = await db.select()
+      .from(queueTable)
+      .where(eq(queueTable.status, 'pending'))
+      .orderBy(asc(queueTable.createdAt))
+      .limit(1);
+
+    if (pendingPosts.length === 0) {
+      console.log('[Worker] No pending posts in queue to auto-publish.');
+      return;
+    }
+
+    const post = pendingPosts[0];
+    console.log(`[Worker] Auto-publishing post ID ${post.id}`);
+
+    try {
+      let mediaToPublish = [...post.media];
+      const ctaUrl = process.env.CTA_IMAGE_URL;
+      if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
+        mediaToPublish.push({ type: 'image', url: ctaUrl });
+      }
+
+      // Publish to buffer
+      await publishToBuffer(mediaToPublish, post.text);
+      
+      // Update DB
+      await db.update(queueTable)
+        .set({
+          status: 'published',
+          publishedAt: new Date()
+        })
+        .where(eq(queueTable.id, post.id));
+
+      console.log(`[Worker] Successfully auto-published post ID ${post.id}`);
+    } catch (publishError: any) {
+      console.error(`[Worker] Failed to auto-publish post ID ${post.id}:`, publishError);
+      
+      // Update DB with error so it doesn't get stuck in a retry loop
+      await db.update(queueTable)
+        .set({
+          status: 'error',
+          errorLog: publishError.message || String(publishError)
+        })
+        .where(eq(queueTable.id, post.id));
+    }
+
+  } catch (error: any) {
+    console.error('[Worker] Unexpected error checking queue for auto-publish:', error);
+  }
+}
+
+// Run exactly at :00 and :30 past the hour using global clock
+console.log(`[Worker] Auto-publish scheduled at exactly 0 and 30 past every hour.`);
+cron.schedule('0,30 * * * *', autoPublishQueue);
 
 // Graceful shutdown
 const shutdown = () => {
