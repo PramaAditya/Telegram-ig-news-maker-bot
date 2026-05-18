@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Queue Dashboard - IG News Bot</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css" />
   <style>
     [v-cloak] { display: none; }
   </style>
@@ -33,9 +34,8 @@
           <thead>
             <tr class="bg-gray-50 border-b">
               <th class="p-3 w-16 text-center">Order</th>
-              <th class="p-3">Cover</th>
+              <th class="p-3">Slides</th>
               <th class="p-3 w-1/2">Caption</th>
-              <th class="p-3">Media</th>
               <th class="p-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -50,18 +50,19 @@
                 </div>
               </td>
               <td class="p-3">
-                <img v-if="item.media && item.media.length > 0 && item.media[0].type === 'image'" :src="item.media[0].url" class="w-16 h-16 object-cover rounded shadow">
-                <video v-else-if="item.media && item.media.length > 0 && item.media[0].type === 'video'" :src="item.media[0].url" class="w-16 h-16 object-cover rounded shadow" muted></video>
-                <div v-else class="w-16 h-16 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400">None</div>
+                <div class="flex flex-wrap gap-2 w-48">
+                  <a v-for="(media, mIndex) in item.media" :key="mIndex" :href="media.url" class="glightbox" :data-gallery="'gallery-' + item.id">
+                    <img v-if="media.type === 'image'" :src="media.url" class="w-12 h-12 object-cover rounded shadow hover:opacity-80 transition cursor-zoom-in">
+                    <video v-else-if="media.type === 'video'" :src="media.url" class="w-12 h-12 object-cover rounded shadow hover:opacity-80 transition cursor-zoom-in" muted></video>
+                  </a>
+                  <div v-if="!item.media || item.media.length === 0" class="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400">None</div>
+                </div>
               </td>
               <td class="p-3 text-sm">
                 <div v-if="editingId === item.id">
                   <textarea v-model="editForm.text" class="w-full border p-2 rounded" rows="4"></textarea>
                 </div>
                 <div v-else class="whitespace-pre-wrap max-h-32 overflow-y-auto">{{ item.text }}</div>
-              </td>
-              <td class="p-3 text-sm">
-                {{ item.media ? item.media.length : 0 }} items
               </td>
               <td class="p-3 text-right space-x-2 whitespace-nowrap">
                 <div v-if="editingId === item.id">
@@ -76,7 +77,7 @@
               </td>
             </tr>
             <tr v-if="queue.length === 0">
-              <td colspan="5" class="p-6 text-center text-gray-500">No items in the queue.</td>
+              <td colspan="4" class="p-6 text-center text-gray-500">No items in the queue.</td>
             </tr>
           </tbody>
         </table>
@@ -85,8 +86,11 @@
   </div>
 
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/mcstudios/glightbox/dist/js/glightbox.min.js"></script>
   <script>
-    const { createApp, ref, onMounted } = Vue;
+    const { createApp, ref, onMounted, nextTick } = Vue;
+
+    let lightbox = null;
 
     createApp({
       setup() {
@@ -138,6 +142,13 @@
           loading.value = true;
           try {
             queue.value = await apiCall('/api/queue');
+            nextTick(() => {
+              if (lightbox) {
+                lightbox.reload();
+              } else {
+                lightbox = GLightbox({ selector: '.glightbox' });
+              }
+            });
           } catch (e) {
             console.error(e);
           } finally {

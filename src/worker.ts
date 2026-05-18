@@ -185,9 +185,11 @@ async function autoPublishQueue() {
   }
 }
 
-// Run exactly at :00 and :30 past the hour using global clock
-console.log(`[Worker] Auto-publish scheduled at exactly 0 and 30 past every hour.`);
-cron.schedule('0,30 * * * *', autoPublishQueue);
+// Run exactly at :00 and :30 past the hour between 06:00 and 23:59 Asia/Jakarta time
+console.log(`[Worker] Auto-publish scheduled at exactly 0 and 30 past the hour, between 06:00 and 23:59 (Asia/Jakarta).`);
+cron.schedule('0,30 6-23 * * *', autoPublishQueue, {
+  timezone: "Asia/Jakarta"
+});
 
 // Graceful shutdown
 const shutdown = () => {
