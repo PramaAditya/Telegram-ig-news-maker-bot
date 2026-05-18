@@ -27,6 +27,8 @@ services:
     command: npm run start:bot
     ports:
       - "3000:3000"
+    volumes:
+      - telegram-data:/var/lib/telegram-bot-api
     depends_on:
       - ignews_botapi
     
@@ -38,5 +40,7 @@ services:
     environment:
       - TELEGRAM_API_URL=http://ignews_botapi:8081
     command: npm run start:worker
+    volumes:
+      - telegram-data:/var/lib/telegram-bot-api
     depends_on:
       - ignews_botapi

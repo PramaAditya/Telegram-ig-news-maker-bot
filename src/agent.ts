@@ -8,6 +8,8 @@ import { censorText } from './sanitize.js';
 import { uploadToS3 } from './s3.js';
 import { generateImageSequence } from './image.js';
 import { publishToBuffer } from './buffer.js';
+import fs from 'fs/promises';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
@@ -78,7 +80,17 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
                 let retries = 3;
                 while (retries > 0) {
                   try {
-                    response = await axios.get(media.url, { responseType: 'arraybuffer' });
+                    if (media.url.startsWith('file://')) {
+                      // Extract the actual file path from the file:// URL
+                      // Telegraf creates urls like file://ignews_botapi/var/lib/... or file:///var/lib/...
+                      const parsedUrl = new URL(media.url);
+                      // parsedUrl.pathname contains the absolute path on disk
+                      const filePath = decodeURIComponent(parsedUrl.pathname);
+                      const fileBuffer = await fs.readFile(filePath);
+                      response = { data: fileBuffer };
+                    } else {
+                      response = await axios.get(media.url, { responseType: 'arraybuffer' });
+                    }
                     break;
                   } catch (e: any) {
                     retries--;
