@@ -6,6 +6,10 @@ import { publishToBuffer } from './buffer.js';
 import { Telegraf } from 'telegraf';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
+import dns from 'dns';
+
+// Fix for ECONNRESET issues in Docker (Node.js 17+ prefers IPv6 by default, which can break in some Docker networks)
+dns.setDefaultResultOrder('ipv4first');
 
 dotenv.config();
 
@@ -14,7 +18,13 @@ if (!botToken) {
   throw new Error('TELEGRAM_BOT_TOKEN must be provided!');
 }
 
-const telegram = new Telegraf(botToken).telegram;
+const telegramApiRoot = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
+
+const telegram = new Telegraf(botToken, {
+  telegram: {
+    apiRoot: telegramApiRoot
+  }
+}).telegram;
 
 let isShuttingDown = false;
 let activeJobs = 0;

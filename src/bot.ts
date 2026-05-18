@@ -5,6 +5,10 @@ import { startServer } from './server.js';
 import { db } from './db/index.js';
 import { jobsTable } from './db/schema.js';
 import { eq } from 'drizzle-orm';
+import dns from 'dns';
+
+// Fix for ECONNRESET issues in Docker (Node.js 17+ prefers IPv6 by default, which can break in some Docker networks)
+dns.setDefaultResultOrder('ipv4first');
 
 dotenv.config();
 
@@ -17,7 +21,13 @@ if (!botToken) {
   throw new Error('TELEGRAM_BOT_TOKEN must be provided!');
 }
 
-const bot = new Telegraf(botToken);
+const telegramApiRoot = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
+
+const bot = new Telegraf(botToken, {
+  telegram: {
+    apiRoot: telegramApiRoot
+  }
+});
 
 const mediaGroupAccumulator = new Map<string, { timer: NodeJS.Timeout, items: { fileId: string, caption?: string, msgId: number, type: 'image' | 'video', mimeType?: string }[] }>();
 
@@ -110,7 +120,11 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
               let retries = 3;
               while (retries > 0) {
                 try {
-                  url = (await ctx.telegram.getFileLink(item.fileId)).toString();
+                  const fileUrl = await ctx.telegram.getFileLink(item.fileId);
+                  url = fileUrl.toString();
+                  // When using the local Bot API, it returns http://botapi:8081/... 
+                  // If we are mapping ports or using the local bot API in production, axios can reach this url natively
+                  // because our bot and worker containers are in the same docker network as 'botapi'.
                   break;
                 } catch (e: any) {
                   retries--;

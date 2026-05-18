@@ -11,6 +11,20 @@ import { publishToBuffer } from './buffer.js';
 
 dotenv.config();
 
+// Helper to retry Telegram API calls for transient network errors (like ECONNRESET)
+const withRetry = async <T>(fn: () => Promise<T>, retries = 3, delayMs = 2000): Promise<T> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      console.warn(`[Telegram API Retry ${i + 1}/${retries}] Failed: ${error.message}`);
+      if (i === retries - 1) throw error;
+      await new Promise(res => setTimeout(res, delayMs));
+    }
+  }
+  throw new Error("Unreachable");
+};
+
 const googleAI = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
@@ -41,7 +55,7 @@ export interface MediaItem {
 
 export async function runAutomatedPipeline(chatId: string, messageId: number, userInput: string, uploadedMedia: MediaItem[] | undefined, telegram: any) {
   try {
-    let statusMsg = await telegram.sendMessage(chatId, '🔍 Mencari informasi...', { reply_to_message_id: messageId });
+    let statusMsg = await withRetry(() => telegram.sendMessage(chatId, '🔍 Mencari informasi...', { reply_to_message_id: messageId })) as any;
 
     // Phase 1: Research (Fact Gathering)
     console.log(`[Phase 1] Researching: ${userInput}`);
@@ -148,7 +162,7 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     });
 
     console.log(`[Phase 1] Research Complete. Text length: ${researchResult.length}`);
-    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✍️ Menyusun konten...');
+    await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✍️ Menyusun konten...'));
 
     // Phase 2: Content Generation
     console.log(`[Phase 2] Generating content`);
@@ -173,7 +187,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
     let finalCaption = `${contentParams.slide_text.trim()}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
     finalCaption = censorText(finalCaption);
 
-    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...');
+    await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...'));
 
     // Phase 3: Image Sourcing
     let baseImageBuffer: Buffer | null = null;
@@ -244,7 +258,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
       throw new Error('Gagal mendapatkan URL gambar.');
     }
 
-    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
+    await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
 
     // Phase 4: Image Rendering
     console.log(`[Phase 4] Rendering carousel via API`);
@@ -297,7 +311,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
 
     const paginatedSlides = paginateText(contentParams.slide_text, MAX_SLIDE_LENGTH);
 
-    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...');
+    await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...'));
     console.log(`[Phase 4] Enhancing slides with markdown bolding via gemini-3.1-flash-lite...`);
     
     const highlightText = async (text: string) => {
@@ -321,7 +335,7 @@ RULES:
 
     const boldedSlides = await Promise.all(paginatedSlides.map(text => highlightText(text)));
 
-    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...');
+    await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
 
     const renderedUrls = await generateImageSequence({
       logo: process.env.LOGO_IMAGE_URL || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
@@ -336,7 +350,7 @@ RULES:
       throw new Error('Gagal merender carousel dari API.');
     }
 
-    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🚀 Mempublikasikan ke Buffer...');
+    await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🚀 Mempublikasikan ke Buffer...'));
 
     // Phase 5: Publishing via Buffer
     console.log(`[Phase 5] Sending rendered photo to user and preparing Buffer URLs`);
@@ -352,16 +366,16 @@ RULES:
 
     if (previewBuffer) {
       if (finalCaption.length > 1024) {
-        await telegram.sendPhoto(chatId, { source: previewBuffer }, { reply_to_message_id: messageId });
-        await telegram.sendMessage(chatId, finalCaption, { reply_to_message_id: messageId });
+        await withRetry(() => telegram.sendPhoto(chatId, { source: previewBuffer }, { reply_to_message_id: messageId }));
+        await withRetry(() => telegram.sendMessage(chatId, finalCaption, { reply_to_message_id: messageId }));
       } else {
-        await telegram.sendPhoto(chatId, 
+        await withRetry(() => telegram.sendPhoto(chatId, 
           { source: previewBuffer },
           { caption: finalCaption, reply_to_message_id: messageId }
-        );
+        ));
       }
     } else {
-      await telegram.sendMessage(chatId, finalCaption + `\n\nCover URL: ${renderedUrls[0]}`, { reply_to_message_id: messageId });
+      await withRetry(() => telegram.sendMessage(chatId, finalCaption + `\n\nCover URL: ${renderedUrls[0]}`, { reply_to_message_id: messageId }));
     }
 
     // Prepare array of media for Queue
@@ -386,12 +400,16 @@ RULES:
       status: 'pending'
     });
 
-    await telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Berhasil diselesaikan dan masuk Queue untuk di-publish!');
+    await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Berhasil diselesaikan dan masuk Queue untuk di-publish!'));
     console.log(`[Done] Pipeline finished successfully.`);
 
   } catch (error: any) {
     console.error('[Pipeline Error]', error);
-    await telegram.sendMessage(chatId, `❌ Terjadi kesalahan: ${error.message}`, { reply_to_message_id: messageId });
+    try {
+      await withRetry(() => telegram.sendMessage(chatId, `❌ Terjadi kesalahan: ${error.message}`, { reply_to_message_id: messageId }));
+    } catch (e) {
+      console.error('[Pipeline Error] Failed to send error message to user:', e);
+    }
     throw error;
   }
 }
