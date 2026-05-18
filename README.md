@@ -46,4 +46,4 @@ http://localhost:3000
 ```
 *(Replace `localhost:3000` with your production URL).*
 
-It will prompt you for the `TRIGGER_API_KEY` to authenticate and allow you to view, edit, and delete queued items.
+It will prompt you for the `DASHBOARD_PASSWORD` (configured in your `.env`) to authenticate and allow you to view, edit, and delete queued items.

@@ -21,13 +21,17 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
 const TRIGGER_API_KEY = process.env.TRIGGER_API_KEY;
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
 
 if (!TRIGGER_API_KEY) {
   console.warn('WARNING: TRIGGER_API_KEY is not set in environment variables.');
 }
+if (!DASHBOARD_PASSWORD) {
+  console.warn('WARNING: DASHBOARD_PASSWORD is not set in environment variables. Dashboard will be inaccessible.');
+}
 
-// Middleware to protect API routes
-const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+// Middleware to protect trigger API routes
+const requireTriggerAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers.authorization;
   if (!TRIGGER_API_KEY || authHeader !== `Bearer ${TRIGGER_API_KEY}`) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -35,7 +39,16 @@ const requireAuth = (req: express.Request, res: express.Response, next: express.
   next();
 };
 
-app.post('/api/trigger-publish', requireAuth, async (req, res) => {
+// Middleware to protect dashboard CRUD API routes
+const requireDashboardAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!DASHBOARD_PASSWORD || authHeader !== `Bearer ${DASHBOARD_PASSWORD}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+};
+
+app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
   try {
     // Find the oldest pending post
     const pendingPosts = await db.select()
@@ -88,7 +101,7 @@ app.post('/api/trigger-publish', requireAuth, async (req, res) => {
 // --- CRUD API Endpoints for Dashboard ---
 
 // GET /api/queue - List all queue items
-app.get('/api/queue', requireAuth, async (req, res) => {
+app.get('/api/queue', requireDashboardAuth, async (req, res) => {
   try {
     const items = await db.select().from(queueTable).orderBy(desc(queueTable.createdAt));
     res.json(items);
@@ -98,9 +111,9 @@ app.get('/api/queue', requireAuth, async (req, res) => {
 });
 
 // PUT /api/queue/:id - Update queue item (e.g. edit text or retry a failed post)
-app.put('/api/queue/:id', requireAuth, async (req, res) => {
+app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
     const { text, status } = req.body;
     
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -119,9 +132,9 @@ app.put('/api/queue/:id', requireAuth, async (req, res) => {
 });
 
 // DELETE /api/queue/:id - Delete a queue item
-app.delete('/api/queue/:id', requireAuth, async (req, res) => {
+app.delete('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
 
     await db.delete(queueTable).where(eq(queueTable.id, id));

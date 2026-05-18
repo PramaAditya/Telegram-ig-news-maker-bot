@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Queue Dashboard - IG News Bot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    [v-cloak] { display: none; }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-900 font-sans p-6">
+  <div id="app" v-cloak class="max-w-6xl mx-auto bg-white p-8 rounded-lg shadow">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold">Queue Dashboard</h1>
+      <div v-if="!apiKey" class="flex gap-2">
+        <input v-model="tempKey" type="password" placeholder="Enter Dashboard Password" class="border p-2 rounded" @keyup.enter="saveKey">
+        <button @click="saveKey" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Login</button>
+      </div>
+      <button v-else @click="logout" class="text-red-500 hover:underline">Logout</button>
+    </div>
+
+    <div v-if="apiKey">
+      <div class="mb-4 flex justify-between items-center">
+        <p class="text-sm text-gray-500">Showing all queue items. Trigger publication via API/N8N.</p>
+        <button @click="fetchQueue" class="text-blue-500 hover:underline">Refresh</button>
+      </div>
+
+      <div v-if="loading" class="text-center py-10">Loading...</div>
+      
+      <div v-else class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-gray-50 border-b">
+              <th class="p-3">ID</th>
+              <th class="p-3">Status</th>
+              <th class="p-3 w-1/3">Caption</th>
+              <th class="p-3">Media</th>
+              <th class="p-3">Date</th>
+              <th class="p-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in queue" :key="item.id" class="border-b hover:bg-gray-50">
+              <td class="p-3">{{ item.id }}</td>
+              <td class="p-3">
+                <span class="px-2 py-1 rounded text-xs text-white"
+                  :class="{
+                    'bg-yellow-500': item.status === 'pending',
+                    'bg-green-500': item.status === 'published',
+                    'bg-red-500': item.status === 'error'
+                  }">
+                  {{ item.status }}
+                </span>
+                <div v-if="item.status === 'error'" class="text-xs text-red-500 mt-1 max-w-xs truncate" :title="item.errorLog">
+                  {{ item.errorLog }}
+                </div>
+              </td>
+              <td class="p-3 text-sm">
+                <div v-if="editingId === item.id">
+                  <textarea v-model="editForm.text" class="w-full border p-2 rounded" rows="4"></textarea>
+                </div>
+                <div v-else class="whitespace-pre-wrap max-h-32 overflow-y-auto">{{ item.text }}</div>
+              </td>
+              <td class="p-3 text-sm">
+                {{ item.media ? item.media.length : 0 }} items
+              </td>
+              <td class="p-3 text-xs text-gray-500">
+                Created: {{ new Date(item.createdAt).toLocaleString() }}<br>
+                <span v-if="item.publishedAt">Published: {{ new Date(item.publishedAt).toLocaleString() }}</span>
+              </td>
+              <td class="p-3 text-right space-x-2 whitespace-nowrap">
+                <div v-if="editingId === item.id">
+                  <button @click="saveEdit" class="text-green-600 hover:underline">Save</button>
+                  <button @click="cancelEdit" class="text-gray-500 hover:underline ml-2">Cancel</button>
+                </div>
+                <div v-else>
+                  <button v-if="item.status !== 'published'" @click="startEdit(item)" class="text-blue-600 hover:underline">Edit</button>
+                  <button v-if="item.status === 'error'" @click="updateStatus(item.id, 'pending')" class="text-yellow-600 hover:underline ml-2">Retry</button>
+                  <button @click="deleteItem(item.id)" class="text-red-600 hover:underline ml-2">Delete</button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="queue.length === 0">
+              <td colspan="6" class="p-6 text-center text-gray-500">No items in the queue.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script>
+    const { createApp, ref, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const queue = ref([]);
+        const loading = ref(false);
+        const apiKey = ref(localStorage.getItem('DASHBOARD_PASSWORD') || '');
+        const tempKey = ref('');
+        const editingId = ref(null);
+        const editForm = ref({ text: '' });
+
+        const saveKey = () => {
+          if (!tempKey.value) return;
+          apiKey.value = tempKey.value;
+          localStorage.setItem('DASHBOARD_PASSWORD', apiKey.value);
+          tempKey.value = '';
+          fetchQueue();
+        };
+
+        const logout = () => {
+          apiKey.value = '';
+          localStorage.removeItem('DASHBOARD_PASSWORD');
+          queue.value = [];
+        };
+
+        const apiCall = async (url, options = {}) => {
+          const res = await fetch(url, {
+            ...options,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey.value}`,
+              ...options.headers
+            }
+          });
+          if (res.status === 401) {
+            alert('Unauthorized. Invalid Password.');
+            logout();
+            throw new Error('Unauthorized');
+          }
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            alert(`Error: ${data.error || res.statusText}`);
+            throw new Error(data.error);
+          }
+          return res.json();
+        };
+
+        const fetchQueue = async () => {
+          if (!apiKey.value) return;
+          loading.value = true;
+          try {
+            queue.value = await apiCall('/api/queue');
+          } catch (e) {
+            console.error(e);
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        const deleteItem = async (id) => {
+          if (!confirm('Are you sure you want to delete this post?')) return;
+          try {
+            await apiCall(`/api/queue/${id}`, { method: 'DELETE' });
+            await fetchQueue();
+          } catch (e) {}
+        };
+
+        const updateStatus = async (id, status) => {
+          try {
+            await apiCall(`/api/queue/${id}`, {
+              method: 'PUT',
+              body: JSON.stringify({ status })
+            });
+            await fetchQueue();
+          } catch (e) {}
+        };
+
+        const startEdit = (item) => {
+          editingId.value = item.id;
+          editForm.value.text = item.text;
+        };
+
+        const cancelEdit = () => {
+          editingId.value = null;
+        };
+
+        const saveEdit = async () => {
+          try {
+            await apiCall(`/api/queue/${editingId.value}`, {
+              method: 'PUT',
+              body: JSON.stringify({ text: editForm.value.text })
+            });
+            editingId.value = null;
+            await fetchQueue();
+          } catch (e) {}
+        };
+
+        onMounted(() => {
+          if (apiKey.value) fetchQueue();
+        });
+
+        return {
+          queue, loading, apiKey, tempKey, saveKey, logout, fetchQueue,
+          deleteItem, updateStatus, editingId, editForm, startEdit, cancelEdit, saveEdit
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
