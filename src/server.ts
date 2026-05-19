@@ -234,8 +234,13 @@ app.delete('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   }
 });
 
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
 export const startServer = (port: number = 3000) => {
   app.listen(port, () => {
     console.log(`API Server is running on port ${port}`);
   });
 };
+
