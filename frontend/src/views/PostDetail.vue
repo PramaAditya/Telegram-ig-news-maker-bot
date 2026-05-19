@@ -126,67 +126,56 @@ const regenerateMedia = async () => {
     <div v-if="loading" class="text-center py-10 text-gray-500">Loading...</div>
     <div v-else-if="error" class="bg-red-50 text-red-600 p-4 rounded-md">{{ error }}</div>
     
-    <div v-else-if="post" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div v-else-if="post" class="space-y-6 max-w-4xl mx-auto">
       
-      <!-- Left Column: Data Editor -->
-      <div class="space-y-6">
-        <div class="bg-white shadow rounded-lg p-6">
-          <h2 class="text-lg font-bold mb-4 text-gray-800">Media Data (Render Engine)</h2>
-          
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Title (supports **bold**)</label>
-            <input 
-              v-model="post.title" 
-              type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Cover Image S3 URL</label>
-            <input 
-              v-model="post.coverImageUrl" 
-              type="url"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-            />
-            <img v-if="post.coverImageUrl" :src="post.coverImageUrl" class="mt-2 h-24 object-cover rounded-md border border-gray-200" />
-          </div>
-
-          <div v-for="(_, i) in post.slides" :key="i" class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Slide {{ Number(i) + 1 }} Text (supports **bold**)</label>
-            <textarea 
-              v-model="post.slides[i]" 
-              rows="3" 
-              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            ></textarea>
-          </div>
-
-          <button 
-            @click="regenerateMedia" 
-            :disabled="generating"
-            class="w-full mt-2 inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-          >
-            <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': generating }" />
-            {{ generating ? 'Generating Images from API...' : 'Regenerate Media Grid' }}
-          </button>
-        </div>
-
-        <div class="bg-white shadow rounded-lg p-6">
-          <h2 class="text-lg font-bold mb-4 text-gray-800">Final Caption (Instagram Text)</h2>
+      <!-- Media Data Editor -->
+      <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-gray-800">Media Data (Render Engine)</h2>
+        
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Title (supports **bold**)</label>
           <textarea 
-            v-model="post.text" 
-            rows="8" 
-            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            v-model="post.title" 
+            rows="3"
+            class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
           ></textarea>
         </div>
+
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Cover Image S3 URL</label>
+          <input 
+            v-model="post.coverImageUrl" 
+            type="url"
+            class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+          />
+          <img v-if="post.coverImageUrl" :src="post.coverImageUrl" class="mt-3 h-32 object-cover rounded-md border border-gray-200" />
+        </div>
+
+        <div v-for="(_, i) in post.slides" :key="i" class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Slide {{ Number(i) + 1 }} Text (supports **bold**)</label>
+          <textarea 
+            v-model="post.slides[i]" 
+            rows="5" 
+            class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+          ></textarea>
+        </div>
+
+        <button 
+          @click="regenerateMedia" 
+          :disabled="generating"
+          class="w-full mt-4 inline-flex justify-center items-center px-4 py-3 border border-gray-300 shadow-sm text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RefreshCw class="w-5 h-5 mr-2" :class="{ 'animate-spin': generating }" />
+          {{ generating ? 'Generating Images from API...' : 'Regenerate Media Grid' }}
+        </button>
       </div>
 
-      <!-- Right Column: Media Preview -->
-      <div class="bg-white shadow rounded-lg p-6 self-start sticky top-6">
+      <!-- Media Preview -->
+      <div class="bg-white shadow rounded-lg p-6">
         <h2 class="text-lg font-bold mb-4 text-gray-800">Media Grid Preview</h2>
-        <p class="text-xs text-gray-500 mb-4">This is the exact sequence that will be published. Note: The CTA Image is dynamically injected at publish time and is not shown here.</p>
+        <p class="text-sm text-gray-500 mb-6">This is the exact sequence that will be published. Note: The CTA Image is dynamically injected at publish time and is not shown here.</p>
         
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-3 gap-4">
           <div v-for="(m, i) in post.media" :key="i" @click="openLightbox(post.media, Number(i))" class="relative aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer hover:opacity-80 transition">
             <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
             <div v-else class="w-full h-full flex flex-col items-center justify-center text-gray-400 p-4 text-center">
@@ -198,6 +187,16 @@ const regenerateMedia = async () => {
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Final Caption Editor -->
+      <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-gray-800">Final Caption (Instagram Text)</h2>
+        <textarea 
+          v-model="post.text" 
+          rows="12" 
+          class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+        ></textarea>
       </div>
 
     </div>
