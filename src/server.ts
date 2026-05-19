@@ -1,10 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import { db } from './db/index.js';
-import { queueTable } from './db/schema.js';
-import { eq, asc, desc } from 'drizzle-orm';
+import { jobsTable, queueTable } from './db/schema.js';
+import { eq, asc, desc, sql } from 'drizzle-orm';
 import { generateImageSequence } from './image.js';
 import { publishToBuffer } from './buffer.js';
+import { runAutomatedPipeline } from './agent.js';
+import multer from 'multer';
+import { uploadToS3 } from './s3.js';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -98,6 +103,64 @@ app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
 });
 
 // --- CRUD API Endpoints for Dashboard ---
+
+// POST /api/upload - Upload image to S3
+app.post('/api/upload', requireDashboardAuth, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image provided' });
+    
+    const buffer = req.file.buffer;
+    const mimeType = req.file.mimetype;
+    
+    if (!mimeType.startsWith('image/')) {
+      return res.status(400).json({ error: 'Only image files are allowed' });
+    }
+
+    const ext = mimeType === 'image/png' ? '.png' : mimeType === 'image/webp' ? '.webp' : '.jpg';
+    
+    const s3Url = await uploadToS3(buffer, mimeType, ext);
+    if (!s3Url) throw new Error('Failed to upload to S3');
+
+    res.json({ url: s3Url });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/generate-content - Enqueue a new generation job from dashboard
+app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
+  try {
+    const { text, mediaUrl } = req.body;
+    if (!text) return res.status(400).json({ error: 'Text input is required' });
+
+    const media = mediaUrl ? [{ type: 'image' as const, url: mediaUrl }] : [];
+
+    const result = await db.insert(jobsTable).values({
+      chatId: 'DASHBOARD',
+      messageId: Date.now(),
+      text,
+      media,
+      status: 'pending'
+    }).returning();
+
+    res.json({ message: 'Job enqueued successfully', job: result[0] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/jobs/dashboard - Get active dashboard jobs
+app.get('/api/jobs/dashboard', requireDashboardAuth, async (req, res) => {
+  try {
+    const activeJobs = await db.select()
+      .from(jobsTable)
+      .where(sql`chat_id = 'DASHBOARD' AND status IN ('pending', 'processing', 'error')`)
+      .orderBy(desc(jobsTable.createdAt));
+    res.json(activeJobs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // GET /api/queue - List all queue items
 app.get('/api/queue', requireDashboardAuth, async (req, res) => {

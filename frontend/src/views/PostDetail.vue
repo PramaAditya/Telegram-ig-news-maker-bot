@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { ArrowLeft, Save, RefreshCw } from 'lucide-vue-next'
 import { getAuthHeaders, setPassword } from '../auth'
 import { Fancybox } from '@fancyapps/ui'
+import ImageUploader from '../components/ImageUploader.vue'
 
 const route = useRoute()
 const postId = route.params.id
@@ -142,13 +143,8 @@ const regenerateMedia = async () => {
         </div>
 
         <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Cover Image S3 URL</label>
-          <input 
-            v-model="post.coverImageUrl" 
-            type="url"
-            class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
-          />
-          <img v-if="post.coverImageUrl" :src="post.coverImageUrl" class="mt-3 h-32 object-cover rounded-md border border-gray-200" />
+          <label class="block text-sm font-medium text-gray-700 mb-2">Cover Image</label>
+          <ImageUploader v-model="post.coverImageUrl" />
         </div>
 
         <div v-for="(_, i) in post.slides" :key="i" class="mb-6">

@@ -86,13 +86,28 @@ async function processNextJob() {
 
   // Process the claimed job
   try {
+    const telegramToUse = jobToProcess.chat_id === 'DASHBOARD'
+      ? {
+          sendMessage: async (chatId: string, text: string, opts: any) => {
+            console.log(`[Dashboard Job Status] ${text}`);
+            return { chat: { id: chatId }, message_id: Date.now() };
+          },
+          editMessageText: async (chatId: string, msgId: number, inlineMsgId: any, text: string) => {
+            console.log(`[Dashboard Job Status] ${text}`);
+          },
+          sendPhoto: async (chatId: string, photo: any, opts: any) => {
+            console.log(`[Dashboard Job] Sending photo preview to dashboard mock`);
+          }
+        }
+      : telegram;
+
     // Run the pipeline
     await runAutomatedPipeline(
       jobToProcess.chat_id,
       Number(jobToProcess.message_id),
       jobToProcess.text,
       jobToProcess.media && jobToProcess.media.length > 0 ? jobToProcess.media : undefined,
-      telegram
+      telegramToUse
     );
 
     // Mark as completed
