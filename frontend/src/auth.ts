@@ -3,10 +3,11 @@ import { ref } from 'vue'
 export const dashboardPassword = ref(localStorage.getItem('dashboard_password') || '')
 
 export const setPassword = (pwd: string) => {
-  dashboardPassword.value = pwd
-  localStorage.setItem('dashboard_password', pwd)
+  const cleanPwd = pwd.trim()
+  dashboardPassword.value = cleanPwd
+  localStorage.setItem('dashboard_password', cleanPwd)
 }
 
 export const getAuthHeaders = () => ({
-  Authorization: "Bearer "
+  Authorization: `Bearer ${dashboardPassword.value}`
 })

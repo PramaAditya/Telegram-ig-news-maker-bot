@@ -20,20 +20,11 @@ app.use(express.json());
 // Serve static files for the dashboard
 app.use(express.static(path.join(__dirname, '../public')));
 
-const TRIGGER_API_KEY = process.env.TRIGGER_API_KEY;
-const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
-
-if (!TRIGGER_API_KEY) {
-  console.warn('WARNING: TRIGGER_API_KEY is not set in environment variables.');
-}
-if (!DASHBOARD_PASSWORD) {
-  console.warn('WARNING: DASHBOARD_PASSWORD is not set in environment variables. Dashboard will be inaccessible.');
-}
-
 // Middleware to protect trigger API routes
 const requireTriggerAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const triggerKey = process.env.TRIGGER_API_KEY;
   const authHeader = req.headers.authorization;
-  if (!TRIGGER_API_KEY || authHeader !== `Bearer ${TRIGGER_API_KEY}`) {
+  if (!triggerKey || authHeader !== `Bearer ${triggerKey}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
@@ -41,8 +32,9 @@ const requireTriggerAuth = (req: express.Request, res: express.Response, next: e
 
 // Middleware to protect dashboard CRUD API routes
 const requireDashboardAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const dashboardPassword = process.env.DASHBOARD_PASSWORD;
   const authHeader = req.headers.authorization;
-  if (!DASHBOARD_PASSWORD || authHeader !== `Bearer ${DASHBOARD_PASSWORD}`) {
+  if (!dashboardPassword || authHeader !== `Bearer ${dashboardPassword}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
@@ -239,6 +231,9 @@ app.get(['/', '/*path'], (req, res) => {
 });
 
 export const startServer = (port: number = 3000) => {
+  if (!process.env.TRIGGER_API_KEY) console.warn('WARNING: TRIGGER_API_KEY is not set in env.');
+  if (!process.env.DASHBOARD_PASSWORD) console.warn('WARNING: DASHBOARD_PASSWORD is not set in env. Dashboard will be inaccessible.');
+  
   app.listen(port, () => {
     console.log(`API Server is running on port ${port}`);
   });
