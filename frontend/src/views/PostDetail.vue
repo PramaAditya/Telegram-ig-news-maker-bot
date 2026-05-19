@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowLeft, Save, RefreshCw } from 'lucide-vue-next'
 import { getAuthHeaders, setPassword } from '../auth'
+import { Fancybox } from '@fancyapps/ui'
 
 const route = useRoute()
 const postId = route.params.id
@@ -12,6 +13,14 @@ const loading = ref(true)
 const saving = ref(false)
 const generating = ref(false)
 const error = ref('')
+
+const openLightbox = (mediaArray: any[], index: number) => {
+  const items = mediaArray.map(m => ({
+    src: m.url,
+    type: m.type === 'video' ? 'video' : 'image'
+  }))
+  Fancybox.show(items, { startIndex: index })
+}
 
 const fetchPost = async () => {
   loading.value = true
@@ -178,14 +187,14 @@ const regenerateMedia = async () => {
         <p class="text-xs text-gray-500 mb-4">This is the exact sequence that will be published. Note: The CTA Image is dynamically injected at publish time and is not shown here.</p>
         
         <div class="grid grid-cols-2 gap-4">
-          <div v-for="(m, i) in post.media" :key="i" class="relative aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200 group">
+          <div v-for="(m, i) in post.media" :key="i" @click="openLightbox(post.media, Number(i))" class="relative aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer hover:opacity-80 transition">
             <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
             <div v-else class="w-full h-full flex flex-col items-center justify-center text-gray-400 p-4 text-center">
               <span class="font-medium">Video</span>
               <span class="text-xs truncate w-full mt-1">{{ m.url }}</span>
             </div>
-            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center">
-              <span class="text-white opacity-0 group-hover:opacity-100 font-bold text-lg pointer-events-none">{{ i === 0 ? 'Cover' : 'Slide ' + i }}</span>
+            <div class="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded shadow">
+              {{ i === 0 ? 'Cover' : 'Slide ' + i }}
             </div>
           </div>
         </div>

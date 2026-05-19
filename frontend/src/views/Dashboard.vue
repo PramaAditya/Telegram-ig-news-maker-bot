@@ -2,10 +2,19 @@
 import { ref, onMounted } from 'vue'
 import { Trash2, Edit, ArrowUp, ArrowDown, Send } from 'lucide-vue-next'
 import { getAuthHeaders, setPassword } from '../auth'
+import { Fancybox } from '@fancyapps/ui'
 
 const queue = ref<any[]>([])
 const loading = ref(true)
 const error = ref('')
+
+const openLightbox = (mediaArray: any[], index: number) => {
+  const items = mediaArray.map(m => ({
+    src: m.url,
+    type: m.type === 'video' ? 'video' : 'image'
+  }))
+  Fancybox.show(items, { startIndex: index })
+}
 
 const fetchQueue = async () => {
   loading.value = true
@@ -119,11 +128,11 @@ const publishNow = async (id: number) => {
               </div>
               
               <div class="mt-3 flex space-x-2" v-if="item.media.length > 0">
-                <div v-for="(m, i) in item.media.slice(0, 3)" :key="i" class="w-16 h-16 rounded overflow-hidden bg-gray-100 border border-gray-200">
+                <div v-for="(m, i) in item.media.slice(0, 3)" :key="i" @click="openLightbox(item.media, Number(i))" class="cursor-pointer hover:opacity-80 transition w-16 h-16 rounded overflow-hidden bg-gray-100 border border-gray-200">
                   <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
                   <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-xs">Video</div>
                 </div>
-                <div v-if="item.media.length > 3" class="w-16 h-16 rounded bg-gray-100 border border-gray-200 flex items-center justify-center text-sm font-medium text-gray-500">
+                <div v-if="item.media.length > 3" @click="openLightbox(item.media, 3)" class="cursor-pointer hover:opacity-80 transition w-16 h-16 rounded bg-gray-100 border border-gray-200 flex items-center justify-center text-sm font-medium text-gray-500">
                   +{{ item.media.length - 3 }}
                 </div>
               </div>

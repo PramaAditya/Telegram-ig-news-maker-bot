@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import './style.css'
+import '@fancyapps/ui/dist/fancybox/fancybox.css'
 import App from './App.vue'
 import { createRouter, createWebHistory } from 'vue-router'
 
