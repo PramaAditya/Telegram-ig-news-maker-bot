@@ -352,9 +352,8 @@ RULES:
       url
     }));
 
-    if (process.env.CTA_IMAGE_URL) {
-      allPublishUrls.push({ type: 'image', url: process.env.CTA_IMAGE_URL });
-    }
+    // REMOVED CTA_IMAGE_URL appending from here.
+    // It is dynamically added at the publish step in server.ts
 
     console.log(`[Phase 5] Saving to Queue with ${allPublishUrls.length} media items`);
     
@@ -363,6 +362,9 @@ RULES:
     const { queueTable } = await import('./db/schema.js');
     
     await db.insert(queueTable).values({
+      title: censorText(cleanTitle),
+      coverImageUrl: coverImageUrl,
+      slides: boldedSlides.map(text => censorText(text)),
       text: finalCaption,
       media: allPublishUrls,
       status: 'pending'

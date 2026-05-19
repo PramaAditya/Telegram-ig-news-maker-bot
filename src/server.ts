@@ -3,6 +3,7 @@ import cors from 'cors';
 import { db } from './db/index.js';
 import { queueTable } from './db/schema.js';
 import { eq, asc, desc } from 'drizzle-orm';
+import { generateImageSequence } from './image.js';
 import { publishToBuffer } from './buffer.js';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -46,7 +47,7 @@ app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
     const pendingPosts = await db.select()
       .from(queueTable)
       .where(eq(queueTable.status, 'pending'))
-      .orderBy(asc(queueTable.createdAt))
+      .orderBy(asc(queueTable.sortOrder))
       .limit(1);
 
     if (pendingPosts.length === 0) {
@@ -104,7 +105,7 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
     const items = await db.select()
       .from(queueTable)
       .where(eq(queueTable.status, 'pending'))
-      .orderBy(asc(queueTable.createdAt)); // Oldest first = top of queue
+      .orderBy(asc(queueTable.sortOrder)); // Smallest sort_order first = top of queue
     res.json(items);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -115,17 +116,70 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
 app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { text } = req.body;
+    const { text, title, coverImageUrl, slides } = req.body;
     
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
 
-    if (text !== undefined) {
+    const updateData: any = {};
+    if (text !== undefined) updateData.text = text;
+    if (title !== undefined) updateData.title = title;
+    if (coverImageUrl !== undefined) updateData.coverImageUrl = coverImageUrl;
+    if (slides !== undefined) updateData.slides = slides;
+
+    if (Object.keys(updateData).length > 0) {
       await db.update(queueTable)
-        .set({ text })
+        .set(updateData)
         .where(eq(queueTable.id, id));
     }
 
     res.json({ message: 'Updated successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/queue/:id/regenerate-media - Re-render media using current draft data
+app.post('/api/queue/:id/regenerate-media', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const items = await db.select().from(queueTable).where(eq(queueTable.id, id));
+    if (items.length === 0) return res.status(404).json({ error: 'Post not found in queue' });
+    
+    const post = items[0];
+
+    if (!post.title || !post.coverImageUrl || !post.slides) {
+       return res.status(400).json({ error: 'Missing required data (title, cover image, or slides) to regenerate media.' });
+    }
+
+    try {
+      // Re-render the images
+      const renderedUrls = await generateImageSequence({
+        logo: process.env.LOGO_IMAGE_URL || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+        cover_image: post.coverImageUrl,
+        title: post.title,
+        slides: post.slides.map((text: string) => ({ text }))
+      });
+
+      if (!renderedUrls || renderedUrls.length === 0) {
+        throw new Error('Failed to render images from external API.');
+      }
+
+      const allPublishUrls = renderedUrls.map((url: string) => ({
+        type: 'image' as const,
+        url
+      }));
+
+      // Update the DB with the newly generated media URLs
+      await db.update(queueTable)
+        .set({ media: allPublishUrls })
+        .where(eq(queueTable.id, post.id));
+
+      return res.json({ message: 'Media regenerated successfully', media: allPublishUrls });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed to regenerate media', details: err.message });
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -184,27 +238,27 @@ app.post('/api/queue/:id/move', requireDashboardAuth, async (req, res) => {
     // Fetch all pending to determine neighbors
     const pending = await db.select().from(queueTable)
       .where(eq(queueTable.status, 'pending'))
-      .orderBy(asc(queueTable.createdAt));
+      .orderBy(asc(queueTable.sortOrder));
       
     const index = pending.findIndex(p => p.id === id);
     if (index === -1) return res.status(404).json({ error: 'Post not found in pending queue' });
 
     if (direction === 'top' && index > 0) {
       const firstItem = pending[0];
-      const newDate = new Date(firstItem.createdAt.getTime() - 1000); // 1 second before the first item
-      await db.update(queueTable).set({ createdAt: newDate }).where(eq(queueTable.id, id));
+      const newSortOrder = firstItem.sortOrder - 1; // 1 less than the top item
+      await db.update(queueTable).set({ sortOrder: newSortOrder }).where(eq(queueTable.id, id));
     } else if (direction === 'up' && index > 0) {
       const prevItem = pending[index - 1];
       const currentItem = pending[index];
-      // Swap createdAt timestamps to swap order
-      await db.update(queueTable).set({ createdAt: prevItem.createdAt }).where(eq(queueTable.id, currentItem.id));
-      await db.update(queueTable).set({ createdAt: currentItem.createdAt }).where(eq(queueTable.id, prevItem.id));
+      // Swap sortOrder to swap order
+      await db.update(queueTable).set({ sortOrder: prevItem.sortOrder }).where(eq(queueTable.id, currentItem.id));
+      await db.update(queueTable).set({ sortOrder: currentItem.sortOrder }).where(eq(queueTable.id, prevItem.id));
     } else if (direction === 'down' && index < pending.length - 1) {
       const nextItem = pending[index + 1];
       const currentItem = pending[index];
-      // Swap createdAt timestamps to swap order
-      await db.update(queueTable).set({ createdAt: nextItem.createdAt }).where(eq(queueTable.id, currentItem.id));
-      await db.update(queueTable).set({ createdAt: currentItem.createdAt }).where(eq(queueTable.id, nextItem.id));
+      // Swap sortOrder to swap order
+      await db.update(queueTable).set({ sortOrder: nextItem.sortOrder }).where(eq(queueTable.id, currentItem.id));
+      await db.update(queueTable).set({ sortOrder: currentItem.sortOrder }).where(eq(queueTable.id, nextItem.id));
     }
 
     res.json({ message: 'Moved successfully' });

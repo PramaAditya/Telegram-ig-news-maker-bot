@@ -2,6 +2,10 @@ import { pgTable, text, serial, timestamp, jsonb, bigint } from 'drizzle-orm/pg-
 
 export const queueTable = pgTable('queue', {
   id: serial('id').primaryKey(),
+  sortOrder: serial('sort_order'),
+  title: text('title'),
+  coverImageUrl: text('cover_image_url'),
+  slides: jsonb('slides').$type<string[]>(),
   text: text('text').notNull(),
   media: jsonb('media').$type<{ type: 'image' | 'video', url: string }[]>().notNull(),
   status: text('status').notNull().default('pending'), // pending, published, error
