@@ -212,7 +212,7 @@ bot.on(message('video'), (ctx) => handleMediaMessage(ctx, true));
 const startBotWithRetry = async (retries = 10, delayMs = 3000) => {
   for (let i = 0; i < retries; i++) {
     try {
-      await bot.launch();
+      await bot.launch({ dropPendingUpdates: true });
       console.log('Bot is running in automated mode...');
       return;
     } catch (err: any) {
