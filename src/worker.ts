@@ -7,15 +7,18 @@ import { Telegraf } from 'telegraf';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
 import dns from 'dns';
+import { getSettings } from './db/settings.js';
 
 // Fix for ECONNRESET issues in Docker (Node.js 17+ prefers IPv6 by default, which can break in some Docker networks)
 dns.setDefaultResultOrder('ipv4first');
 
 dotenv.config();
 
-const botToken = process.env.TELEGRAM_BOT_TOKEN;
+const settings = await getSettings();
+const botToken = settings.telegramBotToken;
 if (!botToken) {
-  throw new Error('TELEGRAM_BOT_TOKEN must be provided!');
+  console.error('TELEGRAM_BOT_TOKEN must be provided in Settings (Database) or .env');
+  process.exit(1);
 }
 
 const telegramApiRoot = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';
@@ -147,17 +150,36 @@ for (let i = 0; i < MAX_CONCURRENT_JOBS; i++) {
 async function autoPublishQueue() {
   if (isShuttingDown) return;
   
-  console.log('[Worker] Checking queue for auto-publish...');
   try {
+    const settings = await getSettings();
+    const now = new Date();
+    
+    // Check if current hour is within allowed bounds (Asia/Jakarta timezone)
+    const currentHourStr = new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Jakarta' }).format(now);
+    const currentHour = parseInt(currentHourStr, 10);
+    
+    if (currentHour < settings.cronStartHour || currentHour > settings.cronEndHour) {
+      return; // Outside of allowed publishing hours
+    }
+
+    // Check if enough time has passed since last publish
+    if (settings.lastAutoPublishAt) {
+      const diffMins = (now.getTime() - settings.lastAutoPublishAt.getTime()) / 60000;
+      if (diffMins < settings.cronIntervalMinutes) {
+        return; // Not enough time has passed
+      }
+    }
+
+    console.log('[Worker] Checking queue for auto-publish...');
+    
     // Find the oldest pending post
     const pendingPosts = await db.select()
       .from(queueTable)
       .where(eq(queueTable.status, 'pending'))
-      .orderBy(asc(queueTable.createdAt))
+      .orderBy(asc(queueTable.sortOrder))
       .limit(1);
 
     if (pendingPosts.length === 0) {
-      console.log('[Worker] No pending posts in queue to auto-publish.');
       return;
     }
 
@@ -166,7 +188,7 @@ async function autoPublishQueue() {
 
     try {
       let mediaToPublish = [...post.media];
-      const ctaUrl = process.env.CTA_IMAGE_URL;
+      const ctaUrl = settings.ctaImageUrl;
       if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
         mediaToPublish.push({ type: 'image', url: ctaUrl });
       }
@@ -181,6 +203,10 @@ async function autoPublishQueue() {
           publishedAt: new Date()
         })
         .where(eq(queueTable.id, post.id));
+
+      // Update last publish time in settings
+      const { settingsTable } = await import('./db/schema.js');
+      await db.update(settingsTable).set({ lastAutoPublishAt: new Date() }).where(eq(settingsTable.id, 1));
 
       console.log(`[Worker] Successfully auto-published post ID ${post.id}`);
     } catch (publishError: any) {
@@ -200,9 +226,9 @@ async function autoPublishQueue() {
   }
 }
 
-// Run exactly at :00 and :30 past the hour between 06:00 and 23:59 Asia/Jakarta time
-console.log(`[Worker] Auto-publish scheduled at exactly 0 and 30 past the hour, between 06:00 and 23:59 (Asia/Jakarta).`);
-cron.schedule('0,30 6-23 * * *', autoPublishQueue, {
+// Run every minute, the function will decide whether to publish based on settings
+console.log(`[Worker] Auto-publish worker started (Checking every minute against DB settings).`);
+cron.schedule('* * * * *', autoPublishQueue, {
   timezone: "Asia/Jakarta"
 });
 

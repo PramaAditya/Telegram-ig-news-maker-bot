@@ -10,6 +10,7 @@ import { generateImageSequence } from './image.js';
 import { publishToBuffer } from './buffer.js';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
+import { getSettings } from './db/settings.js';
 
 dotenv.config();
 
@@ -305,8 +306,10 @@ RULES:
 
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
 
+    const settings = await getSettings();
+
     const renderedUrls = await generateImageSequence({
-      logo: process.env.LOGO_IMAGE_URL || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+      logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
       cover_image: coverImageUrl,
       title: censorText(cleanTitle),
       slides: boldedSlides.map(text => ({

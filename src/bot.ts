@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { startServer } from './server.js';
 import { db } from './db/index.js';
 import { jobsTable } from './db/schema.js';
+import { getSettings } from './db/settings.js';
 import { eq } from 'drizzle-orm';
 import dns from 'dns';
 
@@ -16,9 +17,11 @@ dotenv.config();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 startServer(PORT);
 
-const botToken = process.env.TELEGRAM_BOT_TOKEN;
+const settings = await getSettings();
+const botToken = settings.telegramBotToken;
 if (!botToken) {
-  throw new Error('TELEGRAM_BOT_TOKEN must be provided!');
+  console.error('TELEGRAM_BOT_TOKEN must be provided in Settings (Database) or .env');
+  process.exit(1);
 }
 
 const telegramApiRoot = process.env.TELEGRAM_API_URL || 'https://api.telegram.org';

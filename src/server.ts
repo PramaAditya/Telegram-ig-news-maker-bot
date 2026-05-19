@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import { db } from './db/index.js';
-import { jobsTable, queueTable } from './db/schema.js';
+import { jobsTable, queueTable, settingsTable } from './db/schema.js';
+import { getSettings } from './db/settings.js';
 import { eq, asc, desc, sql } from 'drizzle-orm';
 import { generateImageSequence } from './image.js';
 import { publishToBuffer } from './buffer.js';
@@ -62,9 +63,10 @@ app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
     const post = pendingPosts[0];
     console.log(`[API] Triggering publish for post ID ${post.id}`);
 
-    try {
+      try {
+      const settings = await getSettings();
       let mediaToPublish = [...post.media];
-      const ctaUrl = process.env.CTA_IMAGE_URL;
+      const ctaUrl = settings.ctaImageUrl;
       if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
         mediaToPublish.push({ type: 'image', url: ctaUrl });
       }
@@ -162,6 +164,51 @@ app.get('/api/jobs/dashboard', requireDashboardAuth, async (req, res) => {
   }
 });
 
+// GET /api/settings - Get dynamic settings
+app.get('/api/settings', requireDashboardAuth, async (req, res) => {
+  try {
+    const settings = await getSettings();
+    res.json(settings);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/settings - Update settings
+app.put('/api/settings', requireDashboardAuth, async (req, res) => {
+  try {
+    const { 
+      logoImageUrl, 
+      ctaImageUrl, 
+      bufferApiKey, 
+      bufferInstagramChannelId, 
+      telegramBotToken, 
+      cronIntervalMinutes, 
+      cronStartHour, 
+      cronEndHour 
+    } = req.body;
+
+    const updateData: any = {};
+    if (logoImageUrl !== undefined) updateData.logoImageUrl = logoImageUrl;
+    if (ctaImageUrl !== undefined) updateData.ctaImageUrl = ctaImageUrl;
+    if (bufferApiKey !== undefined) updateData.bufferApiKey = bufferApiKey;
+    if (bufferInstagramChannelId !== undefined) updateData.bufferInstagramChannelId = bufferInstagramChannelId;
+    if (telegramBotToken !== undefined) updateData.telegramBotToken = telegramBotToken;
+    if (cronIntervalMinutes !== undefined) updateData.cronIntervalMinutes = parseInt(cronIntervalMinutes, 10);
+    if (cronStartHour !== undefined) updateData.cronStartHour = parseInt(cronStartHour, 10);
+    if (cronEndHour !== undefined) updateData.cronEndHour = parseInt(cronEndHour, 10);
+
+    // Make sure the row exists first
+    await getSettings();
+    
+    await db.update(settingsTable).set(updateData).where(eq(settingsTable.id, 1));
+    
+    res.json({ message: 'Settings updated successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/queue - List all queue items
 app.get('/api/queue', requireDashboardAuth, async (req, res) => {
   try {
@@ -217,9 +264,10 @@ app.post('/api/queue/:id/regenerate-media', requireDashboardAuth, async (req, re
     }
 
     try {
+      const settings = await getSettings();
       // Re-render the images
       const renderedUrls = await generateImageSequence({
-        logo: process.env.LOGO_IMAGE_URL || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+        logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
         cover_image: post.coverImageUrl,
         title: post.title,
         slides: post.slides.map((text: string) => ({ text }))
@@ -259,9 +307,10 @@ app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
     
     const post = items[0];
     
-    try {
+      try {
+      const settings = await getSettings();
       let mediaToPublish = [...post.media];
-      const ctaUrl = process.env.CTA_IMAGE_URL;
+      const ctaUrl = settings.ctaImageUrl;
       if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
         mediaToPublish.push({ type: 'image', url: ctaUrl });
       }

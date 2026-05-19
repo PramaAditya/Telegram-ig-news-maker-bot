@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getSettings } from './db/settings.js';
 
 export interface BufferMediaItem {
   type: 'image' | 'video';
@@ -6,8 +7,9 @@ export interface BufferMediaItem {
 }
 
 export async function publishToBuffer(media: BufferMediaItem[], text: string) {
-  const bufferToken = process.env.BUFFER_API_KEY;
-  const channelId = process.env.BUFFER_INSTAGRAM_CHANNEL_ID;
+  const settings = await getSettings();
+  const bufferToken = settings.bufferApiKey;
+  const channelId = settings.bufferInstagramChannelId;
 
   if (!bufferToken || !channelId) {
     throw new Error('Buffer API credentials missing.');

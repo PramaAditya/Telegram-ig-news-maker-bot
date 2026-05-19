@@ -10,6 +10,7 @@
           <div class="flex space-x-4">
             <router-link to="/" class="text-sm font-medium text-gray-600 hover:text-gray-900 px-2 py-1 rounded-md" active-class="bg-gray-100 text-gray-900">Queue</router-link>
             <router-link to="/create" class="text-sm font-medium text-gray-600 hover:text-gray-900 px-2 py-1 rounded-md" active-class="bg-gray-100 text-gray-900">Create New</router-link>
+            <router-link to="/settings" class="text-sm font-medium text-gray-600 hover:text-gray-900 px-2 py-1 rounded-md" active-class="bg-gray-100 text-gray-900">Settings</router-link>
           </div>
         </div>
         <div class="text-sm text-gray-500">Admin Dashboard</div>

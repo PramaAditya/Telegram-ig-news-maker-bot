@@ -7,12 +7,14 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from './views/Dashboard.vue'
 import PostDetail from './views/PostDetail.vue'
 import CreatePost from './views/CreatePost.vue'
+import Settings from './views/Settings.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: Dashboard },
     { path: '/create', component: CreatePost },
+    { path: '/settings', component: Settings },
     { path: '/post/:id', component: PostDetail }
   ]
 })

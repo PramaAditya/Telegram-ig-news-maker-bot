@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, jsonb, bigint } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, timestamp, jsonb, bigint, integer } from 'drizzle-orm/pg-core';
 
 export const queueTable = pgTable('queue', {
   id: serial('id').primaryKey(),
@@ -24,4 +24,17 @@ export const jobsTable = pgTable('jobs', {
   errorLog: text('error_log'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const settingsTable = pgTable('settings', {
+  id: integer('id').primaryKey(), // Always 1
+  logoImageUrl: text('logo_image_url'),
+  ctaImageUrl: text('cta_image_url'),
+  bufferApiKey: text('buffer_api_key'),
+  bufferInstagramChannelId: text('buffer_instagram_channel_id'),
+  telegramBotToken: text('telegram_bot_token'),
+  cronIntervalMinutes: integer('cron_interval_minutes').default(30).notNull(),
+  cronStartHour: integer('cron_start_hour').default(6).notNull(),
+  cronEndHour: integer('cron_end_hour').default(23).notNull(),
+  lastAutoPublishAt: timestamp('last_auto_publish_at'),
 });
