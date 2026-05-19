@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { PenTool, Loader2, RefreshCw } from 'lucide-vue-next'
 import { getAuthHeaders } from '../auth'
 import ImageUploader from '../components/ImageUploader.vue'
@@ -9,6 +9,22 @@ const mediaUrl = ref('')
 const submitting = ref(false)
 const error = ref('')
 const activeJobs = ref<any[]>([])
+const uploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
+
+const handlePaste = (e: ClipboardEvent) => {
+  const items = e.clipboardData?.items
+  if (!items) return
+
+  for (const item of items) {
+    if (item.type.indexOf('image') !== -1) {
+      const file = item.getAsFile()
+      if (file && uploaderRef.value) {
+        uploaderRef.value.uploadFile(file)
+        break // Only handle first image
+      }
+    }
+  }
+}
 
 const fetchActiveJobs = async () => {
   try {
@@ -23,6 +39,11 @@ onMounted(() => {
   fetchActiveJobs()
   // Refresh active jobs every 5 seconds
   setInterval(fetchActiveJobs, 5000)
+  window.addEventListener('paste', handlePaste)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('paste', handlePaste)
 })
 
 const generateContent = async () => {
@@ -86,8 +107,8 @@ const generateContent = async () => {
 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">Optional Reference Image</label>
-          <p class="text-xs text-gray-500 mb-2">Upload an image to be used as a reference for the cover image generation, or as the actual cover.</p>
-          <ImageUploader v-model="mediaUrl" />
+          <p class="text-xs text-gray-500 mb-2">Upload an image to be used as a reference for the cover image generation, or as the actual cover. You can also paste an image directly anywhere on this page.</p>
+          <ImageUploader ref="uploaderRef" v-model="mediaUrl" />
         </div>
 
         <div v-if="error" class="bg-red-50 text-red-600 p-4 rounded-md text-sm">

@@ -13,11 +13,7 @@ const uploading = ref(false)
 const error = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 
-const handleFileUpload = async (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-
+const uploadFile = async (file: File) => {
   uploading.value = true
   error.value = ''
 
@@ -47,6 +43,17 @@ const handleFileUpload = async (event: Event) => {
     if (fileInput.value) fileInput.value.value = ''
   }
 }
+
+const handleFileUpload = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+  await uploadFile(file)
+}
+
+defineExpose({
+  uploadFile
+})
 
 const triggerUpload = () => {
   fileInput.value?.click()
