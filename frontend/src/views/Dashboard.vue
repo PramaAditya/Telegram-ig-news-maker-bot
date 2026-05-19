@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Trash2, Edit, ExternalLink, ArrowUp, ArrowDown, Send } from 'lucide-vue-next'
+import { Trash2, Edit, ArrowUp, ArrowDown, Send } from 'lucide-vue-next'
 import { getAuthHeaders, setPassword } from '../auth'
 
 const queue = ref<any[]>([])
@@ -78,63 +78,6 @@ const publishNow = async (id: number) => {
     alert(err.message)
   }
 }
-
-const fetchQueue = async () => {
-  loading.value = true
-  try {
-    const res = await fetch('/api/queue', { headers: authHeaders })
-    if (!res.ok) throw new Error('Failed to fetch')
-    queue.value = await res.json()
-  } catch (err: any) {
-    error.value = err.message
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(fetchQueue)
-
-const moveItem = async (id: number, direction: 'up' | 'down' | 'top') => {
-  try {
-    await fetch(/api/queue//move, {
-      method: 'POST',
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ direction })
-    })
-    fetchQueue()
-  } catch (err) {
-    alert('Failed to move')
-  }
-}
-
-const deleteItem = async (id: number) => {
-  if (!confirm('Are you sure you want to delete this post?')) return
-  try {
-    await fetch(/api/queue/, {
-      method: 'DELETE',
-      headers: authHeaders
-    })
-    fetchQueue()
-  } catch (err) {
-    alert('Failed to delete')
-  }
-}
-
-const publishNow = async (id: number) => {
-  if (!confirm('Are you sure you want to publish this post IMMEDIATELY to Buffer?')) return
-  try {
-    const res = await fetch(/api/queue//publish, {
-      method: 'POST',
-      headers: authHeaders
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Failed to publish')
-    alert('Published successfully!')
-    fetchQueue()
-  } catch (err: any) {
-    alert(err.message)
-  }
-}
 </script>
 
 <template>
@@ -171,7 +114,7 @@ const publishNow = async (id: number) => {
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                   {{ item.media.length }} media item(s)
                 </span>
-                <span>•</span>
+                <span>â€¢</span>
                 <span>Added {{ new Date(item.createdAt).toLocaleString() }}</span>
               </div>
               

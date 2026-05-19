@@ -56,42 +56,6 @@ const saveChanges = async () => {
     saving.value = false
   }
 }
-
-const fetchPost = async () => {
-  loading.value = true
-  try {
-    // Note: The API doesn't have a GET /api/queue/:id endpoint right now, so we fetch all and filter.
-    // In a real app, you'd add a GET /api/queue/:id endpoint to Express.
-    const res = await fetch('/api/queue', { headers: authHeaders })
-    if (!res.ok) throw new Error('Failed to fetch queue')
-    const queue = await res.json()
-    post.value = queue.find((p: any) => p.id === parseInt(postId as string))
-    if (!post.value) throw new Error('Post not found in pending queue')
-  } catch (err: any) {
-    error.value = err.message
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(fetchPost)
-
-const saveChanges = async () => {
-  saving.value = true
-  try {
-    const res = await fetch(/api/queue/, {
-      method: 'PUT',
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: post.value.text })
-    })
-    if (!res.ok) throw new Error('Failed to save')
-    router.push('/')
-  } catch (err: any) {
-    alert(err.message)
-  } finally {
-    saving.value = false
-  }
-}
 </script>
 
 <template>
