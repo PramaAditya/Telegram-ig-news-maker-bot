@@ -369,7 +369,3 @@ const formatExpectedTime = (dateObj: Date | string) => {
     </div>
   </div>
 </template>
-      </draggable>
-    </div>
-  </div>
-</template>
