@@ -211,6 +211,34 @@ app.get('/api/jobs/dashboard', requireDashboardAuth, async (req, res) => {
   }
 });
 
+import { generateText } from 'ai';
+
+// POST /api/ai/refine-text - Refine text using AI
+app.post('/api/ai/refine-text', requireDashboardAuth, async (req, res) => {
+  try {
+    const { text, instruction } = req.body;
+    if (!text) return res.status(400).json({ error: 'Text is required' });
+    if (!process.env.LIGHT_MODEL) return res.status(500).json({ error: 'LIGHT_MODEL is not configured' });
+
+    let prompt = `You are a helpful AI editor. I will provide you with some original text. Your job is to strictly improve and refine the text based on the provided instructions. Output ONLY the finalized refined text. Do not add any conversational filler like "Here is the refined text:". If no specific instruction is provided, just improve the grammar, spelling, and general flow while maintaining the original meaning and tone.\n\n`;
+    
+    if (instruction && instruction.trim()) {
+      prompt += `USER INSTRUCTIONS:\n${instruction}\n\n`;
+    }
+
+    prompt += `ORIGINAL TEXT:\n${text}`;
+
+    const { text: refinedText } = await generateText({
+      model: google(process.env.LIGHT_MODEL),
+      prompt: prompt
+    });
+
+    res.json({ refinedText });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/settings/slots/generate - Generate posting slots using AI
 app.post('/api/settings/slots/generate', requireDashboardAuth, async (req, res) => {
   try {
@@ -301,16 +329,14 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
   try {
     const status = req.query.status as string || 'pending';
     
-    let query = db.select().from(queueTable).where(eq(queueTable.status, status));
-    
+    let items;
     if (status === 'pending') {
-      query = query.orderBy(asc(queueTable.sortOrder));
+      items = await db.select().from(queueTable).where(eq(queueTable.status, status)).orderBy(asc(queueTable.sortOrder));
     } else {
       // For published and error, show most recent first
-      query = query.orderBy(desc(queueTable.createdAt));
+      items = await db.select().from(queueTable).where(eq(queueTable.status, status)).orderBy(desc(queueTable.createdAt));
     }
     
-    const items = await query;
     res.json(items);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

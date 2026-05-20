@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AiTextarea: typeof import('./src/components/AiTextarea.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     ImageUploader: typeof import('./src/components/ImageUploader.vue')['default']
     PasswordInput: typeof import('./src/components/PasswordInput.vue')['default']
@@ -22,5 +23,6 @@ declare module 'vue' {
     UButton: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Button.vue')['default']
     UCard: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Card.vue')['default']
     UDropdownMenu: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/DropdownMenu.vue')['default']
+    UPopover: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Popover.vue')['default']
   }
 }

@@ -4,6 +4,7 @@ import { Save, Settings2, Loader2, Info, Sparkles, X } from 'lucide-vue-next'
 import { getAuthHeaders } from '../auth'
 import ImageUploader from '../components/ImageUploader.vue'
 import PasswordInput from '../components/PasswordInput.vue'
+import AiTextarea from '../components/AiTextarea.vue'
 
 const toast = useToast()
 
@@ -316,12 +317,12 @@ const saveSettings = async () => {
             description="Provide explicit instructions to the AI on how to frame the news, tone of voice, perspective, and general editorial stance. This overwrites the default `.env` fallback."
             class="mb-4"
           />
-          <textarea 
+          <AiTextarea 
             v-model="settings.editorialGuidelines" 
-            rows="6" 
+            :rows="6" 
             placeholder="e.g. Your reporting should maintain a professional and highly informative journalistic tone. Focus on delivering factual news while highlighting perspectives from the Global South..."
-            class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default placeholder-muted"
-          ></textarea>
+            guidancePlaceholder="e.g., make it more aggressive and punchy"
+          />
         </div>
 
         <!-- Content Moderation -->

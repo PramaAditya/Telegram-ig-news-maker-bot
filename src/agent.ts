@@ -185,7 +185,6 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     console.log(`[Phase 1] Research Complete. Text length: ${researchResult.length}`);
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✍️ Menyusun konten...'));
 
-    const settings = await getSettings();
     const bannedWords = settings.bannedWords || [];
 
     const bannedWordsPrompt = bannedWords.length > 0 
