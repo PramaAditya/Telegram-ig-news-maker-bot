@@ -11,18 +11,20 @@ const toggleColorMode = () => {
 
 <template>
   <UApp>
-    <div class="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-      <nav class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
+    <div class="min-h-screen bg-muted text-default">
+      <nav class="bg-default border-b border-default px-4 py-3">
         <div class="max-w-5xl mx-auto flex justify-between items-center">
           <div class="flex items-center space-x-6">
-            <router-link to="/" class="text-xl font-bold text-gray-900 dark:text-white">IG News Maker Bot</router-link>
+            <router-link to="/" class="text-xl font-bold text-default">IG News Maker Bot</router-link>
+          </div>
+          <div class="hidden sm:block sm:ml-6">
             <div class="flex space-x-4">
-              <router-link to="/" class="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-2 py-1 rounded-md" active-class="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white">Queue</router-link>
-              <router-link to="/create" class="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-2 py-1 rounded-md" active-class="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white">Create New</router-link>
-              <router-link to="/settings" class="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-2 py-1 rounded-md" active-class="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white">Settings</router-link>
+              <router-link to="/" class="text-sm font-medium text-muted hover:text-default px-2 py-1 rounded-md" active-class="bg-elevated text-default">Queue</router-link>
+              <router-link to="/create" class="text-sm font-medium text-muted hover:text-default px-2 py-1 rounded-md" active-class="bg-elevated text-default">Create New</router-link>
+              <router-link to="/settings" class="text-sm font-medium text-muted hover:text-default px-2 py-1 rounded-md" active-class="bg-elevated text-default">Settings</router-link>
             </div>
           </div>
-          <div class="text-sm text-gray-500 flex items-center gap-4">
+          <div class="text-sm text-muted flex items-center gap-4">
             <span>Admin Dashboard</span>
             <UButton :icon="Moon" color="neutral" variant="ghost" @click="toggleColorMode" />
           </div>

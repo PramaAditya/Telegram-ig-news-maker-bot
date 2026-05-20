@@ -164,21 +164,21 @@ const saveSettings = async () => {
 
 <template>
   <div class="container mx-auto space-y-6">
-    <div class="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
-      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center">
-        <Settings2 class="w-6 h-6 mr-3 text-blue-600 dark:text-blue-400" />
+    <div class="bg-default shadow rounded-lg p-6">
+      <h1 class="text-2xl font-bold text-default mb-6 flex items-center">
+        <Settings2 class="w-6 h-6 mr-3 text-primary" />
         Global Settings
       </h1>
       
-      <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
-        Settings defined here will override the <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded text-gray-800 dark:text-gray-200">.env</code> configurations.
+      <p class="text-sm text-muted mb-6">
+        Settings defined here will override the <code class="bg-elevated px-1 rounded text-default">.env</code> configurations.
       </p>
 
       <div v-if="loading" class="flex justify-center py-10">
-        <Loader2 class="w-8 h-8 text-blue-500 animate-spin" />
+        <Loader2 class="w-8 h-8 text-primary animate-spin" />
       </div>
 
-      <div v-else-if="error" class="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-4 rounded-md text-sm mb-6">
+      <div v-else-if="error" class="bg-red-50 text-error p-4 rounded-md text-sm mb-6">
         {{ error }}
       </div>
 
@@ -186,14 +186,14 @@ const saveSettings = async () => {
         
         <!-- Media Assets -->
         <div>
-          <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-800 pb-2">Media Assets</h2>
+          <h2 class="text-lg font-bold text-default mb-4 border-b border-default pb-2">Media Assets</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Watermark Logo URL</label>
+              <label class="block text-sm font-medium text-default mb-2">Watermark Logo URL</label>
               <ImageUploader v-model="settings.logoImageUrl" />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">CTA Slide URL (Final Slide)</label>
+              <label class="block text-sm font-medium text-default mb-2">CTA Slide URL (Final Slide)</label>
               <ImageUploader v-model="settings.ctaImageUrl" />
             </div>
           </div>
@@ -201,27 +201,27 @@ const saveSettings = async () => {
 
         <!-- Automation & Publishing -->
         <div>
-          <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-800 pb-2">Posting Slots</h2>
-          <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 rounded-md p-4 mb-4 flex items-start">
-            <Info class="w-5 h-5 text-blue-500 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" />
-            <div class="text-sm text-blue-800 dark:text-blue-300">
+          <h2 class="text-lg font-bold text-default mb-4 border-b border-default pb-2">Posting Slots</h2>
+          <div class="bg-blue-50 border border-primary rounded-md p-4 mb-4 flex items-start">
+            <Info class="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
+            <div class="text-sm text-primary">
               Your posting slots determine exactly when the worker will publish the next item in the Pending Queue. Add slots below using Natural Language AI!
             </div>
           </div>
 
           <!-- Slots Grid -->
-          <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800 mb-6 flex flex-col md:flex-row">
-            <div v-for="day in daysOfWeek" :key="day" class="flex-1 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 last:border-0 min-w-0">
-              <div class="bg-gray-50 dark:bg-gray-700/50 py-3 text-center border-b border-gray-200 dark:border-gray-700">
-                <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">{{ day }}</span>
+          <div class="border border-default rounded-lg overflow-hidden bg-default mb-6 flex flex-col md:flex-row">
+            <div v-for="day in daysOfWeek" :key="day" class="flex-1 border-b md:border-b-0 md:border-r border-default last:border-0 min-w-0">
+              <div class="bg-muted py-3 text-center border-b border-default">
+                <span class="text-sm font-semibold text-default">{{ day }}</span>
               </div>
               <div class="p-2 space-y-2 min-h-[100px] flex flex-col items-center">
-                <div v-if="slotsByDay[day].length === 0" class="text-xs text-gray-400 dark:text-gray-500 py-4 italic">
+                <div v-if="slotsByDay[day].length === 0" class="text-xs text-muted py-4 italic">
                   No slots
                 </div>
-                <div v-for="(slot, i) in slotsByDay[day]" :key="i" class="group relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 transition flex items-center justify-center w-full">
+                <div v-for="(slot, i) in slotsByDay[day]" :key="i" class="group relative bg-default border border-default rounded shadow-sm px-3 py-2 text-sm font-medium text-default hover:border-default transition flex items-center justify-center w-full">
                   {{ formatTime(slot.time) }}
-                  <button @click="removeSlot(slot)" class="absolute -right-1 -top-1 bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition shadow-sm hover:bg-red-200 dark:hover:bg-red-800/50">
+                  <button @click="removeSlot(slot)" class="absolute -right-1 -top-1 bg-error text-error rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition shadow-sm hover:bg-error">
                     <X class="w-3 h-3" />
                   </button>
                 </div>
@@ -230,28 +230,28 @@ const saveSettings = async () => {
           </div>
 
           <!-- Add slots with AI -->
-          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div class="bg-muted rounded-lg p-4 border border-default flex flex-col sm:flex-row items-center justify-between gap-4">
             <div class="flex-1 w-full">
-              <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider">Add slots using AI</label>
+              <label class="block text-xs font-medium text-muted mb-1 uppercase tracking-wider">Add slots using AI</label>
               <input 
                 v-model="aiPrompt" 
                 @keyup.enter="generateSlots"
                 type="text" 
                 placeholder="e.g. Everyday 3 times between 9am to 9pm"
-                class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+                class="w-full px-4 py-2.5 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default placeholder-muted"
               />
             </div>
             <div class="flex items-center gap-3 w-full sm:w-auto mt-2 sm:mt-5">
               <button 
                 @click="generateSlots" 
                 :disabled="aiGenerating || !aiPrompt.trim()"
-                class="flex-1 sm:flex-none inline-flex items-center justify-center px-4 py-2.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                class="flex-1 sm:flex-none inline-flex items-center justify-center px-4 py-2.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-inverted bg-primary hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
               >
                 <Loader2 v-if="aiGenerating" class="w-4 h-4 mr-2 animate-spin" />
                 <Sparkles v-else class="w-4 h-4 mr-2" />
                 Generate
               </button>
-              <button @click="clearAllSlots" class="text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 py-2.5 px-2">
+              <button @click="clearAllSlots" class="text-sm font-medium text-error hover:text-error py-2.5 px-2">
                 Clear All
               </button>
             </div>
@@ -260,40 +260,40 @@ const saveSettings = async () => {
 
         <!-- Content Moderation -->
         <div>
-          <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-800 pb-2">Content Moderation</h2>
-          <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 rounded-md p-4 mb-6 flex items-start">
-            <Info class="w-5 h-5 text-blue-500 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" />
-            <div class="text-sm text-blue-800 dark:text-blue-300">
+          <h2 class="text-lg font-bold text-default mb-4 border-b border-default pb-2">Content Moderation</h2>
+          <div class="bg-blue-50 border border-primary rounded-md p-4 mb-6 flex items-start">
+            <Info class="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
+            <div class="text-sm text-primary">
               The AI Writer will be explicitly instructed to avoid these words and use the replacements instead. As a final fallback, the text will be hard-censored just before rendering/publishing. 
             </div>
           </div>
 
-          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700 mb-6 flex flex-col md:flex-row gap-4 items-end">
+          <div class="bg-muted rounded-lg p-4 border border-default mb-6 flex flex-col md:flex-row gap-4 items-end">
             <div class="flex-1 w-full">
-              <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Banned Word</label>
+              <label class="block text-xs font-medium text-muted mb-1">Banned Word</label>
               <input 
                 v-model="newBannedWord.word" 
                 type="text" 
                 placeholder="e.g. bunuh"
                 @keyup.enter="addBannedWord"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                class="w-full px-3 py-2 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default"
               />
             </div>
             <div class="flex-1 w-full">
-              <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Replacement</label>
+              <label class="block text-xs font-medium text-muted mb-1">Replacement</label>
               <input 
                 v-model="newBannedWord.replacement" 
                 type="text" 
                 placeholder="e.g. b*nuh"
                 @keyup.enter="addBannedWord"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                class="w-full px-3 py-2 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default"
               />
             </div>
             <div class="w-full md:w-auto">
-              <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Match Type</label>
+              <label class="block text-xs font-medium text-muted mb-1">Match Type</label>
               <select 
                 v-model="newBannedWord.type"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                class="w-full px-3 py-2 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default"
               >
                 <option value="partial">Partial (Matches inside words)</option>
                 <option value="exact">Exact (Whole word only)</option>
@@ -302,7 +302,7 @@ const saveSettings = async () => {
             <div class="w-full md:w-auto">
               <button 
                 @click="addBannedWord" 
-                class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none"
+                class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-inverted bg-primary hover:bg-primary focus:outline-none"
               >
                 Add Rule
               </button>
@@ -310,46 +310,46 @@ const saveSettings = async () => {
           </div>
 
           <!-- Dictionary List -->
-          <div v-if="settings.bannedWords && settings.bannedWords.length > 0" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-            <ul class="divide-y divide-gray-200 dark:divide-gray-700 max-h-96 overflow-y-auto">
-              <li v-for="(item, index) in settings.bannedWords" :key="index" class="p-3 sm:px-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50">
+          <div v-if="settings.bannedWords && settings.bannedWords.length > 0" class="border border-default rounded-lg overflow-hidden bg-default">
+            <ul class="divide-y divide-default max-h-96 overflow-y-auto">
+              <li v-for="(item, index) in settings.bannedWords" :key="index" class="p-3 sm:px-4 flex items-center justify-between hover:bg-muted">
                 <div class="flex items-center gap-2 sm:gap-4 overflow-hidden">
-                  <span class="font-medium text-red-600 dark:text-red-400 truncate">{{ item.word }}</span>
-                  <span class="text-gray-400 dark:text-gray-500 text-xs">→</span>
-                  <span class="font-mono text-sm text-green-600 dark:text-green-400 truncate">{{ item.replacement }}</span>
-                  <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hidden sm:inline-block">
+                  <span class="font-medium text-error truncate">{{ item.word }}</span>
+                  <span class="text-muted text-xs">→</span>
+                  <span class="font-mono text-sm text-success truncate">{{ item.replacement }}</span>
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-elevated text-muted hidden sm:inline-block">
                     {{ item.type }}
                   </span>
                 </div>
-                <button @click="removeBannedWord(Number(index))" class="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 flex-shrink-0 ml-4">
+                <button @click="removeBannedWord(Number(index))" class="text-muted hover:text-error flex-shrink-0 ml-4">
                   <X class="w-5 h-5" />
                 </button>
               </li>
             </ul>
           </div>
-          <div v-else class="text-center py-6 border border-dashed border-gray-300 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400 text-sm">
+          <div v-else class="text-center py-6 border border-dashed border-default rounded-lg text-muted text-sm">
             No moderation rules configured.
           </div>
         </div>
 
         <!-- API Keys -->
         <div>
-          <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-800 pb-2">API Keys & Tokens</h2>
+          <h2 class="text-lg font-bold text-default mb-4 border-b border-default pb-2">API Keys & Tokens</h2>
           
           <div class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Telegram Bot Token</label>
+              <label class="block text-sm font-medium text-default mb-2">Telegram Bot Token</label>
               <PasswordInput v-model="settings.telegramBotToken" placeholder="123456789:ABCDefgh..." />
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Changes to this require a full container restart to reconnect Telegraf.</p>
+              <p class="text-xs text-muted mt-1">Changes to this require a full container restart to reconnect Telegraf.</p>
             </div>
             
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Buffer API Key (Bearer)</label>
+              <label class="block text-sm font-medium text-default mb-2">Buffer API Key (Bearer)</label>
               <PasswordInput v-model="settings.bufferApiKey" placeholder="1/abcdef..." />
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Buffer Instagram Channel ID</label>
+              <label class="block text-sm font-medium text-default mb-2">Buffer Instagram Channel ID</label>
               <PasswordInput v-model="settings.bufferInstagramChannelId" placeholder="60abc123..." />
             </div>
           </div>
@@ -358,7 +358,7 @@ const saveSettings = async () => {
         <button 
           @click="saveSettings" 
           :disabled="saving"
-          class="w-full flex justify-center items-center px-4 py-3 border border-transparent shadow-sm text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          class="w-full flex justify-center items-center px-4 py-3 border border-transparent shadow-sm text-base font-medium rounded-md text-inverted bg-primary hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
         >
           <Loader2 v-if="saving" class="w-5 h-5 mr-2 animate-spin" />
           <Save v-else class="w-5 h-5 mr-2" />

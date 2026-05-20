@@ -128,51 +128,51 @@ const regenerateMedia = async () => {
   <div>
     <div class="mb-6 flex items-center justify-between">
       <div class="flex items-center space-x-4">
-        <router-link to="/" class="p-2 bg-white rounded-full border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50">
+        <router-link to="/" class="p-2 bg-default rounded-full border border-default text-muted hover:text-default hover:bg-muted">
           <ArrowLeft class="w-5 h-5" />
         </router-link>
-        <h1 class="text-2xl font-bold text-gray-900">Edit Post #{{ postId }}</h1>
+        <h1 class="text-2xl font-bold text-default">Edit Post #{{ postId }}</h1>
       </div>
       <button 
         @click="saveChanges" 
         :disabled="saving"
-        class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+        class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-inverted bg-primary hover:bg-primary disabled:opacity-50"
       >
         <Save class="w-4 h-4 mr-2" />
         {{ saving ? 'Saving...' : 'Save Draft' }}
       </button>
     </div>
 
-    <div v-if="loading" class="text-center py-10 text-gray-500">Loading...</div>
-    <div v-else-if="error" class="bg-red-50 text-red-600 p-4 rounded-md">{{ error }}</div>
+    <div v-if="loading" class="text-center py-10 text-muted">Loading...</div>
+    <div v-else-if="error" class="bg-red-50 text-error p-4 rounded-md">{{ error }}</div>
     
     <div v-else-if="post" class="space-y-6 max-w-4xl mx-auto">
       
       <!-- Media Data Editor -->
-      <div class="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
-        <h2 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-200">Media Data (Template: {{ post.templateId }})</h2>
+      <div class="bg-default shadow rounded-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-default">Media Data (Template: {{ post.templateId }})</h2>
         
         <div v-if="post.templateId === 'image-multiple:interval'">
           <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Title (supports **bold**)</label>
+            <label class="block text-sm font-medium text-default mb-2">Title (supports **bold**)</label>
             <textarea 
               v-model="post.templateData.title" 
               rows="3"
-              class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-base bg-default text-default"
             ></textarea>
           </div>
 
           <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cover Image</label>
+            <label class="block text-sm font-medium text-default mb-2">Cover Image</label>
             <ImageUploader v-model="post.templateData.coverImageUrl" />
           </div>
 
-          <div v-for="(_, i) in post.templateData.slides" :key="i" class="mb-6 relative bg-gray-50 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
+          <div v-for="(_, i) in post.templateData.slides" :key="i" class="mb-6 relative bg-muted p-4 border border-default rounded-md">
             <div class="flex justify-between items-center mb-2">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Slide {{ Number(i) + 1 }} Text (supports **bold**)</label>
+              <label class="block text-sm font-medium text-default">Slide {{ Number(i) + 1 }} Text (supports **bold**)</label>
               <button 
                 @click="removeSlide(Number(i))" 
-                class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-xs font-medium"
+                class="text-error hover:text-error text-xs font-medium"
                 v-if="post.templateData.slides.length > 1"
               >
                 Remove Slide
@@ -181,32 +181,32 @@ const regenerateMedia = async () => {
             <textarea 
               v-model="post.templateData.slides[i]" 
               rows="4" 
-              class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+              class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-base bg-default text-default"
             ></textarea>
           </div>
 
           <button 
             @click="addSlide" 
-            class="w-full mb-6 flex justify-center items-center px-4 py-2 border border-dashed border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none"
+            class="w-full mb-6 flex justify-center items-center px-4 py-2 border border-dashed border-default shadow-sm text-sm font-medium rounded-md text-muted bg-default hover:bg-muted focus:outline-none"
           >
             + Add Slide
           </button>
         </div>
 
         <div v-else class="mb-6">
-          <p class="text-sm text-gray-500 italic mb-2">Advanced Template Editor (JSON)</p>
+          <p class="text-sm text-muted italic mb-2">Advanced Template Editor (JSON)</p>
           <textarea 
             :value="JSON.stringify(post.templateData, null, 2)"
             @input="(e) => { try { post.templateData = JSON.parse((e.target as HTMLTextAreaElement).value) } catch (err) {} }"
             rows="10" 
-            class="w-full font-mono px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100"
+            class="w-full font-mono px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-muted text-default"
           ></textarea>
         </div>
 
         <button 
           @click="regenerateMedia" 
           :disabled="generating"
-          class="w-full mt-4 inline-flex justify-center items-center px-4 py-3 border border-gray-300 dark:border-gray-600 shadow-sm text-base font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+          class="w-full mt-4 inline-flex justify-center items-center px-4 py-3 border border-default shadow-sm text-base font-medium rounded-md text-default bg-default hover:bg-muted disabled:opacity-50"
         >
           <RefreshCw class="w-5 h-5 mr-2" :class="{ 'animate-spin': generating }" />
           {{ generating ? 'Generating Images from API...' : 'Regenerate Media Grid' }}
@@ -214,18 +214,18 @@ const regenerateMedia = async () => {
       </div>
 
       <!-- Media Preview -->
-      <div class="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
-        <h2 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-200">Media Grid Preview</h2>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">This is the exact sequence that will be published. Note: The CTA Image is dynamically injected at publish time and is not shown here.</p>
+      <div class="bg-default shadow rounded-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-default">Media Grid Preview</h2>
+        <p class="text-sm text-muted mb-6">This is the exact sequence that will be published. Note: The CTA Image is dynamically injected at publish time and is not shown here.</p>
         
         <div class="grid grid-cols-3 gap-4">
-          <div v-for="(m, i) in post.media" :key="i" @click="openLightbox(post.media, Number(i))" class="relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-80 transition">
+          <div v-for="(m, i) in post.media" :key="i" @click="openLightbox(post.media, Number(i))" class="relative aspect-square rounded-lg overflow-hidden bg-elevated border border-default cursor-pointer hover:opacity-80 transition">
             <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
-            <div v-else class="w-full h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 p-4 text-center">
+            <div v-else class="w-full h-full flex flex-col items-center justify-center text-muted p-4 text-center">
               <span class="font-medium">Video</span>
               <span class="text-xs truncate w-full mt-1">{{ m.url }}</span>
             </div>
-            <div class="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded shadow">
+            <div class="absolute top-2 left-2 bg-inverted bg-opacity-60 text-inverted text-xs px-2 py-1 rounded shadow">
               {{ i === 0 ? 'Cover' : 'Slide ' + i }}
             </div>
           </div>
@@ -233,12 +233,12 @@ const regenerateMedia = async () => {
       </div>
 
       <!-- Final Caption Editor -->
-      <div class="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
-        <h2 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-200">Final Caption (Instagram Text)</h2>
+      <div class="bg-default shadow rounded-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-default">Final Caption (Instagram Text)</h2>
         <textarea 
           v-model="post.text" 
           rows="12" 
-          class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+          class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-base bg-default text-default"
         ></textarea>
       </div>
 

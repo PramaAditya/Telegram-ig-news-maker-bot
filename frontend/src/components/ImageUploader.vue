@@ -65,7 +65,7 @@ const clearImage = () => {
 </script>
 
 <template>
-  <div class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-4 text-center relative overflow-hidden transition hover:border-gray-400 dark:hover:border-gray-600 bg-gray-50 dark:bg-gray-800">
+  <div class="border-2 border-dashed border-default rounded-lg p-4 text-center relative overflow-hidden transition hover:border-muted bg-muted">
     <input 
       type="file" 
       ref="fileInput" 
@@ -75,26 +75,26 @@ const clearImage = () => {
     />
     
     <div v-if="uploading" class="flex flex-col items-center justify-center space-y-2 py-4">
-      <Loader2 class="w-8 h-8 text-blue-500 dark:text-blue-400 animate-spin" />
-      <span class="text-sm text-gray-500 dark:text-gray-400">Uploading to S3...</span>
+      <Loader2 class="w-8 h-8 text-primary animate-spin" />
+      <span class="text-sm text-muted">Uploading to S3...</span>
     </div>
 
     <div v-else-if="modelValue" class="relative group">
       <img :src="modelValue" class="max-h-48 mx-auto rounded object-cover shadow-sm" />
-      <div class="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded">
-        <button @click="clearImage" class="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 mx-2">
+      <div class="absolute inset-0 bg-inverted bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded">
+        <button @click="clearImage" class="p-2 bg-error text-inverted rounded-full hover:bg-error mx-2">
           <X class="w-5 h-5" />
         </button>
       </div>
     </div>
 
     <div v-else class="py-6 cursor-pointer" @click="triggerUpload">
-      <UploadCloud class="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
-      <p class="text-sm text-gray-600 dark:text-gray-400">Click to upload an image</p>
-      <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">JPG, PNG up to 10MB</p>
+      <UploadCloud class="w-10 h-10 text-muted mx-auto mb-2" />
+      <p class="text-sm text-muted">Click to upload an image</p>
+      <p class="text-xs text-muted mt-1">JPG, PNG up to 10MB</p>
     </div>
 
-    <div v-if="error" class="mt-2 text-sm text-red-600 dark:text-red-400">
+    <div v-if="error" class="mt-2 text-sm text-error">
       {{ error }}
     </div>
   </div>
