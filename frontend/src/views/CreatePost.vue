@@ -6,6 +6,7 @@ import ImageUploader from '../components/ImageUploader.vue'
 
 const textInput = ref('')
 const mediaUrl = ref('')
+const templateId = ref('image-multiple:interval')
 const submitting = ref(false)
 const error = ref('')
 const activeJobs = ref<any[]>([])
@@ -58,7 +59,8 @@ const generateContent = async () => {
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text: textInput.value,
-        mediaUrl: mediaUrl.value 
+        mediaUrl: mediaUrl.value,
+        templateId: templateId.value
       })
     })
     
@@ -95,6 +97,17 @@ const generateContent = async () => {
       </p>
 
       <div class="space-y-6">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Template</label>
+          <select 
+            v-model="templateId"
+            class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+          >
+            <option value="image-multiple:interval">Interval News (Carousel)</option>
+            <!-- Add more templates here in the future -->
+          </select>
+        </div>
+
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Topic or Reference URL *</label>
           <textarea 

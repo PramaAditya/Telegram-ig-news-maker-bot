@@ -4,7 +4,8 @@ import { db } from './db/index.js';
 import { jobsTable, queueTable, settingsTable } from './db/schema.js';
 import { getSettings } from './db/settings.js';
 import { eq, asc, desc, sql } from 'drizzle-orm';
-import { generateImageSequence } from './image.js';
+import { TEMPLATES } from './templates.js';
+import { generateMedia } from './image.js';
 import { publishToBuffer } from './buffer.js';
 import { runAutomatedPipeline } from './agent.js';
 import multer from 'multer';
@@ -135,7 +136,7 @@ app.post('/api/upload', requireDashboardAuth, upload.single('image'), async (req
 // POST /api/generate-content - Enqueue a new generation job from dashboard
 app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
   try {
-    const { text, mediaUrl } = req.body;
+    const { text, mediaUrl, templateId } = req.body;
     if (!text) return res.status(400).json({ error: 'Text input is required' });
 
     const media = mediaUrl ? [{ type: 'image' as const, url: mediaUrl }] : [];
@@ -143,6 +144,7 @@ app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
     const result = await db.insert(jobsTable).values({
       chatId: 'DASHBOARD',
       messageId: Date.now(),
+      templateId: templateId || 'image-multiple:interval',
       text,
       media,
       status: 'pending'
@@ -266,15 +268,13 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
 app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { text, title, coverImageUrl, slides } = req.body;
+    const { text, templateData } = req.body;
     
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
 
     const updateData: any = {};
     if (text !== undefined) updateData.text = text;
-    if (title !== undefined) updateData.title = title;
-    if (coverImageUrl !== undefined) updateData.coverImageUrl = coverImageUrl;
-    if (slides !== undefined) updateData.slides = slides;
+    if (templateData !== undefined) updateData.templateData = templateData;
 
     if (Object.keys(updateData).length > 0) {
       await db.update(queueTable)
@@ -298,20 +298,15 @@ app.post('/api/queue/:id/regenerate-media', requireDashboardAuth, async (req, re
     if (items.length === 0) return res.status(404).json({ error: 'Post not found in queue' });
     
     const post = items[0];
-
-    if (!post.title || !post.coverImageUrl || !post.slides) {
-       return res.status(400).json({ error: 'Missing required data (title, cover image, or slides) to regenerate media.' });
-    }
+    
+    const template = TEMPLATES[post.templateId];
+    if (!template) return res.status(400).json({ error: `Template ${post.templateId} not found` });
 
     try {
       const settings = await getSettings();
       // Re-render the images
-      const renderedUrls = await generateImageSequence({
-        logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
-        cover_image: post.coverImageUrl,
-        title: post.title,
-        slides: post.slides.map((text: string) => ({ text }))
-      });
+      const renderPayload = template.prepareRenderPayload(post.templateData, settings);
+      const renderedUrls = await generateMedia(template.renderEndpoint, renderPayload);
 
       if (!renderedUrls || renderedUrls.length === 0) {
         throw new Error('Failed to render images from external API.');

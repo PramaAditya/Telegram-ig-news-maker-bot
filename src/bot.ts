@@ -59,6 +59,7 @@ bot.on(message('text'), async (ctx) => {
       messageId: ctx.message.message_id,
       text,
       media: [],
+      templateId: 'image-multiple:interval', // Default template for Telegram
       status: 'pending'
     });
     await ctx.reply('⏳ Pesan diterima dan masuk antrean sistem.');
@@ -147,6 +148,7 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
               messageId: groupData.items[0].msgId,
               text: groupCaption,
               media: mediaItems,
+              templateId: 'image-multiple:interval', // Default template for Telegram
               status: 'pending'
             });
             await ctx.reply('⏳ Album media diterima dan masuk antrean sistem.', { reply_to_message_id: groupData.items[0].msgId });
@@ -200,6 +202,7 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
       messageId: ctx.message.message_id,
       text,
       media: [{ type: isVideo ? 'video' : 'image', url: fileLink.toString(), mimeType }],
+      templateId: 'image-multiple:interval', // Default template for Telegram
       status: 'pending'
     });
     await ctx.reply('⏳ Media diterima dan masuk antrean sistem.', { reply_to_message_id: ctx.message.message_id });

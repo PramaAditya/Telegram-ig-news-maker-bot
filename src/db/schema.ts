@@ -3,9 +3,8 @@ import { pgTable, text, serial, timestamp, jsonb, bigint, integer } from 'drizzl
 export const queueTable = pgTable('queue', {
   id: serial('id').primaryKey(),
   sortOrder: serial('sort_order'),
-  title: text('title'),
-  coverImageUrl: text('cover_image_url'),
-  slides: jsonb('slides').$type<string[]>(),
+  templateId: text('template_id').notNull().default('image-multiple:interval'),
+  templateData: jsonb('template_data').$type<any>().notNull().default({}),
   text: text('text').notNull(),
   media: jsonb('media').$type<{ type: 'image' | 'video', url: string }[]>().notNull(),
   status: text('status').notNull().default('pending'), // pending, published, error
@@ -18,6 +17,7 @@ export const jobsTable = pgTable('jobs', {
   id: serial('id').primaryKey(),
   chatId: text('chat_id').notNull(),
   messageId: bigint('message_id', { mode: 'number' }).notNull(),
+  templateId: text('template_id').notNull().default('image-multiple:interval'),
   text: text('text').notNull(),
   media: jsonb('media').$type<{ type: 'image' | 'video', url: string, mimeType?: string }[]>().default([]).notNull(),
   status: text('status').notNull().default('pending'), // pending, processing, completed, error

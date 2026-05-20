@@ -6,11 +6,12 @@ import dotenv from 'dotenv';
 import axios from 'axios';
 import { censorText } from './sanitize.js';
 import { uploadToS3 } from './s3.js';
-import { generateImageSequence } from './image.js';
+import { generateMedia } from './image.js';
 import { publishToBuffer } from './buffer.js';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { getSettings } from './db/settings.js';
+import { TEMPLATES } from './templates.js';
 
 dotenv.config();
 
@@ -56,8 +57,13 @@ export interface MediaItem {
   s3Url?: string;
 }
 
-export async function runAutomatedPipeline(chatId: string, messageId: number, userInput: string, uploadedMedia: MediaItem[] | undefined, telegram: any) {
+export async function runAutomatedPipeline(chatId: string, messageId: number, userInput: string, uploadedMedia: MediaItem[] | undefined, telegram: any, templateId: string = 'image-multiple:interval') {
   try {
+    const template = TEMPLATES[templateId];
+    if (!template) {
+      throw new Error(`Template ${templateId} not found in registry`);
+    }
+
     let statusMsg = await withRetry(() => telegram.sendMessage(chatId, '🔍 Mencari informasi...', { reply_to_message_id: messageId })) as any;
 
     // Phase 1: Research (Fact Gathering)
@@ -178,26 +184,22 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✍️ Menyusun konten...'));
 
     // Phase 2: Content Generation
-    console.log(`[Phase 2] Generating content`);
+    console.log(`[Phase 2] Generating content using template schema`);
     const { object: contentParams } = await generateObject({
       model: googleAI(process.env.CONTENT_WRITER_MODEL || 'gemini-3.1-pro-preview'),
-      system: SYSTEM_PROMPT + `
-Your task is to parse the gathered facts into final components for an Instagram news carousel.
-- title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
-- slides: An array of exactly 2 strings, representing two slides explaining the news. Write in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span. AVOID complex political or academic jargon (e.g. use "hak penuh sebagai negara merdeka" instead of "hak kedaulatan"). Each slide MUST be exactly 1 short paragraph containing at most 2 sentences. Get straight to the point without unnecessary fluff. Answer the 5W1H comprehensively across the two slides. Do NOT repeat information already stated in the title.
-- source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
-- image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "masterpiece professional photography, dramatic backlighting, heavy chiaroscuro, extreme low key".
-`,
-      schema: z.object({
-        title: z.string(),
-        slides: z.array(z.string()).length(2),
-        source_name: z.string(),
-        image_prompt: z.string(),
-      }),
+      system: SYSTEM_PROMPT + `\n${template.systemPromptAdditions}`,
+      schema: template.schema,
       prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchResult}`,
     });
     
-    let finalCaption = `${contentParams.slides.join('\n\n')}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
+    // For now, assume slides array logic for captions if it's the interval template
+    let finalCaption = '';
+    if (contentParams.slides && contentParams.source_name) {
+      finalCaption = `${contentParams.slides.join('\n\n')}\n\n${currentDate}. Sumber: ${contentParams.source_name}`;
+    } else {
+      finalCaption = `${currentDate}.`; // Generic fallback
+    }
+    
     finalCaption = censorText(finalCaption);
 
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...'));
@@ -274,27 +276,52 @@ Your task is to parse the gathered facts into final components for an Instagram 
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
 
     // Phase 4: Image Rendering
-    console.log(`[Phase 4] Rendering carousel via API`);
+    console.log(`[Phase 4] Rendering media via API for template ${templateId}`);
     
-    // Remove emojis from title
-    const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}]/gu;
-    const cleanTitle = contentParams.title.replace(emojiRegex, '');
+    // Custom logic for templates with titles (like interval)
+    let cleanTitle = contentParams.title || '';
+    if (cleanTitle) {
+      const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}]/gu;
+      cleanTitle = censorText(cleanTitle.replace(emojiRegex, ''));
+    }
 
-    await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...'));
-    console.log(`[Phase 4] Enhancing slides with markdown bolding via gemini-3.1-flash-lite...`);
-    
-    const highlightText = async (text: string) => {
-      try {
-        const { text: boldedText } = await generateText({
-          model: googleAI('gemini-3.1-flash-lite-preview'),
-          system: `You are an editor for an Instagram news carousel. Your task is to add bold markdown (using **text**) to the most important or shocking words, phrases, or clauses in the provided text. 
+    let templateData = { ...contentParams };
+    templateData.title = cleanTitle;
+
+    // Enhance slides with markdown bolding if slides exist
+    if (contentParams.slides) {
+      await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...'));
+      console.log(`[Phase 4] Enhancing slides with markdown bolding via gemini-3.1-flash-lite...`);
+      
+      const highlightText = async (text: string) => {
+        try {
+          const { text: boldedText } = await generateText({
+            model: googleAI('gemini-3.1-flash-lite-preview'),
+            system: `You are an editor for an Instagram news carousel. Your task is to add bold markdown (using **text**) to the most important or shocking words, phrases, or clauses in the provided text. 
 This helps readers scan the text and prevents it from being monotonous.
 RULES:
 1. Do not change any original words, only add ** around the important parts.
 2. Output ONLY the modified text, nothing else.
 3. Don't bold everything, just the key highlights (maximum 20-30% of the text).`,
-          prompt: text
-        });
+            prompt: text
+          });
+          return boldedText.trim() || text;
+        } catch (err) {
+          console.warn('Failed to add bolding to text, falling back to original text:', err);
+          return text;
+        }
+      };
+
+      templateData.slides = await Promise.all(contentParams.slides.map((text: string) => highlightText(text)));
+      templateData.slides = templateData.slides.map((text: string) => censorText(text));
+    }
+
+    await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
+
+    const settings = await getSettings();
+
+    const renderPayload = template.prepareRenderPayload(templateData, settings, coverImageUrl);
+    const renderedUrls = await generateMedia(template.renderEndpoint, renderPayload);
         return boldedText.trim() || text;
       } catch (err) {
         console.warn('Failed to add bolding to text, falling back to original text:', err);
@@ -364,10 +391,11 @@ RULES:
     const { db } = await import('./db/index.js');
     const { queueTable } = await import('./db/schema.js');
     
+    templateData.coverImageUrl = coverImageUrl; // Keep coverImageUrl in DB so it can be viewed on frontend
+    
     await db.insert(queueTable).values({
-      title: censorText(cleanTitle),
-      coverImageUrl: coverImageUrl,
-      slides: boldedSlides.map(text => censorText(text)),
+      templateId: template.id,
+      templateData: templateData,
       text: finalCaption,
       media: allPublishUrls,
       status: 'pending'

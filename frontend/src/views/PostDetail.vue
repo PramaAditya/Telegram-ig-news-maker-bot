@@ -40,8 +40,13 @@ const fetchPost = async () => {
     post.value = queue.find((p: any) => p.id === parseInt(postId as string))
     if (!post.value) throw new Error('Post not found in pending queue')
     
-    // Ensure slides array exists and has at least two elements if empty
-    if (!post.value.slides) post.value.slides = ['', '']
+    // Ensure templateData exists
+    if (!post.value.templateData) post.value.templateData = {}
+
+    // Specific logic for interval template
+    if (post.value.templateId === 'image-multiple:interval') {
+      if (!post.value.templateData.slides) post.value.templateData.slides = ['', '']
+    }
     
     error.value = ''
   } catch (err: any) {
@@ -61,9 +66,7 @@ const saveChanges = async () => {
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text: post.value.text,
-        title: post.value.title,
-        coverImageUrl: post.value.coverImageUrl,
-        slides: post.value.slides
+        templateData: post.value.templateData
       })
     })
     if (res.status === 401) return alert('Unauthorized')
@@ -77,18 +80,24 @@ const saveChanges = async () => {
 }
 
 const removeSlide = (index: number) => {
-  if (post.value.slides.length > 1) {
-    post.value.slides.splice(index, 1)
+  if (post.value.templateData.slides.length > 1) {
+    post.value.templateData.slides.splice(index, 1)
   }
 }
 
 const addSlide = () => {
-  post.value.slides.push('')
+  if (!post.value.templateData.slides) {
+    post.value.templateData.slides = []
+  }
+  post.value.templateData.slides.push('')
 }
 
 const regenerateMedia = async () => {
-  if (!post.value.title || !post.value.coverImageUrl || !post.value.slides || post.value.slides.length === 0) {
-    return alert('Title, Cover Image URL, and at least 1 Slide cannot be empty to regenerate.')
+  // Hardcoded validation for interval template
+  if (post.value.templateId === 'image-multiple:interval') {
+    if (!post.value.templateData.title || !post.value.templateData.coverImageUrl || !post.value.templateData.slides || post.value.templateData.slides.length === 0) {
+      return alert('Title, Cover Image URL, and at least 1 Slide cannot be empty to regenerate.')
+    }
   }
   
   // First save the current draft so backend uses the latest text
@@ -141,46 +150,58 @@ const regenerateMedia = async () => {
       
       <!-- Media Data Editor -->
       <div class="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
-        <h2 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-200">Media Data (Render Engine)</h2>
+        <h2 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-200">Media Data (Template: {{ post.templateId }})</h2>
         
-        <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Title (supports **bold**)</label>
-          <textarea 
-            v-model="post.title" 
-            rows="3"
-            class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-          ></textarea>
-        </div>
-
-        <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cover Image</label>
-          <ImageUploader v-model="post.coverImageUrl" />
-        </div>
-
-        <div v-for="(_, i) in post.slides" :key="i" class="mb-6 relative bg-gray-50 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
-          <div class="flex justify-between items-center mb-2">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Slide {{ Number(i) + 1 }} Text (supports **bold**)</label>
-            <button 
-              @click="removeSlide(Number(i))" 
-              class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-xs font-medium"
-              v-if="post.slides.length > 1"
-            >
-              Remove Slide
-            </button>
+        <div v-if="post.templateId === 'image-multiple:interval'">
+          <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Title (supports **bold**)</label>
+            <textarea 
+              v-model="post.templateData.title" 
+              rows="3"
+              class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            ></textarea>
           </div>
-          <textarea 
-            v-model="post.slides[i]" 
-            rows="4" 
-            class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-          ></textarea>
+
+          <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cover Image</label>
+            <ImageUploader v-model="post.templateData.coverImageUrl" />
+          </div>
+
+          <div v-for="(_, i) in post.templateData.slides" :key="i" class="mb-6 relative bg-gray-50 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
+            <div class="flex justify-between items-center mb-2">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Slide {{ Number(i) + 1 }} Text (supports **bold**)</label>
+              <button 
+                @click="removeSlide(Number(i))" 
+                class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-xs font-medium"
+                v-if="post.templateData.slides.length > 1"
+              >
+                Remove Slide
+              </button>
+            </div>
+            <textarea 
+              v-model="post.templateData.slides[i]" 
+              rows="4" 
+              class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            ></textarea>
+          </div>
+
+          <button 
+            @click="addSlide" 
+            class="w-full mb-6 flex justify-center items-center px-4 py-2 border border-dashed border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none"
+          >
+            + Add Slide
+          </button>
         </div>
 
-        <button 
-          @click="addSlide" 
-          class="w-full mb-6 flex justify-center items-center px-4 py-2 border border-dashed border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none"
-        >
-          + Add Slide
-        </button>
+        <div v-else class="mb-6">
+          <p class="text-sm text-gray-500 italic mb-2">Advanced Template Editor (JSON)</p>
+          <textarea 
+            :value="JSON.stringify(post.templateData, null, 2)"
+            @input="(e) => { try { post.templateData = JSON.parse((e.target as HTMLTextAreaElement).value) } catch (err) {} }"
+            rows="10" 
+            class="w-full font-mono px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100"
+          ></textarea>
+        </div>
 
         <button 
           @click="regenerateMedia" 
