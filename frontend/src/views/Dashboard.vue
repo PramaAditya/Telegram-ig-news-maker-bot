@@ -162,6 +162,29 @@ onMounted(() => {
   fetchSettings();
 });
 
+const jumpToPosition = async (currentIndex: number, event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const newIndex = parseInt(target.value) - 1;
+
+  if (
+    isNaN(newIndex) ||
+    newIndex < 0 ||
+    newIndex >= queue.value.length ||
+    newIndex === currentIndex
+  ) {
+    target.value = (currentIndex + 1).toString();
+    return;
+  }
+
+  const newQueue = [...queue.value];
+  const [movedItem] = newQueue.splice(currentIndex, 1);
+  newQueue.splice(newIndex, 0, movedItem);
+  queue.value = newQueue;
+
+  target.value = (newIndex + 1).toString();
+  await syncReorder();
+};
+
 const deleteItem = async (id: number) => {
   if (!confirm("Are you sure you want to delete this post?")) return;
   try {
@@ -328,7 +351,7 @@ const timeAgo = (dateObj: Date | string | null) => {
       The queue is empty.
     </div>
 
-    <div v-else class="bg-default shadow rounded-lg overflow-hidden">
+    <div v-else class="overflow-hidden">
       <draggable
         v-if="activeTab === 'pending'"
         v-model="queue"
@@ -352,11 +375,23 @@ const timeAgo = (dateObj: Date | string | null) => {
                 {{ formatTimeOnly(item.expectedPostAt) }}
               </div>
 
-              <!-- Drag Handle -->
-              <div class="flex-shrink-0 pt-5">
+              <!-- Drag Handle & Jump -->
+              <div class="flex-shrink-0 pt-5 flex flex-col items-center gap-2">
                 <button class="drag-handle cursor-move text-muted hover:text-default">
                   <GripVertical class="w-5 h-5" />
                 </button>
+                <div class="flex items-center text-xs text-muted font-medium">
+                  <span class="mr-1 text-muted">#</span>
+                  <input
+                    type="number"
+                    :value="index + 1"
+                    min="1"
+                    :max="queue.length"
+                    @change="(e) => jumpToPosition(index, e)"
+                    class="w-10 px-1 py-1 text-center border border-default rounded bg-muted text-default focus:outline-none focus:ring-1 focus:ring-primary"
+                    title="Jump to position"
+                  />
+                </div>
               </div>
 
               <!-- Item Card -->
@@ -417,11 +452,11 @@ const timeAgo = (dateObj: Date | string | null) => {
                       <UButton color="white" variant="solid" @click="$router.push('/post/' + item.id)" :padded="false" class="p-2">
                         <Edit class="w-4 h-4 text-muted" />
                       </UButton>
-                      <UDropdown :items="[[{ label: 'Delete', click: () => deleteItem(item.id), class: 'text-error' }]]" :popper="{ placement: 'bottom-end' }">
+                      <UDropdownMenu :items="[[{ label: 'Delete', onSelect: () => deleteItem(item.id), color: 'error' }]]" :content="{ align: 'end' }">
                         <UButton color="white" variant="solid" :padded="false" class="p-2">
                           <MoreVertical class="w-4 h-4 text-muted" />
                         </UButton>
-                      </UDropdown>
+                      </UDropdownMenu>
                     </div>
                   </div>
                 </template>
@@ -501,11 +536,11 @@ const timeAgo = (dateObj: Date | string | null) => {
                         Retry
                       </UButton>
                       
-                      <UDropdown :items="[[{ label: 'Delete', click: () => deleteItem(item.id), class: 'text-error' }]]" :popper="{ placement: 'bottom-end' }">
+                      <UDropdownMenu :items="[[{ label: 'Delete', onSelect: () => deleteItem(item.id), color: 'error' }]]" :content="{ align: 'end' }">
                         <UButton color="white" variant="solid" :padded="false" class="p-2">
                           <MoreVertical class="w-4 h-4 text-muted" />
                         </UButton>
-                      </UDropdown>
+                      </UDropdownMenu>
                     </div>
                   </div>
                 </template>
