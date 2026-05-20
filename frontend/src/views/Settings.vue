@@ -33,47 +33,50 @@ const addBannedWord = () => {
     settings.value.bannedWords = []
   }
   
-  // If editing an existing word
-  if (editingWordIndex.value !== null) {
-    // Check if new word already exists elsewhere in the list
-    if (settings.value.bannedWords.some((w: any, idx: number) => 
-        idx !== editingWordIndex.value && 
-        w.word.toLowerCase() === newBannedWord.value.word.toLowerCase().trim())) {
-      return alert('This word is already in the banned list.')
-    }
-    
-    settings.value.bannedWords[editingWordIndex.value] = {
-      word: newBannedWord.value.word.trim(),
-      replacement: newBannedWord.value.replacement.trim() || '***',
-      type: newBannedWord.value.type
-    }
-    editingWordIndex.value = null
-  } else {
-    // Adding a new word
-    if (settings.value.bannedWords.some((w: any) => w.word.toLowerCase() === newBannedWord.value.word.toLowerCase().trim())) {
-      return alert('This word is already in the banned list.')
-    }
-
-    settings.value.bannedWords.push({
-      word: newBannedWord.value.word.trim(),
-      replacement: newBannedWord.value.replacement.trim() || '***',
-      type: newBannedWord.value.type
-    })
+  // Adding a new word
+  if (settings.value.bannedWords.some((w: any) => w.word.toLowerCase() === newBannedWord.value.word.toLowerCase().trim())) {
+    return alert('This word is already in the banned list.')
   }
+
+  settings.value.bannedWords.push({
+    word: newBannedWord.value.word.trim(),
+    replacement: newBannedWord.value.replacement.trim() || '***',
+    type: newBannedWord.value.type
+  })
 
   // Reset form
   newBannedWord.value = { word: '', replacement: '', type: 'partial' }
 }
 
+const editingWordState = ref({ word: '', replacement: '', type: 'partial' as 'exact' | 'partial' })
+
 const editBannedWord = (index: number) => {
   const item = settings.value.bannedWords[index]
-  newBannedWord.value = { ...item }
+  editingWordState.value = { ...item }
   editingWordIndex.value = index
 }
 
 const cancelEditBannedWord = () => {
   editingWordIndex.value = null
-  newBannedWord.value = { word: '', replacement: '', type: 'partial' }
+}
+
+const saveEditedWord = () => {
+  if (editingWordIndex.value === null) return
+  if (!editingWordState.value.word.trim()) return
+
+  // Check if new word already exists elsewhere in the list
+  if (settings.value.bannedWords.some((w: any, idx: number) => 
+      idx !== editingWordIndex.value && 
+      w.word.toLowerCase() === editingWordState.value.word.toLowerCase().trim())) {
+    return alert('This word is already in the banned list.')
+  }
+  
+  settings.value.bannedWords[editingWordIndex.value] = {
+    word: editingWordState.value.word.trim(),
+    replacement: editingWordState.value.replacement.trim() || '***',
+    type: editingWordState.value.type
+  }
+  editingWordIndex.value = null
 }
 
 const removeBannedWord = (index: number) => {
@@ -345,14 +348,7 @@ const saveSettings = async () => {
                 @click="addBannedWord" 
                 class="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-inverted bg-primary hover:bg-primary focus:outline-none"
               >
-                {{ editingWordIndex !== null ? 'Save Edit' : 'Add Rule' }}
-              </button>
-              <button 
-                v-if="editingWordIndex !== null"
-                @click="cancelEditBannedWord" 
-                class="flex-1 inline-flex items-center justify-center px-4 py-2 border border-default shadow-sm text-sm font-medium rounded-md text-default bg-default hover:bg-muted focus:outline-none"
-              >
-                Cancel
+                Add Rule
               </button>
             </div>
           </div>
@@ -360,18 +356,57 @@ const saveSettings = async () => {
           <!-- Dictionary List -->
           <div v-if="settings.bannedWords && settings.bannedWords.length > 0" class="border border-default rounded-lg overflow-hidden bg-default">
             <ul class="divide-y divide-default max-h-96 overflow-y-auto">
-              <li v-for="(item, index) in settings.bannedWords" :key="index" class="p-3 sm:px-4 flex items-center justify-between hover:bg-muted" :class="{'bg-muted': editingWordIndex === index}">
-                <div class="flex items-center gap-2 sm:gap-4 overflow-hidden cursor-pointer" @click="editBannedWord(Number(index))">
-                  <span class="font-medium text-error truncate">{{ item.word }}</span>
-                  <span class="text-muted text-xs">→</span>
-                  <span class="font-mono text-sm text-success truncate">{{ item.replacement }}</span>
-                  <span class="text-xs px-2 py-0.5 rounded-full bg-elevated text-muted hidden sm:inline-block">
-                    {{ item.type }}
-                  </span>
+              <li v-for="(item, index) in settings.bannedWords" :key="index" class="p-3 sm:px-4 hover:bg-muted transition-colors" :class="{'bg-muted': editingWordIndex === index}">
+                <!-- Inline Edit Form -->
+                <div v-if="editingWordIndex === index" class="flex flex-col md:flex-row gap-3 items-center w-full">
+                  <div class="flex-1 w-full">
+                    <input 
+                      v-model="editingWordState.word" 
+                      type="text" 
+                      placeholder="Banned Word"
+                      @keyup.enter="saveEditedWord"
+                      class="w-full px-3 py-1.5 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default"
+                    />
+                  </div>
+                  <div class="text-muted hidden md:block">→</div>
+                  <div class="flex-1 w-full">
+                    <input 
+                      v-model="editingWordState.replacement" 
+                      type="text" 
+                      placeholder="Replacement"
+                      @keyup.enter="saveEditedWord"
+                      class="w-full px-3 py-1.5 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default"
+                    />
+                  </div>
+                  <div class="w-full md:w-auto">
+                    <select 
+                      v-model="editingWordState.type"
+                      class="w-full px-3 py-1.5 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default"
+                    >
+                      <option value="partial">Partial</option>
+                      <option value="exact">Exact</option>
+                    </select>
+                  </div>
+                  <div class="flex gap-2 w-full md:w-auto mt-2 md:mt-0 justify-end">
+                    <button @click="saveEditedWord" class="px-3 py-1.5 text-xs font-medium text-inverted bg-primary rounded-md hover:bg-primary/90 transition-colors">Save</button>
+                    <button @click="cancelEditBannedWord" class="px-3 py-1.5 text-xs font-medium text-default bg-default border border-default rounded-md hover:bg-muted transition-colors">Cancel</button>
+                  </div>
                 </div>
-                <button @click="removeBannedWord(Number(index))" class="text-muted hover:text-error flex-shrink-0 ml-4">
-                  <X class="w-5 h-5" />
-                </button>
+
+                <!-- Display Mode -->
+                <div v-else class="flex items-center justify-between w-full cursor-pointer" @click="editBannedWord(Number(index))">
+                  <div class="flex items-center gap-2 sm:gap-4 overflow-hidden">
+                    <span class="font-medium text-error truncate">{{ item.word }}</span>
+                    <span class="text-muted text-xs">→</span>
+                    <span class="font-mono text-sm text-success truncate">{{ item.replacement }}</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-elevated text-muted hidden sm:inline-block">
+                      {{ item.type }}
+                    </span>
+                  </div>
+                  <button @click.stop="removeBannedWord(Number(index))" class="text-muted hover:text-error flex-shrink-0 ml-4 p-1 rounded-md hover:bg-default transition-colors">
+                    <X class="w-4 h-4" />
+                  </button>
+                </div>
               </li>
             </ul>
           </div>
