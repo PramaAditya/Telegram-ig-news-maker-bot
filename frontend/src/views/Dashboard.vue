@@ -400,15 +400,6 @@ const timeAgo = (dateObj: Date | string | null) => {
                   
                   <!-- Left: Content -->
                   <div class="flex-1 min-w-0">
-                    <div class="flex items-center mb-4">
-                      <div class="relative">
-                        <UAvatar src="https://storage.pelita.tech/logo_kabar_perjuangan_white.png" alt="kabar.perjuangan" size="md" class="bg-black" />
-                        <div class="absolute -bottom-1 -right-1 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500 text-white rounded-full p-0.5 border border-white dark:border-gray-900">
-                          <Instagram class="w-3 h-3" />
-                        </div>
-                      </div>
-                      <span class="ml-3 font-semibold text-default">kabar.perjuangan</span>
-                    </div>
                     <p class="text-sm text-default whitespace-pre-wrap line-clamp-6">
                       {{ item.text }}
                     </p>
@@ -484,15 +475,6 @@ const timeAgo = (dateObj: Date | string | null) => {
                 <div class="flex flex-col sm:flex-row justify-between gap-6">
                   
                   <div class="flex-1 min-w-0">
-                    <div class="flex items-center mb-4">
-                      <div class="relative">
-                        <UAvatar src="https://storage.pelita.tech/logo_kabar_perjuangan_white.png" alt="kabar.perjuangan" size="md" class="bg-black" />
-                        <div class="absolute -bottom-1 -right-1 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500 text-white rounded-full p-0.5 border border-white dark:border-gray-900">
-                          <Instagram class="w-3 h-3" />
-                        </div>
-                      </div>
-                      <span class="ml-3 font-semibold text-default">kabar.perjuangan</span>
-                    </div>
                     <p class="text-sm text-default whitespace-pre-wrap line-clamp-6">
                       {{ item.text }}
                     </p>
