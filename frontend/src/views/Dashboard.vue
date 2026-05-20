@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { Trash2, Edit, Send, GripVertical } from "lucide-vue-next";
+import { Trash2, Edit, Send, GripVertical, CalendarClock } from "lucide-vue-next";
 import { getAuthHeaders, setPassword } from "../auth";
 import { Fancybox } from "@fancyapps/ui";
 import draggable from "vuedraggable";
 
 const queue = ref<any[]>([]);
+const postingSlots = ref<{day: string, time: string}[]>([]);
 const loading = ref(true);
 const error = ref("");
 
@@ -17,8 +18,117 @@ const openLightbox = (mediaArray: any[], index: number) => {
   Fancybox.show(items, { startIndex: index });
 };
 
+const dayMap: Record<string, number> = {
+  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6
+};
+
+const getNextSlot = (fromDate: Date, sortedSlots: {day: string, time: string}[]) => {
+  if (!sortedSlots.length) return null;
+
+  const currentDay = fromDate.getDay();
+  const currentHour = fromDate.getHours();
+  const currentMinute = fromDate.getMinutes();
+
+  for (let i = 0; i < 7; i++) {
+    const searchDay = (currentDay + i) % 7;
+    const slotsForDay = sortedSlots.filter(s => dayMap[s.day.toLowerCase()] === searchDay);
+    
+    for (const slot of slotsForDay) {
+      const [h, m] = slot.time.split(':').map(Number);
+      if (i === 0) {
+        if (h > currentHour || (h === currentHour && m > currentMinute)) {
+          const nextDate = new Date(fromDate);
+          nextDate.setDate(nextDate.getDate() + i);
+          nextDate.setHours(h, m, 0, 0);
+          return nextDate;
+        }
+      } else {
+        const nextDate = new Date(fromDate);
+        nextDate.setDate(nextDate.getDate() + i);
+        nextDate.setHours(h, m, 0, 0);
+        return nextDate;
+      }
+    }
+  }
+  
+  // Wrap to next week
+  const firstSlot = sortedSlots[0];
+  const [h, m] = firstSlot.time.split(':').map(Number);
+  const targetDay = dayMap[firstSlot.day.toLowerCase()];
+  let daysToAdd = targetDay - currentDay;
+  if (daysToAdd <= 0) daysToAdd += 7;
+  
+  const nextDate = new Date(fromDate);
+  nextDate.setDate(nextDate.getDate() + daysToAdd);
+  nextDate.setHours(h, m, 0, 0);
+  return nextDate;
+};
+
+const calculateExpectedTimes = () => {
+  if (!queue.value.length) return;
+
+  const sortedSlots = [...postingSlots.value].sort((a, b) => {
+    const dayA = dayMap[a.day.toLowerCase()] || 0;
+    const dayB = dayMap[b.day.toLowerCase()] || 0;
+    if (dayA !== dayB) return dayA - dayB;
+    return a.time.localeCompare(b.time);
+  });
+
+  let refDate = new Date();
+  
+  for (const item of queue.value) {
+    if (!sortedSlots.length) {
+      item.expectedPostAt = null;
+      continue;
+    }
+
+    const next = getNextSlot(refDate, sortedSlots);
+    if (next) {
+      item.expectedPostAt = next;
+      refDate = new Date(next.getTime() + 60000);
+    } else {
+      item.expectedPostAt = null;
+    }
+  }
+};
+
+const fetchSettings = async () => {
+  try {
+    const res = await fetch("/api/settings", { headers: getAuthHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      postingSlots.value = data.postingSlots || [];
+      calculateExpectedTimes();
+    }
+  } catch (e) {}
+};
+
+const fetchQueue = async () => {
+  loading.value = true;
+  try {
+    const res = await fetch("/api/queue", { headers: getAuthHeaders() });
+    if (res.status === 401) {
+      const pwd = prompt("Enter Dashboard Password:");
+      if (pwd !== null) {
+        setPassword(pwd);
+        return fetchQueue();
+      }
+      throw new Error("Unauthorized");
+    }
+    if (!res.ok) throw new Error("Failed to fetch");
+    queue.value = await res.json();
+    calculateExpectedTimes();
+    error.value = "";
+  } catch (err: any) {
+    error.value = err.message;
+  } finally {
+    loading.value = false;
+  }
+};
+
 const syncReorder = async () => {
   try {
+    calculateExpectedTimes(); // update UI instantly before sync
     const res = await fetch(`/api/queue/reorder`, {
       method: "POST",
       headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
@@ -38,33 +148,14 @@ const onDragEnd = async () => {
   await syncReorder();
 };
 
-const fetchQueue = async () => {
-  loading.value = true;
-  try {
-    const res = await fetch("/api/queue", { headers: getAuthHeaders() });
-    if (res.status === 401) {
-      const pwd = prompt("Enter Dashboard Password:");
-      if (pwd !== null) {
-        setPassword(pwd);
-        return fetchQueue();
-      }
-      throw new Error("Unauthorized");
-    }
-    if (!res.ok) throw new Error("Failed to fetch");
-    queue.value = await res.json();
-    error.value = "";
-  } catch (err: any) {
-    error.value = err.message;
-  } finally {
-    loading.value = false;
-  }
-};
-
-onMounted(fetchQueue);
+onMounted(() => {
+  fetchQueue();
+  fetchSettings();
+});
 
 const jumpToPosition = async (currentIndex: number, event: Event) => {
   const target = event.target as HTMLInputElement;
-  const newIndex = parseInt(target.value) - 1; // 1-based to 0-based
+  const newIndex = parseInt(target.value) - 1;
 
   if (
     isNaN(newIndex) ||
@@ -72,21 +163,16 @@ const jumpToPosition = async (currentIndex: number, event: Event) => {
     newIndex >= queue.value.length ||
     newIndex === currentIndex
   ) {
-    // Reset to current index if invalid
     target.value = (currentIndex + 1).toString();
     return;
   }
 
-  // Perform local array reorder
   const newQueue = [...queue.value];
   const [movedItem] = newQueue.splice(currentIndex, 1);
   newQueue.splice(newIndex, 0, movedItem);
   queue.value = newQueue;
 
-  // Update target value to reflect the new state
   target.value = (newIndex + 1).toString();
-
-  // Sync with server
   await syncReorder();
 };
 
@@ -124,6 +210,19 @@ const publishNow = async (id: number) => {
   } catch (err: any) {
     alert(err.message);
   }
+};
+
+const formatExpectedTime = (dateObj: Date | string) => {
+  if (!dateObj) return '';
+  const d = new Date(dateObj);
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  }).format(d);
 };
 </script>
 
@@ -197,13 +296,18 @@ const publishNow = async (id: number) => {
                   {{ item.text }}
                 </p>
                 <div
-                  class="mt-2 flex items-center space-x-2 text-xs text-muted"
+                  class="mt-2 flex items-center space-x-3 text-xs text-muted"
                 >
-                  <UBadge> {{ item.media.length }} media item(s) </UBadge>
-                  <span>•</span>
-                  <span
-                    >Added {{ new Date(item.createdAt).toLocaleString() }}</span
-                  >
+                  <UBadge color="gray" variant="soft"> {{ item.media.length }} media </UBadge>
+                  
+                  <span v-if="item.expectedPostAt" class="flex items-center text-primary font-medium bg-primary-50 px-2 py-0.5 rounded border border-primary-100">
+                    <CalendarClock class="w-3.5 h-3.5 mr-1" />
+                    {{ formatExpectedTime(item.expectedPostAt) }}
+                  </span>
+                  <span v-else class="flex items-center text-warning font-medium">
+                    <CalendarClock class="w-3.5 h-3.5 mr-1" />
+                    No slots configured
+                  </span>
                 </div>
 
                 <div class="mt-3 flex space-x-2" v-if="item.media.length > 0">
@@ -261,6 +365,10 @@ const publishNow = async (id: number) => {
             </div>
           </li>
         </template>
+      </draggable>
+    </div>
+  </div>
+</template>
       </draggable>
     </div>
   </div>
