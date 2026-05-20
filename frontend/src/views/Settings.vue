@@ -134,7 +134,7 @@ const saveSettings = async () => {
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto space-y-6">
+  <div class="container mx-auto space-y-6">
     <div class="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
       <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center">
         <Settings2 class="w-6 h-6 mr-3 text-blue-600 dark:text-blue-400" />

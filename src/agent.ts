@@ -138,7 +138,7 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     let scrapedImageUrl: string | null = null;
 
     const { text: researchResult } = await generateText({
-      model: googleAI('gemini-3.1-pro-preview'),
+      model: googleAI(process.env.CONTENT_RESEARCHER_MODEL || 'gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If the user input contains an http/https URL, you MUST prioritize using the \`scrapeUrl\` tool on that specific URL to read its content. If it's just a topic or keywords, use the \`searchWeb\` tool. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`,
       messages: [
         {
@@ -180,7 +180,7 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     // Phase 2: Content Generation
     console.log(`[Phase 2] Generating content`);
     const { object: contentParams } = await generateObject({
-      model: googleAI('gemini-3.1-pro-preview'),
+      model: googleAI(process.env.CONTENT_WRITER_MODEL || 'gemini-3.1-pro-preview'),
       system: SYSTEM_PROMPT + `
 Your task is to parse the gathered facts into final components for an Instagram news carousel.
 - title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
