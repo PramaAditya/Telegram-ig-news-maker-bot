@@ -381,7 +381,8 @@ RULES:
       templateData: templateData,
       text: finalCaption,
       media: allPublishUrls,
-      status: 'pending'
+      status: 'pending',
+      researchResult: researchResult
     });
 
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Berhasil diselesaikan dan masuk Queue untuk di-publish!'));

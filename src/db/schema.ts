@@ -9,6 +9,7 @@ export const queueTable = pgTable('queue', {
   media: jsonb('media').$type<{ type: 'image' | 'video', url: string }[]>().notNull(),
   status: text('status').notNull().default('pending'), // pending, published, error
   errorLog: text('error_log'),
+  researchResult: text('research_result'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   publishedAt: timestamp('published_at'),
 });

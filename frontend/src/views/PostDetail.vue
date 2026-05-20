@@ -148,6 +148,14 @@ const regenerateMedia = async () => {
     
     <div v-else-if="post" class="space-y-6 max-w-4xl mx-auto">
       
+      <!-- Research Result Reference -->
+      <div v-if="post.researchResult" class="bg-default shadow rounded-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-default">AI Research Notes</h2>
+        <div class="bg-muted border border-default rounded-md p-4 max-h-64 overflow-y-auto">
+          <p class="text-sm text-default whitespace-pre-wrap font-mono">{{ post.researchResult }}</p>
+        </div>
+      </div>
+
       <!-- Media Data Editor -->
       <div class="bg-default shadow rounded-lg p-6">
         <h2 class="text-lg font-bold mb-4 text-default">Media Data (Template: {{ post.templateId }})</h2>
