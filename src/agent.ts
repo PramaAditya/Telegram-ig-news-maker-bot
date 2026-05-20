@@ -35,16 +35,13 @@ const googleAI = createGoogleGenerativeAI({
 
 const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY || '' });
 
-const getSystemPrompt = (currentDateStr: string, currentYear: number, editorialGuidelines: string) => `You are a strict, automated editorial assistant crafting a news carousel for Instagram.
+const getBaseSystemPrompt = (currentDateStr: string, currentYear: number) => `You are a strict, automated editorial assistant crafting news based content for social media.
 You operate entirely in BAHASA INDONESIA. Your tone should be highly informative, objective, and strictly journalistic.
 
 CRITICAL CONTEXT REGARDING TIME:
 Today's date is: ${currentDateStr}.
 The current year is: ${currentYear}.
 You MUST use the year ${currentYear} (and the current month if needed) in your web searches. Completely ignore any internal knowledge cutoff dates that suggest we are in the past.
-
-EDITORIAL GUIDELINES & FRAMING:
-${editorialGuidelines}
 `;
 
 export interface MediaItem {
@@ -75,7 +72,10 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     const defaultGuidelines = process.env.EDITORIAL_GUIDELINES || `Your reporting should maintain a professional and highly informative journalistic tone. Focus on delivering factual news while highlighting perspectives from the Global South, particularly Palestine, Lebanon, Iran, Iraq, and Yemen. When covering conflicts or international relations, critically examine the roles, policies, and actions of the US, Israel, and their allies.\n\nCrucially, avoid emotive language, sensationalism, or blatant propaganda. Let the facts, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How) drive the narrative. Your goal is to inform the audience thoroughly and objectively within the constraints of a short format.`;
     const editorialGuidelines = settings.editorialGuidelines || defaultGuidelines;
 
-    const SYSTEM_PROMPT = getSystemPrompt(currentDateStr, currentYear, editorialGuidelines);
+    const baseSystemPrompt = getBaseSystemPrompt(currentDateStr, currentYear);
+    
+    // Research prompt: strictly neutral 5W1H
+    const researchSystemPrompt = baseSystemPrompt + `\n\nRESEARCH GUIDELINES:\nMaintain a strictly neutral, objective, and highly informative investigative journalistic tone. Focus on gathering factual news, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How). Do not apply any political bias, emotive language, or specific framing during the research phase.\n\nYour task is to gather facts on the user's input. If the user input contains an http/https URL, you MUST prioritize using the \`scrapeUrl\` tool on that specific URL to read its content. If it's just a topic or keywords, use the \`searchWeb\` tool. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`;
 
     const messageContent: any[] = [
       { type: 'text', text: `User Input: ${userInput}` }
@@ -147,7 +147,7 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
 
     const { text: researchResult } = await generateText({
       model: googleAI(process.env.CONTENT_RESEARCHER_MODEL || 'gemini-3.1-pro-preview'),
-      system: SYSTEM_PROMPT + `\n\nYour task is to gather facts on the user's input. If the user input contains an http/https URL, you MUST prioritize using the \`scrapeUrl\` tool on that specific URL to read its content. If it's just a topic or keywords, use the \`searchWeb\` tool. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`,
+      system: researchSystemPrompt,
       messages: [
         {
           role: 'user',
@@ -192,9 +192,11 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
       : '';
     // Phase 2: Content Generation
     console.log(`[Phase 2] Generating content using template schema`);
+    const writerSystemPrompt = baseSystemPrompt + `\n\nEDITORIAL GUIDELINES & FRAMING:\n${editorialGuidelines}\n\n${template.systemPromptAdditions}` + bannedWordsPrompt;
+    
     const { object: contentParams } = await generateObject({
       model: googleAI(process.env.CONTENT_WRITER_MODEL || 'gemini-3.1-pro-preview'),
-      system: SYSTEM_PROMPT + `\n${template.systemPromptAdditions}` + bannedWordsPrompt,
+      system: writerSystemPrompt,
       schema: template.schema,
       prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchResult}`,
     });
@@ -304,7 +306,7 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
         try {
           const { text: boldedText } = await generateText({
             model: googleAI('gemini-3.1-flash-lite-preview'),
-            system: `You are an editor for an Instagram news carousel. Your task is to add bold markdown (using **text**) to the most important or shocking words, phrases, or clauses in the provided text. 
+            system: `You are an editor for an news based social media. Your task is to add bold markdown (using **text**) to the most important or shocking words, phrases, or clauses in the provided text. 
 This helps readers scan the text and prevents it from being monotonous.
 RULES:
 1. Do not change any original words, only add ** around the important parts.
