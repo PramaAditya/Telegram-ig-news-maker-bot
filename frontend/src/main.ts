@@ -3,6 +3,7 @@ import './style.css'
 import '@fancyapps/ui/dist/fancybox/fancybox.css'
 import App from './App.vue'
 import { createRouter, createWebHistory } from 'vue-router'
+import ui from '@nuxt/ui/vue-plugin'
 
 import Dashboard from './views/Dashboard.vue'
 import PostDetail from './views/PostDetail.vue'
@@ -19,4 +20,4 @@ const router = createRouter({
   ]
 })
 
-createApp(App).use(router).mount('#app')
+createApp(App).use(router).use(ui).mount('#app')
