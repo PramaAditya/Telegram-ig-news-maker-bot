@@ -213,9 +213,13 @@ const saveSettings = async () => {
         <Loader2 class="w-8 h-8 text-primary animate-spin" />
       </div>
 
-      <div v-else-if="error" class="bg-red-50 text-error p-4 rounded-md text-sm mb-6">
-        {{ error }}
-      </div>
+      <UAlert 
+        v-else-if="error" 
+        color="error" 
+        variant="soft" 
+        :description="error" 
+        class="mb-6" 
+      />
 
       <div v-else class="space-y-8">
         
@@ -237,12 +241,13 @@ const saveSettings = async () => {
         <!-- Automation & Publishing -->
         <div>
           <h2 class="text-lg font-bold text-default mb-4 border-b border-default pb-2">Posting Slots</h2>
-          <div class="bg-blue-50 border border-primary rounded-md p-4 mb-4 flex items-start">
-            <Info class="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
-            <div class="text-sm text-primary">
-              Your posting slots determine exactly when the worker will publish the next item in the Pending Queue. Add slots below using Natural Language AI!
-            </div>
-          </div>
+          <UAlert
+            :icon="Info"
+            color="neutral"
+            variant="subtle"
+            description="Your posting slots determine exactly when the worker will publish the next item in the Pending Queue. Add slots below using Natural Language AI!"
+            class="mb-4"
+          />
 
           <!-- Slots Grid -->
           <div class="border border-default rounded-lg overflow-hidden bg-default mb-6 flex flex-col md:flex-row">
@@ -296,12 +301,13 @@ const saveSettings = async () => {
         <!-- Content Moderation -->
         <div>
           <h2 class="text-lg font-bold text-default mb-4 border-b border-default pb-2">Content Moderation</h2>
-          <div class="bg-blue-50 border border-primary rounded-md p-4 mb-6 flex items-start">
-            <Info class="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
-            <div class="text-sm text-primary">
-              The AI Writer will be explicitly instructed to avoid these words and use the replacements instead. As a final fallback, the text will be hard-censored just before rendering/publishing. 
-            </div>
-          </div>
+          <UAlert
+            :icon="Info"
+            color="neutral"
+            variant="subtle"
+            description="The AI Writer will be explicitly instructed to avoid these words and use the replacements instead. As a final fallback, the text will be hard-censored just before rendering/publishing."
+            class="mb-6"
+          />
 
           <div class="bg-muted rounded-lg p-4 border border-default mb-6 flex flex-col md:flex-row gap-4 items-end">
             <div class="flex-1 w-full">

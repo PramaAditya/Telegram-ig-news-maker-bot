@@ -124,9 +124,7 @@ const generateContent = async () => {
           <ImageUploader ref="uploaderRef" v-model="mediaUrl" />
         </div>
 
-        <div v-if="error" class="bg-red-50 text-error p-4 rounded-md text-sm">
-          {{ error }}
-        </div>
+        <UAlert v-if="error" color="error" variant="soft" :description="error" />
 
         <button 
           @click="generateContent" 
@@ -149,19 +147,24 @@ const generateContent = async () => {
       </div>
       
       <div class="space-y-4">
-        <div v-for="job in activeJobs" :key="job.id" class="p-4 rounded-md border border-default" :class="{ 'bg-yellow-50 border-warning ': job.status === 'pending', 'bg-blue-50 border-primary ': job.status === 'processing', 'bg-red-50 border-error ': job.status === 'error' }">
-          <div class="flex justify-between items-start">
-            <div class="flex-1">
-              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium uppercase mb-2" :class="{ 'bg-warning text-warning ': job.status === 'pending', 'bg-primary text-primary ': job.status === 'processing', 'bg-error text-error ': job.status === 'error' }">
-                {{ job.status }}
-              </span>
-              <p class="text-sm font-medium text-default line-clamp-2">{{ job.text }}</p>
-              
-              <div v-if="job.status === 'error'" class="mt-2 text-xs text-error font-mono bg-error p-2 rounded">
-                {{ job.errorLog }}
+        <div v-for="job in activeJobs" :key="job.id">
+          <UAlert
+            :title="job.text"
+            :description="job.status === 'error' ? job.errorLog : undefined"
+            :color="job.status === 'pending' ? 'warning' : job.status === 'processing' ? 'primary' : 'error'"
+            variant="soft"
+            :icon="job.status === 'pending' ? 'i-lucide-clock' : job.status === 'processing' ? 'i-lucide-loader-2' : 'i-lucide-alert-circle'"
+            :class="{ 'animate-pulse': job.status === 'processing' }"
+          >
+            <template #title="{ title }">
+              <div class="flex items-center gap-2">
+                <UBadge :color="job.status === 'pending' ? 'warning' : job.status === 'processing' ? 'primary' : 'error'" variant="subtle" size="xs" class="uppercase">
+                  {{ job.status }}
+                </UBadge>
+                <span class="text-sm font-medium line-clamp-1">{{ title }}</span>
               </div>
-            </div>
-          </div>
+            </template>
+          </UAlert>
         </div>
         <p class="text-xs text-muted mt-2 text-center">
           Jobs that successfully finish will move to the Pending Queue on the Home dashboard.

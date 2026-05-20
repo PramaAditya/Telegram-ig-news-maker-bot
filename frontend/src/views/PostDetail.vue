@@ -144,7 +144,7 @@ const regenerateMedia = async () => {
     </div>
 
     <div v-if="loading" class="text-center py-10 text-muted">Loading...</div>
-    <div v-else-if="error" class="bg-red-50 text-error p-4 rounded-md">{{ error }}</div>
+    <UAlert v-else-if="error" color="error" variant="soft" :description="error" class="mb-4" />
     
     <div v-else-if="post" class="space-y-6 max-w-4xl mx-auto">
       
