@@ -322,27 +322,6 @@ RULES:
 
     const renderPayload = template.prepareRenderPayload(templateData, settings, coverImageUrl);
     const renderedUrls = await generateMedia(template.renderEndpoint, renderPayload);
-        return boldedText.trim() || text;
-      } catch (err) {
-        console.warn('Failed to add bolding to text, falling back to original text:', err);
-        return text;
-      }
-    };
-
-    const boldedSlides = await Promise.all(contentParams.slides.map(text => highlightText(text)));
-
-    await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
-
-    const settings = await getSettings();
-
-    const renderedUrls = await generateImageSequence({
-      logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
-      cover_image: coverImageUrl,
-      title: censorText(cleanTitle),
-      slides: boldedSlides.map(text => ({
-        text: censorText(text)
-      }))
-    });
 
     if (!renderedUrls || renderedUrls.length === 0) {
       throw new Error('Gagal merender carousel dari API.');

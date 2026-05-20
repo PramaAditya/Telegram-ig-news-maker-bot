@@ -7,7 +7,7 @@ export interface TemplateConfig {
   systemPromptAdditions: string;
   schema: z.ZodType<any>;
   renderEndpoint: string;
-  prepareRenderPayload: (templateData: any, settings: any) => any;
+  prepareRenderPayload: (templateData: any, settings: any, coverImageUrl?: string) => any;
 }
 
 export const TEMPLATES: Record<string, TemplateConfig> = {
@@ -29,9 +29,9 @@ Your task is to parse the gathered facts into final components for an Instagram 
       image_prompt: z.string(),
     }),
     renderEndpoint: '/render-template-multiple',
-    prepareRenderPayload: (data, settings) => ({
+    prepareRenderPayload: (data, settings, coverImageUrl) => ({
       logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
-      cover_image: data.coverImageUrl,
+      cover_image: coverImageUrl || data.coverImageUrl,
       title: data.title,
       slides: data.slides.map((text: string) => ({ text }))
     })
