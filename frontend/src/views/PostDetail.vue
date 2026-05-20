@@ -5,6 +5,7 @@ import { ArrowLeft, Save, RefreshCw } from 'lucide-vue-next'
 import { getAuthHeaders, setPassword } from '../auth'
 import { Fancybox } from '@fancyapps/ui'
 import ImageUploader from '../components/ImageUploader.vue'
+import AiTextarea from '../components/AiTextarea.vue'
 
 const toast = useToast()
 
@@ -172,11 +173,12 @@ const regenerateMedia = async () => {
         <div v-if="post.templateId === 'image-multiple:interval'">
           <div class="mb-6">
             <label class="block text-sm font-medium text-default mb-2">Title (supports **bold**)</label>
-            <textarea 
+            <AiTextarea 
               v-model="post.templateData.title" 
-              rows="3"
-              class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-base bg-default text-default"
-            ></textarea>
+              :rows="3"
+              guidancePlaceholder="e.g., make it more sensational, fix typo"
+              :aiContext="'This is the title of a sensational news post. It should be scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style targeted at Gen Z Indonesians.' + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+            />
           </div>
 
           <div class="mb-6">
@@ -195,11 +197,12 @@ const regenerateMedia = async () => {
                 Remove Slide
               </button>
             </div>
-            <textarea 
+            <AiTextarea 
               v-model="post.templateData.slides[i]" 
-              rows="4" 
-              class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-base bg-default text-default"
-            ></textarea>
+              :rows="4" 
+              guidancePlaceholder="e.g., summarize this better, fix typo"
+              :aiContext="'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.' + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+            />
           </div>
 
           <button 
@@ -252,11 +255,12 @@ const regenerateMedia = async () => {
       <!-- Final Caption Editor -->
       <div class="bg-default shadow rounded-lg p-6">
         <h2 class="text-lg font-bold mb-4 text-default">Final Caption (Instagram Text)</h2>
-        <textarea 
+        <AiTextarea 
           v-model="post.text" 
-          rows="12" 
-          class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-base bg-default text-default"
-        ></textarea>
+          :rows="12" 
+          guidancePlaceholder="e.g., add relevant hashtags, fix typo"
+          :aiContext="'This is the final caption for an Instagram news post. It should be engaging, informative, and include relevant hashtags at the end.' + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+        />
       </div>
 
     </div>
