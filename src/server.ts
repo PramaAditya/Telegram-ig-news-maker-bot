@@ -340,6 +340,36 @@ app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
   }
 });
 
+// POST /api/queue/reorder - Reorder entire queue
+app.post('/api/queue/reorder', requireDashboardAuth, async (req, res) => {
+  try {
+    const { orderedIds } = req.body; // Array of IDs in the new order
+    if (!Array.isArray(orderedIds)) return res.status(400).json({ error: 'orderedIds array required' });
+
+    // Fetch all pending
+    const pending = await db.select().from(queueTable)
+      .where(eq(queueTable.status, 'pending'))
+      .orderBy(asc(queueTable.sortOrder));
+
+    // Create a set of pending IDs for quick validation
+    const pendingIds = new Set(pending.map(p => p.id));
+    
+    // Assign new sortOrders based on index
+    // Note: To be safe, we can just use 10 * index
+    let sortOrder = 10;
+    for (const id of orderedIds) {
+      if (pendingIds.has(id)) {
+        await db.update(queueTable).set({ sortOrder }).where(eq(queueTable.id, id));
+        sortOrder += 10;
+      }
+    }
+
+    res.json({ message: 'Reordered successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/queue/:id/move - Move item up, down, or to top
 app.post('/api/queue/:id/move', requireDashboardAuth, async (req, res) => {
   try {

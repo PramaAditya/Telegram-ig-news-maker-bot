@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Trash2, Edit, ArrowUp, ArrowDown, Send } from 'lucide-vue-next'
+import { Trash2, Edit, Send, GripVertical } from 'lucide-vue-next'
 import { getAuthHeaders, setPassword } from '../auth'
 import { Fancybox } from '@fancyapps/ui'
+import draggable from 'vuedraggable'
 
 const queue = ref<any[]>([])
 const loading = ref(true)
@@ -14,6 +15,27 @@ const openLightbox = (mediaArray: any[], index: number) => {
     type: m.type === 'video' ? 'video' : 'image'
   }))
   Fancybox.show(items, { startIndex: index })
+}
+
+const syncReorder = async () => {
+  try {
+    const res = await fetch(`/api/queue/reorder`, {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderedIds: queue.value.map(i => i.id) })
+    })
+    if (res.status === 401) {
+      alert('Unauthorized. Please refresh and re-enter password.')
+      return
+    }
+  } catch (err) {
+    alert('Failed to reorder items')
+    fetchQueue() // rollback
+  }
+}
+
+const onDragEnd = async () => {
+  await syncReorder()
 }
 
 const fetchQueue = async () => {
@@ -40,21 +62,27 @@ const fetchQueue = async () => {
 
 onMounted(fetchQueue)
 
-const moveItem = async (id: number, direction: 'up' | 'down' | 'top') => {
-  try {
-    const res = await fetch(`/api/queue/${id}/move`, {
-      method: 'POST',
-      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ direction })
-    })
-    if (res.status === 401) {
-      alert('Unauthorized. Please refresh and re-enter password.')
-      return
-    }
-    fetchQueue()
-  } catch (err) {
-    alert('Failed to move')
+const jumpToPosition = async (currentIndex: number, event: Event) => {
+  const target = event.target as HTMLInputElement
+  const newIndex = parseInt(target.value) - 1 // 1-based to 0-based
+  
+  if (isNaN(newIndex) || newIndex < 0 || newIndex >= queue.value.length || newIndex === currentIndex) {
+    // Reset to current index if invalid
+    target.value = (currentIndex + 1).toString()
+    return
   }
+
+  // Perform local array reorder
+  const newQueue = [...queue.value]
+  const [movedItem] = newQueue.splice(currentIndex, 1)
+  newQueue.splice(newIndex, 0, movedItem)
+  queue.value = newQueue
+
+  // Update target value to reflect the new state
+  target.value = (newIndex + 1).toString()
+
+  // Sync with server
+  await syncReorder()
 }
 
 const deleteItem = async (id: number) => {
@@ -105,53 +133,74 @@ const publishNow = async (id: number) => {
     </div>
     
     <div v-else class="bg-white dark:bg-gray-900 shadow rounded-lg overflow-hidden">
-      <ul class="divide-y divide-gray-200 dark:divide-gray-800">
-        <li v-for="(item, index) in queue" :key="item.id" class="p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-          <div class="flex items-start space-x-4">
-            <div class="flex-shrink-0 flex flex-col space-y-1 mt-1">
-              <button @click="moveItem(item.id, 'up')" :disabled="index === 0" class="text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 disabled:hover:text-gray-400 dark:disabled:hover:text-gray-500">
-                <ArrowUp class="w-5 h-5" />
-              </button>
-              <button @click="moveItem(item.id, 'down')" :disabled="index === queue.length - 1" class="text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 disabled:hover:text-gray-400 dark:disabled:hover:text-gray-500">
-                <ArrowDown class="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{{ item.text }}</p>
-              <div class="mt-2 flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
-                  {{ item.media.length }} media item(s)
-                </span>
-                <span>•</span>
-                <span>Added {{ new Date(item.createdAt).toLocaleString() }}</span>
+      <draggable 
+        v-model="queue" 
+        tag="ul"
+        class="divide-y divide-gray-200 dark:divide-gray-800"
+        handle=".drag-handle"
+        ghost-class="opacity-50"
+        @end="onDragEnd"
+        item-key="id"
+      >
+        <template #item="{ element: item, index }">
+          <li class="p-4 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <div class="flex items-start space-x-4">
+              
+              <div class="flex-shrink-0 flex flex-col items-center justify-center space-y-2 mt-1">
+                <button class="drag-handle cursor-move text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+                  <GripVertical class="w-6 h-6" />
+                </button>
+                
+                <div class="flex items-center text-xs text-gray-500 dark:text-gray-400 font-medium">
+                  <span class="mr-1">#</span>
+                  <input 
+                    type="number" 
+                    :value="index + 1"
+                    min="1"
+                    :max="queue.length"
+                    @change="(e) => jumpToPosition(index, e)"
+                    class="w-12 px-1 py-1 text-center border border-gray-300 dark:border-gray-700 rounded bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    title="Jump to position"
+                  />
+                </div>
               </div>
               
-              <div class="mt-3 flex space-x-2" v-if="item.media.length > 0">
-                <div v-for="(m, i) in item.media.slice(0, 3)" :key="i" @click="openLightbox(item.media, Number(i))" class="cursor-pointer hover:opacity-80 transition w-16 h-16 rounded overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                  <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
-                  <div v-else class="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-xs">Video</div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{{ item.text }}</p>
+                <div class="mt-2 flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
+                    {{ item.media.length }} media item(s)
+                  </span>
+                  <span>•</span>
+                  <span>Added {{ new Date(item.createdAt).toLocaleString() }}</span>
                 </div>
-                <div v-if="item.media.length > 3" @click="openLightbox(item.media, 3)" class="cursor-pointer hover:opacity-80 transition w-16 h-16 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-sm font-medium text-gray-500 dark:text-gray-400">
-                  +{{ item.media.length - 3 }}
+                
+                <div class="mt-3 flex space-x-2" v-if="item.media.length > 0">
+                  <div v-for="(m, i) in item.media.slice(0, 3)" :key="i" @click="openLightbox(item.media, Number(i))" class="cursor-pointer hover:opacity-80 transition w-16 h-16 rounded overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                    <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
+                    <div v-else class="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-xs">Video</div>
+                  </div>
+                  <div v-if="item.media.length > 3" @click="openLightbox(item.media, 3)" class="cursor-pointer hover:opacity-80 transition w-16 h-16 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-sm font-medium text-gray-500 dark:text-gray-400">
+                    +{{ item.media.length - 3 }}
+                  </div>
                 </div>
               </div>
+              
+              <div class="flex-shrink-0 flex space-x-2">
+                <router-link :to="'/post/' + item.id" class="p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Edit details">
+                  <Edit class="w-5 h-5" />
+                </router-link>
+                <button @click="publishNow(item.id)" class="p-2 text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 rounded-md hover:bg-green-50 dark:hover:bg-green-900/20" title="Publish immediately">
+                  <Send class="w-5 h-5" />
+                </button>
+                <button @click="deleteItem(item.id)" class="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20" title="Delete post">
+                  <Trash2 class="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            
-            <div class="flex-shrink-0 flex space-x-2">
-              <router-link :to="'/post/' + item.id" class="p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Edit details">
-                <Edit class="w-5 h-5" />
-              </router-link>
-              <button @click="publishNow(item.id)" class="p-2 text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 rounded-md hover:bg-green-50 dark:hover:bg-green-900/20" title="Publish immediately">
-                <Send class="w-5 h-5" />
-              </button>
-              <button @click="deleteItem(item.id)" class="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20" title="Delete post">
-                <Trash2 class="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </li>
-      </ul>
+          </li>
+        </template>
+      </draggable>
     </div>
   </div>
 </template>
