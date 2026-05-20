@@ -1,0 +1,22 @@
+[
+  { "word": "israel", "replacement": "1srαǝl", "type": "partial" },
+  { "word": "hamas", "replacement": "Hαmαs", "type": "partial" },
+  { "word": "zionis", "replacement": "Zıønıs", "type": "partial" },
+  { "word": "hizbullah", "replacement": "Hızbullαh", "type": "partial" },
+  { "word": "hezbollah", "replacement": "Hǝzbøllαh", "type": "partial" },
+  { "word": "houthi", "replacement": "Høuthı", "type": "partial" },
+  { "word": "genosida", "replacement": "Gǝnøsıdα", "type": "partial" },
+  { "word": "bunuh", "replacement": "bvnvh", "type": "partial" },
+  { "word": "bantai", "replacement": "bαntα1", "type": "partial" },
+  { "word": "teroris", "replacement": "tǝrørıs", "type": "partial" },
+  { "word": "bom", "replacement": "bøm", "type": "partial" },
+  { "word": "syahid", "replacement": "syαhıd", "type": "partial" },
+  { "word": "gaza", "replacement": "Gαzα", "type": "partial" },
+  { "word": "palestina", "replacement": "Pαlǝstınα", "type": "partial" },
+  { "word": "penjajah", "replacement": "pǝnjαjαh", "type": "partial" },
+  { "word": "perang", "replacement": "pǝrαng", "type": "partial" },
+  { "word": "mati", "replacement": "mαtı", "type": "partial" },
+  { "word": "meledak", "replacement": "mǝlǝdαk", "type": "partial" },
+  { "word": "hancur", "replacement": "hαncvr", "type": "partial" },
+  { "word": "tewas", "replacement": "tǝwαs", "type": "partial" }
+]

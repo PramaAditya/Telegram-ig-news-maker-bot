@@ -1,28 +1,12 @@
-export const dictionary: Record<string, string> = {
-  "israel": "1srαǝl",
-  "hamas": "Hαmαs",
-  "zionis": "Zıønıs",
-  "hizbullah": "Hızbullαh",
-  "hezbollah": "Hǝzbøllαh",
-  "houthi": "Høuthı",
-  "genosida": "Gǝnøsıdα",
-  "bunuh": "bvnvh",
-  "bantai": "bαntα1",
-  "teroris": "tǝrørıs",
-  "bom": "bøm",
-  "syahid": "syαhıd",
-  "gaza": "Gαzα",
-  "palestina": "Pαlǝstınα",
-  "penjajah": "pǝnjαjαh",
-  "perang": "pǝrαng",
-  "mati": "mαtı",
-  "meledak": "mǝlǝdαk",
-  "hancur": "hαncvr",
-  "tewas": "tǝwαs"
-};
+export interface BannedWord {
+  word: string;
+  replacement: string;
+  type: 'exact' | 'partial';
+}
 
-export function censorText(text: string): string {
+export function censorText(text: string, bannedWords: BannedWord[]): string {
   if (typeof text !== 'string') return text;
+  if (!bannedWords || bannedWords.length === 0) return text;
 
   // Step A: Extract and Protect URLs
   const urlRegex = /(https?:\/\/[^\s"'<>]+)/g;
@@ -37,8 +21,12 @@ export function censorText(text: string): string {
   let result = protectedText.replace(/\\n/g, '\n').replace(/\/n/g, '\n');
 
   // Step C: Apply Censor Dictionary with accurate case matching
-  for (const [word, replacement] of Object.entries(dictionary)) {
-    const regex = new RegExp(word, 'gi');
+  for (const { word, replacement, type } of bannedWords) {
+    if (!word || !replacement) continue;
+    
+    // Build regex based on match type
+    const pattern = type === 'exact' ? `\\b${word}\\b` : word;
+    const regex = new RegExp(pattern, 'gi');
     
     result = result.replace(regex, (match) => {
       const firstCharMatched = match.charAt(0);

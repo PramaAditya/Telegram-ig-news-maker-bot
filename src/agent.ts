@@ -183,11 +183,17 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     console.log(`[Phase 1] Research Complete. Text length: ${researchResult.length}`);
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✍️ Menyusun konten...'));
 
+    const settings = await getSettings();
+    const bannedWords = settings.bannedWords || [];
+
+    const bannedWordsPrompt = bannedWords.length > 0 
+      ? `\n\nCRITICAL MODERATION RULE:\nYou MUST NOT use the following words in your output: ${bannedWords.map((w: any) => w.word).join(', ')}. Use safe synonyms instead, or if you absolutely must convey the exact concept, use the provided safe replacements: ${bannedWords.map((w: any) => `${w.word}->${w.replacement}`).join(', ')}.`
+      : '';
     // Phase 2: Content Generation
     console.log(`[Phase 2] Generating content using template schema`);
     const { object: contentParams } = await generateObject({
       model: googleAI(process.env.CONTENT_WRITER_MODEL || 'gemini-3.1-pro-preview'),
-      system: SYSTEM_PROMPT + `\n${template.systemPromptAdditions}`,
+      system: SYSTEM_PROMPT + `\n${template.systemPromptAdditions}` + bannedWordsPrompt,
       schema: template.schema,
       prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchResult}`,
     });
@@ -200,7 +206,7 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
       finalCaption = `${currentDate}.`; // Generic fallback
     }
     
-    finalCaption = censorText(finalCaption);
+    finalCaption = censorText(finalCaption, bannedWords);
 
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...'));
 
@@ -282,7 +288,7 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     let cleanTitle = contentParams.title || '';
     if (cleanTitle) {
       const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}]/gu;
-      cleanTitle = censorText(cleanTitle.replace(emojiRegex, ''));
+      cleanTitle = censorText(cleanTitle.replace(emojiRegex, ''), bannedWords);
     }
 
     let templateData = { ...contentParams };
@@ -313,12 +319,10 @@ RULES:
       };
 
       templateData.slides = await Promise.all(contentParams.slides.map((text: string) => highlightText(text)));
-      templateData.slides = templateData.slides.map((text: string) => censorText(text));
+      templateData.slides = templateData.slides.map((text: string) => censorText(text, bannedWords));
     }
 
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
-
-    const settings = await getSettings();
 
     const renderPayload = template.prepareRenderPayload(templateData, settings, coverImageUrl);
     const renderedUrls = await generateMedia(template.renderEndpoint, renderPayload);

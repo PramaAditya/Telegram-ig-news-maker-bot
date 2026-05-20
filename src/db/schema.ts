@@ -34,6 +34,7 @@ export const settingsTable = pgTable('settings', {
   bufferInstagramChannelId: text('buffer_instagram_channel_id'),
   telegramBotToken: text('telegram_bot_token'),
   postingSlots: jsonb('posting_slots').$type<{ day: string, time: string }[]>().default([]).notNull(),
+  bannedWords: jsonb('banned_words').$type<{ word: string, replacement: string, type: 'exact' | 'partial' }[]>().default([]).notNull(),
   cronIntervalMinutes: integer('cron_interval_minutes').default(30).notNull(),
   cronStartHour: integer('cron_start_hour').default(6).notNull(),
   cronEndHour: integer('cron_end_hour').default(23).notNull(),

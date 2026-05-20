@@ -11,7 +11,8 @@ const settings = ref<any>({
   bufferApiKey: '',
   bufferInstagramChannelId: '',
   telegramBotToken: '',
-  postingSlots: []
+  postingSlots: [],
+  bannedWords: []
 })
 
 const loading = ref(true)
@@ -20,6 +21,34 @@ const error = ref('')
 
 const aiPrompt = ref('')
 const aiGenerating = ref(false)
+
+const newBannedWord = ref({ word: '', replacement: '', type: 'partial' as 'exact' | 'partial' })
+
+const addBannedWord = () => {
+  if (!newBannedWord.value.word.trim()) return
+  
+  if (!settings.value.bannedWords) {
+    settings.value.bannedWords = []
+  }
+  
+  // Prevent exact duplicates of the 'word' itself
+  if (settings.value.bannedWords.some((w: any) => w.word.toLowerCase() === newBannedWord.value.word.toLowerCase().trim())) {
+    return alert('This word is already in the banned list.')
+  }
+
+  settings.value.bannedWords.push({
+    word: newBannedWord.value.word.trim(),
+    replacement: newBannedWord.value.replacement.trim() || '***',
+    type: newBannedWord.value.type
+  })
+
+  // Reset form
+  newBannedWord.value = { word: '', replacement: '', type: 'partial' }
+}
+
+const removeBannedWord = (index: number) => {
+  settings.value.bannedWords.splice(index, 1)
+}
 
 const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -226,6 +255,80 @@ const saveSettings = async () => {
                 Clear All
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Content Moderation -->
+        <div>
+          <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-800 pb-2">Content Moderation</h2>
+          <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 rounded-md p-4 mb-6 flex items-start">
+            <Info class="w-5 h-5 text-blue-500 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" />
+            <div class="text-sm text-blue-800 dark:text-blue-300">
+              The AI Writer will be explicitly instructed to avoid these words and use the replacements instead. As a final fallback, the text will be hard-censored just before rendering/publishing. 
+            </div>
+          </div>
+
+          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700 mb-6 flex flex-col md:flex-row gap-4 items-end">
+            <div class="flex-1 w-full">
+              <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Banned Word</label>
+              <input 
+                v-model="newBannedWord.word" 
+                type="text" 
+                placeholder="e.g. bunuh"
+                @keyup.enter="addBannedWord"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+              />
+            </div>
+            <div class="flex-1 w-full">
+              <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Replacement</label>
+              <input 
+                v-model="newBannedWord.replacement" 
+                type="text" 
+                placeholder="e.g. b*nuh"
+                @keyup.enter="addBannedWord"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+              />
+            </div>
+            <div class="w-full md:w-auto">
+              <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Match Type</label>
+              <select 
+                v-model="newBannedWord.type"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+              >
+                <option value="partial">Partial (Matches inside words)</option>
+                <option value="exact">Exact (Whole word only)</option>
+              </select>
+            </div>
+            <div class="w-full md:w-auto">
+              <button 
+                @click="addBannedWord" 
+                class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none"
+              >
+                Add Rule
+              </button>
+            </div>
+          </div>
+
+          <!-- Dictionary List -->
+          <div v-if="settings.bannedWords && settings.bannedWords.length > 0" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+            <ul class="divide-y divide-gray-200 dark:divide-gray-700 max-h-96 overflow-y-auto">
+              <li v-for="(item, index) in settings.bannedWords" :key="index" class="p-3 sm:px-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <div class="flex items-center gap-2 sm:gap-4 overflow-hidden">
+                  <span class="font-medium text-red-600 dark:text-red-400 truncate">{{ item.word }}</span>
+                  <span class="text-gray-400 dark:text-gray-500 text-xs">→</span>
+                  <span class="font-mono text-sm text-green-600 dark:text-green-400 truncate">{{ item.replacement }}</span>
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hidden sm:inline-block">
+                    {{ item.type }}
+                  </span>
+                </div>
+                <button @click="removeBannedWord(Number(index))" class="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 flex-shrink-0 ml-4">
+                  <X class="w-5 h-5" />
+                </button>
+              </li>
+            </ul>
+          </div>
+          <div v-else class="text-center py-6 border border-dashed border-gray-300 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400 text-sm">
+            No moderation rules configured.
           </div>
         </div>
 

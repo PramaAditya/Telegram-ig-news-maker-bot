@@ -239,6 +239,7 @@ app.put('/api/settings', requireDashboardAuth, async (req, res) => {
     if (cronStartHour !== undefined) updateData.cronStartHour = parseInt(cronStartHour, 10);
     if (cronEndHour !== undefined) updateData.cronEndHour = parseInt(cronEndHour, 10);
     if (req.body.postingSlots !== undefined) updateData.postingSlots = req.body.postingSlots;
+    if (req.body.bannedWords !== undefined) updateData.bannedWords = req.body.bannedWords;
 
     // Make sure the row exists first
     await getSettings();
