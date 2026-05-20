@@ -64,21 +64,21 @@ const saveSettings = async () => {
 
 <template>
   <div class="max-w-3xl mx-auto space-y-6">
-    <div class="bg-white shadow rounded-lg p-6">
-      <h1 class="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-        <Settings2 class="w-6 h-6 mr-3 text-blue-600" />
+    <div class="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center">
+        <Settings2 class="w-6 h-6 mr-3 text-blue-600 dark:text-blue-400" />
         Global Settings
       </h1>
       
-      <p class="text-sm text-gray-500 mb-6">
-        Settings defined here will override the <code class="bg-gray-100 px-1 rounded">.env</code> configurations.
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+        Settings defined here will override the <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded text-gray-800 dark:text-gray-200">.env</code> configurations.
       </p>
 
       <div v-if="loading" class="flex justify-center py-10">
         <Loader2 class="w-8 h-8 text-blue-500 animate-spin" />
       </div>
 
-      <div v-else-if="error" class="bg-red-50 text-red-600 p-4 rounded-md text-sm mb-6">
+      <div v-else-if="error" class="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-4 rounded-md text-sm mb-6">
         {{ error }}
       </div>
 
@@ -86,14 +86,14 @@ const saveSettings = async () => {
         
         <!-- Media Assets -->
         <div>
-          <h2 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Media Assets</h2>
+          <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-800 pb-2">Media Assets</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Watermark Logo URL</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Watermark Logo URL</label>
               <ImageUploader v-model="settings.logoImageUrl" />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">CTA Slide URL (Final Slide)</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">CTA Slide URL (Final Slide)</label>
               <ImageUploader v-model="settings.ctaImageUrl" />
             </div>
           </div>
@@ -101,37 +101,37 @@ const saveSettings = async () => {
 
         <!-- Automation & Publishing -->
         <div>
-          <h2 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Automation Limits</h2>
-          <div class="bg-blue-50 border border-blue-100 rounded-md p-4 mb-4 flex items-start">
-            <Info class="w-5 h-5 text-blue-500 mr-3 flex-shrink-0 mt-0.5" />
-            <div class="text-sm text-blue-800">
+          <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-800 pb-2">Automation Limits</h2>
+          <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 rounded-md p-4 mb-4 flex items-start">
+            <Info class="w-5 h-5 text-blue-500 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" />
+            <div class="text-sm text-blue-800 dark:text-blue-300">
               The worker checks the queue every minute. It will auto-publish the top pending queue item if the current time in Jakarta is between your Start and End hours, AND the configured Interval has passed since the last publish.
             </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Interval (Minutes)</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Interval (Minutes)</label>
               <input 
                 v-model.number="settings.cronIntervalMinutes" 
                 type="number" min="1"
-                class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Start Hour (0-23)</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Start Hour (0-23)</label>
               <input 
                 v-model.number="settings.cronStartHour" 
                 type="number" min="0" max="23"
-                class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">End Hour (0-23)</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">End Hour (0-23)</label>
               <input 
                 v-model.number="settings.cronEndHour" 
                 type="number" min="0" max="23"
-                class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+                class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               />
             </div>
           </div>
@@ -139,22 +139,22 @@ const saveSettings = async () => {
 
         <!-- API Keys -->
         <div>
-          <h2 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">API Keys & Tokens</h2>
+          <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-800 pb-2">API Keys & Tokens</h2>
           
           <div class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Telegram Bot Token</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Telegram Bot Token</label>
               <PasswordInput v-model="settings.telegramBotToken" placeholder="123456789:ABCDefgh..." />
-              <p class="text-xs text-gray-500 mt-1">Changes to this require a full container restart to reconnect Telegraf.</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Changes to this require a full container restart to reconnect Telegraf.</p>
             </div>
             
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Buffer API Key (Bearer)</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Buffer API Key (Bearer)</label>
               <PasswordInput v-model="settings.bufferApiKey" placeholder="1/abcdef..." />
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Buffer Instagram Channel ID</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Buffer Instagram Channel ID</label>
               <PasswordInput v-model="settings.bufferInstagramChannelId" placeholder="60abc123..." />
             </div>
           </div>

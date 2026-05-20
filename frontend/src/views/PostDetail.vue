@@ -140,29 +140,29 @@ const regenerateMedia = async () => {
     <div v-else-if="post" class="space-y-6 max-w-4xl mx-auto">
       
       <!-- Media Data Editor -->
-      <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-bold mb-4 text-gray-800">Media Data (Render Engine)</h2>
+      <div class="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-200">Media Data (Render Engine)</h2>
         
         <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Title (supports **bold**)</label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Title (supports **bold**)</label>
           <textarea 
             v-model="post.title" 
             rows="3"
-            class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+            class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           ></textarea>
         </div>
 
         <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Cover Image</label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cover Image</label>
           <ImageUploader v-model="post.coverImageUrl" />
         </div>
 
-        <div v-for="(_, i) in post.slides" :key="i" class="mb-6 relative bg-gray-50 p-4 border border-gray-200 rounded-md">
+        <div v-for="(_, i) in post.slides" :key="i" class="mb-6 relative bg-gray-50 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
           <div class="flex justify-between items-center mb-2">
-            <label class="block text-sm font-medium text-gray-700">Slide {{ Number(i) + 1 }} Text (supports **bold**)</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Slide {{ Number(i) + 1 }} Text (supports **bold**)</label>
             <button 
               @click="removeSlide(Number(i))" 
-              class="text-red-500 hover:text-red-700 text-xs font-medium"
+              class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-xs font-medium"
               v-if="post.slides.length > 1"
             >
               Remove Slide
@@ -171,13 +171,13 @@ const regenerateMedia = async () => {
           <textarea 
             v-model="post.slides[i]" 
             rows="4" 
-            class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+            class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
           ></textarea>
         </div>
 
         <button 
           @click="addSlide" 
-          class="w-full mb-6 flex justify-center items-center px-4 py-2 border border-dashed border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-600 bg-white hover:bg-gray-50 focus:outline-none"
+          class="w-full mb-6 flex justify-center items-center px-4 py-2 border border-dashed border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none"
         >
           + Add Slide
         </button>
@@ -185,7 +185,7 @@ const regenerateMedia = async () => {
         <button 
           @click="regenerateMedia" 
           :disabled="generating"
-          class="w-full mt-4 inline-flex justify-center items-center px-4 py-3 border border-gray-300 shadow-sm text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+          class="w-full mt-4 inline-flex justify-center items-center px-4 py-3 border border-gray-300 dark:border-gray-600 shadow-sm text-base font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
         >
           <RefreshCw class="w-5 h-5 mr-2" :class="{ 'animate-spin': generating }" />
           {{ generating ? 'Generating Images from API...' : 'Regenerate Media Grid' }}
@@ -193,14 +193,14 @@ const regenerateMedia = async () => {
       </div>
 
       <!-- Media Preview -->
-      <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-bold mb-4 text-gray-800">Media Grid Preview</h2>
-        <p class="text-sm text-gray-500 mb-6">This is the exact sequence that will be published. Note: The CTA Image is dynamically injected at publish time and is not shown here.</p>
+      <div class="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-200">Media Grid Preview</h2>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">This is the exact sequence that will be published. Note: The CTA Image is dynamically injected at publish time and is not shown here.</p>
         
         <div class="grid grid-cols-3 gap-4">
-          <div v-for="(m, i) in post.media" :key="i" @click="openLightbox(post.media, Number(i))" class="relative aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer hover:opacity-80 transition">
+          <div v-for="(m, i) in post.media" :key="i" @click="openLightbox(post.media, Number(i))" class="relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-80 transition">
             <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
-            <div v-else class="w-full h-full flex flex-col items-center justify-center text-gray-400 p-4 text-center">
+            <div v-else class="w-full h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 p-4 text-center">
               <span class="font-medium">Video</span>
               <span class="text-xs truncate w-full mt-1">{{ m.url }}</span>
             </div>
@@ -212,12 +212,12 @@ const regenerateMedia = async () => {
       </div>
 
       <!-- Final Caption Editor -->
-      <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-bold mb-4 text-gray-800">Final Caption (Instagram Text)</h2>
+      <div class="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-200">Final Caption (Instagram Text)</h2>
         <textarea 
           v-model="post.text" 
           rows="12" 
-          class="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base"
+          class="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
         ></textarea>
       </div>
 

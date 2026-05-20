@@ -65,7 +65,7 @@ const clearImage = () => {
 </script>
 
 <template>
-  <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center relative overflow-hidden transition hover:border-gray-400 bg-gray-50">
+  <div class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-4 text-center relative overflow-hidden transition hover:border-gray-400 dark:hover:border-gray-600 bg-gray-50 dark:bg-gray-800">
     <input 
       type="file" 
       ref="fileInput" 
@@ -75,8 +75,8 @@ const clearImage = () => {
     />
     
     <div v-if="uploading" class="flex flex-col items-center justify-center space-y-2 py-4">
-      <Loader2 class="w-8 h-8 text-blue-500 animate-spin" />
-      <span class="text-sm text-gray-500">Uploading to S3...</span>
+      <Loader2 class="w-8 h-8 text-blue-500 dark:text-blue-400 animate-spin" />
+      <span class="text-sm text-gray-500 dark:text-gray-400">Uploading to S3...</span>
     </div>
 
     <div v-else-if="modelValue" class="relative group">
@@ -89,12 +89,12 @@ const clearImage = () => {
     </div>
 
     <div v-else class="py-6 cursor-pointer" @click="triggerUpload">
-      <UploadCloud class="w-10 h-10 text-gray-400 mx-auto mb-2" />
-      <p class="text-sm text-gray-600">Click to upload an image</p>
-      <p class="text-xs text-gray-400 mt-1">JPG, PNG up to 10MB</p>
+      <UploadCloud class="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
+      <p class="text-sm text-gray-600 dark:text-gray-400">Click to upload an image</p>
+      <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">JPG, PNG up to 10MB</p>
     </div>
 
-    <div v-if="error" class="mt-2 text-sm text-red-600">
+    <div v-if="error" class="mt-2 text-sm text-red-600 dark:text-red-400">
       {{ error }}
     </div>
   </div>
