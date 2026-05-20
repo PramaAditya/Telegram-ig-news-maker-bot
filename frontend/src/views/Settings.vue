@@ -314,7 +314,7 @@ const saveSettings = async () => {
             :icon="Info"
             color="neutral"
             variant="subtle"
-            description="Provide explicit instructions to the AI on how to frame the news, tone of voice, perspective, and general editorial stance. This overwrites the default `.env` fallback."
+            description="Provide explicit instructions to the Content Writer AI on how to frame the news, tone of voice, perspective, and general editorial stance (e.g., highlighting specific geopolitical perspectives). Note: The Research AI will always remain strictly neutral and objective to gather unbiased facts first. This overwrites the default `.env` fallback."
             class="mb-4"
           />
           <AiTextarea 
@@ -322,6 +322,7 @@ const saveSettings = async () => {
             :rows="6" 
             placeholder="e.g. Your reporting should maintain a professional and highly informative journalistic tone. Focus on delivering factual news while highlighting perspectives from the Global South..."
             guidancePlaceholder="e.g., make it more aggressive and punchy"
+            aiContext="This text represents the global editorial guidelines and framing instructions for a news AI agent. It dictates how the AI should write its content, including its tone, perspective, and biases."
           />
         </div>
 

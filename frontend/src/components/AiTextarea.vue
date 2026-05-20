@@ -9,6 +9,7 @@ const props = defineProps<{
   rows?: number
   guidancePlaceholder?: string
   guidanceDescription?: string
+  aiContext?: string
 }>()
 
 const emit = defineEmits(['update:modelValue'])
@@ -38,7 +39,8 @@ const refine = async () => {
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text: textToRefine,
-        instruction: instruction.value
+        instruction: instruction.value,
+        context: props.aiContext
       })
     })
     if (!res.ok) throw new Error('Failed to refine')
