@@ -24,6 +24,8 @@ const aiGenerating = ref(false)
 
 const newBannedWord = ref({ word: '', replacement: '', type: 'partial' as 'exact' | 'partial' })
 
+const editingWordIndex = ref<number | null>(null)
+
 const addBannedWord = () => {
   if (!newBannedWord.value.word.trim()) return
   
@@ -31,23 +33,56 @@ const addBannedWord = () => {
     settings.value.bannedWords = []
   }
   
-  // Prevent exact duplicates of the 'word' itself
-  if (settings.value.bannedWords.some((w: any) => w.word.toLowerCase() === newBannedWord.value.word.toLowerCase().trim())) {
-    return alert('This word is already in the banned list.')
-  }
+  // If editing an existing word
+  if (editingWordIndex.value !== null) {
+    // Check if new word already exists elsewhere in the list
+    if (settings.value.bannedWords.some((w: any, idx: number) => 
+        idx !== editingWordIndex.value && 
+        w.word.toLowerCase() === newBannedWord.value.word.toLowerCase().trim())) {
+      return alert('This word is already in the banned list.')
+    }
+    
+    settings.value.bannedWords[editingWordIndex.value] = {
+      word: newBannedWord.value.word.trim(),
+      replacement: newBannedWord.value.replacement.trim() || '***',
+      type: newBannedWord.value.type
+    }
+    editingWordIndex.value = null
+  } else {
+    // Adding a new word
+    if (settings.value.bannedWords.some((w: any) => w.word.toLowerCase() === newBannedWord.value.word.toLowerCase().trim())) {
+      return alert('This word is already in the banned list.')
+    }
 
-  settings.value.bannedWords.push({
-    word: newBannedWord.value.word.trim(),
-    replacement: newBannedWord.value.replacement.trim() || '***',
-    type: newBannedWord.value.type
-  })
+    settings.value.bannedWords.push({
+      word: newBannedWord.value.word.trim(),
+      replacement: newBannedWord.value.replacement.trim() || '***',
+      type: newBannedWord.value.type
+    })
+  }
 
   // Reset form
   newBannedWord.value = { word: '', replacement: '', type: 'partial' }
 }
 
+const editBannedWord = (index: number) => {
+  const item = settings.value.bannedWords[index]
+  newBannedWord.value = { ...item }
+  editingWordIndex.value = index
+}
+
+const cancelEditBannedWord = () => {
+  editingWordIndex.value = null
+  newBannedWord.value = { word: '', replacement: '', type: 'partial' }
+}
+
 const removeBannedWord = (index: number) => {
   settings.value.bannedWords.splice(index, 1)
+  if (editingWordIndex.value === index) {
+    cancelEditBannedWord()
+  } else if (editingWordIndex.value !== null && editingWordIndex.value > index) {
+    editingWordIndex.value--
+  }
 }
 
 const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -299,12 +334,19 @@ const saveSettings = async () => {
                 <option value="exact">Exact (Whole word only)</option>
               </select>
             </div>
-            <div class="w-full md:w-auto">
+            <div class="w-full md:w-auto flex gap-2">
               <button 
                 @click="addBannedWord" 
-                class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-inverted bg-primary hover:bg-primary focus:outline-none"
+                class="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-inverted bg-primary hover:bg-primary focus:outline-none"
               >
-                Add Rule
+                {{ editingWordIndex !== null ? 'Save Edit' : 'Add Rule' }}
+              </button>
+              <button 
+                v-if="editingWordIndex !== null"
+                @click="cancelEditBannedWord" 
+                class="flex-1 inline-flex items-center justify-center px-4 py-2 border border-default shadow-sm text-sm font-medium rounded-md text-default bg-default hover:bg-muted focus:outline-none"
+              >
+                Cancel
               </button>
             </div>
           </div>
@@ -312,8 +354,8 @@ const saveSettings = async () => {
           <!-- Dictionary List -->
           <div v-if="settings.bannedWords && settings.bannedWords.length > 0" class="border border-default rounded-lg overflow-hidden bg-default">
             <ul class="divide-y divide-default max-h-96 overflow-y-auto">
-              <li v-for="(item, index) in settings.bannedWords" :key="index" class="p-3 sm:px-4 flex items-center justify-between hover:bg-muted">
-                <div class="flex items-center gap-2 sm:gap-4 overflow-hidden">
+              <li v-for="(item, index) in settings.bannedWords" :key="index" class="p-3 sm:px-4 flex items-center justify-between hover:bg-muted" :class="{'bg-muted': editingWordIndex === index}">
+                <div class="flex items-center gap-2 sm:gap-4 overflow-hidden cursor-pointer" @click="editBannedWord(Number(index))">
                   <span class="font-medium text-error truncate">{{ item.word }}</span>
                   <span class="text-muted text-xs">→</span>
                   <span class="font-mono text-sm text-success truncate">{{ item.replacement }}</span>
