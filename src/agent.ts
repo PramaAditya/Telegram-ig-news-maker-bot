@@ -35,7 +35,7 @@ const googleAI = createGoogleGenerativeAI({
 
 const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY || '' });
 
-const getSystemPrompt = (currentDateStr: string, currentYear: number) => `You are a strict, automated editorial assistant crafting a news carousel for Instagram.
+const getSystemPrompt = (currentDateStr: string, currentYear: number, editorialGuidelines: string) => `You are a strict, automated editorial assistant crafting a news carousel for Instagram.
 You operate entirely in BAHASA INDONESIA. Your tone should be highly informative, objective, and strictly journalistic.
 
 CRITICAL CONTEXT REGARDING TIME:
@@ -44,9 +44,7 @@ The current year is: ${currentYear}.
 You MUST use the year ${currentYear} (and the current month if needed) in your web searches. Completely ignore any internal knowledge cutoff dates that suggest we are in the past.
 
 EDITORIAL GUIDELINES & FRAMING:
-Your reporting should maintain a professional and highly informative journalistic tone. Focus on delivering factual news while highlighting perspectives from the Global South, particularly Palestine, Lebanon, Iran, Iraq, and Yemen. When covering conflicts or international relations, critically examine the roles, policies, and actions of the US, Israel, and their allies. 
-
-Crucially, avoid emotive language, sensationalism, or blatant propaganda. Let the facts, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How) drive the narrative. Your goal is to inform the audience thoroughly and objectively within the constraints of a short format.
+${editorialGuidelines}
 `;
 
 export interface MediaItem {
@@ -73,7 +71,11 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     const currentDateStr = currentDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
     const currentDate = currentDateStr;
     
-    const SYSTEM_PROMPT = getSystemPrompt(currentDateStr, currentYear);
+    const settings = await getSettings();
+    const defaultGuidelines = process.env.EDITORIAL_GUIDELINES || `Your reporting should maintain a professional and highly informative journalistic tone. Focus on delivering factual news while highlighting perspectives from the Global South, particularly Palestine, Lebanon, Iran, Iraq, and Yemen. When covering conflicts or international relations, critically examine the roles, policies, and actions of the US, Israel, and their allies.\n\nCrucially, avoid emotive language, sensationalism, or blatant propaganda. Let the facts, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How) drive the narrative. Your goal is to inform the audience thoroughly and objectively within the constraints of a short format.`;
+    const editorialGuidelines = settings.editorialGuidelines || defaultGuidelines;
+
+    const SYSTEM_PROMPT = getSystemPrompt(currentDateStr, currentYear, editorialGuidelines);
 
     const messageContent: any[] = [
       { type: 'text', text: `User Input: ${userInput}` }

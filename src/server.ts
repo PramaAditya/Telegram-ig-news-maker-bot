@@ -266,6 +266,7 @@ app.put('/api/settings', requireDashboardAuth, async (req, res) => {
       bufferApiKey, 
       bufferInstagramChannelId, 
       telegramBotToken, 
+      editorialGuidelines,
       cronIntervalMinutes, 
       cronStartHour, 
       cronEndHour 
@@ -277,6 +278,7 @@ app.put('/api/settings', requireDashboardAuth, async (req, res) => {
     if (bufferApiKey !== undefined) updateData.bufferApiKey = bufferApiKey;
     if (bufferInstagramChannelId !== undefined) updateData.bufferInstagramChannelId = bufferInstagramChannelId;
     if (telegramBotToken !== undefined) updateData.telegramBotToken = telegramBotToken;
+    if (editorialGuidelines !== undefined) updateData.editorialGuidelines = editorialGuidelines;
     if (cronIntervalMinutes !== undefined) updateData.cronIntervalMinutes = parseInt(cronIntervalMinutes, 10);
     if (cronStartHour !== undefined) updateData.cronStartHour = parseInt(cronStartHour, 10);
     if (cronEndHour !== undefined) updateData.cronEndHour = parseInt(cronEndHour, 10);

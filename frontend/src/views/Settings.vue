@@ -13,6 +13,7 @@ const settings = ref<any>({
   bufferApiKey: '',
   bufferInstagramChannelId: '',
   telegramBotToken: '',
+  editorialGuidelines: '',
   postingSlots: [],
   bannedWords: []
 })
@@ -303,6 +304,24 @@ const saveSettings = async () => {
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Editorial Guidelines -->
+        <div>
+          <h2 class="text-lg font-bold text-default mb-4 border-b border-default pb-2">Editorial Guidelines</h2>
+          <UAlert
+            :icon="Info"
+            color="neutral"
+            variant="subtle"
+            description="Provide explicit instructions to the AI on how to frame the news, tone of voice, perspective, and general editorial stance. This overwrites the default `.env` fallback."
+            class="mb-4"
+          />
+          <textarea 
+            v-model="settings.editorialGuidelines" 
+            rows="6" 
+            placeholder="e.g. Your reporting should maintain a professional and highly informative journalistic tone. Focus on delivering factual news while highlighting perspectives from the Global South..."
+            class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default placeholder-muted"
+          ></textarea>
         </div>
 
         <!-- Content Moderation -->
