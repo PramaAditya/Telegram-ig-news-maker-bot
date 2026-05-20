@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { Trash2, Edit, Send, GripVertical, CalendarClock } from "lucide-vue-next";
+import { Edit, Send, GripVertical, RotateCcw, MoreVertical, Instagram } from "lucide-vue-next";
 import { getAuthHeaders, setPassword } from "../auth";
 import { Fancybox } from "@fancyapps/ui";
 import draggable from "vuedraggable";
@@ -9,6 +9,13 @@ const queue = ref<any[]>([]);
 const postingSlots = ref<{day: string, time: string}[]>([]);
 const loading = ref(true);
 const error = ref("");
+const activeTab = ref('pending');
+
+const tabs = [
+  { label: 'Pending', key: 'pending' },
+  { label: 'Published', key: 'published' },
+  { label: 'Error', key: 'error' }
+];
 
 const openLightbox = (mediaArray: any[], index: number) => {
   const items = mediaArray.map((m) => ({
@@ -106,7 +113,7 @@ const fetchSettings = async () => {
 const fetchQueue = async () => {
   loading.value = true;
   try {
-    const res = await fetch("/api/queue", { headers: getAuthHeaders() });
+    const res = await fetch(`/api/queue?status=${activeTab.value}`, { headers: getAuthHeaders() });
     if (res.status === 401) {
       const pwd = prompt("Enter Dashboard Password:");
       if (pwd !== null) {
@@ -117,7 +124,9 @@ const fetchQueue = async () => {
     }
     if (!res.ok) throw new Error("Failed to fetch");
     queue.value = await res.json();
-    calculateExpectedTimes();
+    if (activeTab.value === 'pending') {
+      calculateExpectedTimes();
+    }
     error.value = "";
   } catch (err: any) {
     error.value = err.message;
@@ -152,29 +161,6 @@ onMounted(() => {
   fetchQueue();
   fetchSettings();
 });
-
-const jumpToPosition = async (currentIndex: number, event: Event) => {
-  const target = event.target as HTMLInputElement;
-  const newIndex = parseInt(target.value) - 1;
-
-  if (
-    isNaN(newIndex) ||
-    newIndex < 0 ||
-    newIndex >= queue.value.length ||
-    newIndex === currentIndex
-  ) {
-    target.value = (currentIndex + 1).toString();
-    return;
-  }
-
-  const newQueue = [...queue.value];
-  const [movedItem] = newQueue.splice(currentIndex, 1);
-  newQueue.splice(newIndex, 0, movedItem);
-  queue.value = newQueue;
-
-  target.value = (newIndex + 1).toString();
-  await syncReorder();
-};
 
 const deleteItem = async (id: number) => {
   if (!confirm("Are you sure you want to delete this post?")) return;
@@ -212,17 +198,85 @@ const publishNow = async (id: number) => {
   }
 };
 
-const formatExpectedTime = (dateObj: Date | string) => {
-  if (!dateObj) return '';
+const retryError = async (id: number) => {
+  if (!confirm("Are you sure you want to move this failed post back to the pending queue?")) return;
+  try {
+    const res = await fetch(`/api/queue/${id}/retry-error`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (res.status === 401) return alert("Unauthorized");
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to retry post");
+    alert("Moved back to pending successfully!");
+    fetchQueue();
+  } catch (err: any) {
+    alert(err.message);
+  }
+};
+
+const isFirstOfDay = (index: number) => {
+  if (index === 0) return true;
+  const current = queue.value[index].expectedPostAt;
+  const previous = queue.value[index - 1].expectedPostAt;
+  
+  if (!current && !previous) return false;
+  if (!current || !previous) return true;
+
+  const d1 = new Date(current);
+  const d2 = new Date(previous);
+  
+  return d1.toDateString() !== d2.toDateString();
+};
+
+const formatDayHeader = (dateObj: Date | string | null) => {
+  if (!dateObj) return 'Unscheduled';
+  
+  const d = new Date(dateObj);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  const isToday = d.toDateString() === today.toDateString();
+  const isTomorrow = d.toDateString() === tomorrow.toDateString();
+  
+  const dateStr = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric'
+  }).format(d);
+
+  if (isToday) return `Today, ${dateStr}`;
+  if (isTomorrow) return `Tomorrow, ${dateStr}`;
+  
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    weekday: 'long'
+  }).format(d);
+  
+  return `${weekday}, ${dateStr}`;
+};
+
+const formatTimeOnly = (dateObj: Date | string | null) => {
+  if (!dateObj) return '-';
   const d = new Date(dateObj);
   return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true
   }).format(d);
+};
+const timeAgo = (dateObj: Date | string | null) => {
+  if (!dateObj) return '';
+  const d = new Date(dateObj);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - d.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) return `${diffInSeconds} second${diffInSeconds !== 1 ? 's' : ''} ago`;
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes !== 1 ? 's' : ''} ago`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  return `${diffInDays} day${diffInDays !== 1 ? 's' : ''} ago`;
 };
 </script>
 
@@ -236,6 +290,25 @@ const formatExpectedTime = (dateObj: Date | string) => {
       >
         Refresh
       </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="border-b border-default mb-6">
+      <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          @click="activeTab = tab.key; fetchQueue()"
+          :class="[
+            activeTab === tab.key
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted hover:border-default hover:text-default',
+            'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors'
+          ]"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
     </div>
 
     <div v-if="loading" class="text-center py-10 text-muted">
@@ -257,115 +330,189 @@ const formatExpectedTime = (dateObj: Date | string) => {
 
     <div v-else class="bg-default shadow rounded-lg overflow-hidden">
       <draggable
+        v-if="activeTab === 'pending'"
         v-model="queue"
         tag="ul"
-        class="divide-y divide-default"
+        class=""
         handle=".drag-handle"
         ghost-class="opacity-50"
         @end="onDragEnd"
         item-key="id"
       >
         <template #item="{ element: item, index }">
-          <li class="p-4 bg-default hover:bg-muted transition-colors">
-            <div class="flex items-start space-x-4">
-              <div
-                class="flex-shrink-0 flex flex-col items-center justify-center space-y-2 mt-1"
-              >
-                <button
-                  class="drag-handle cursor-move text-muted hover:text-default"
-                >
-                  <GripVertical class="w-6 h-6" />
-                </button>
+          <li class="relative mb-6">
+            <!-- Day Group Header -->
+            <div v-if="isFirstOfDay(index)" class="pb-3 pt-6 first:pt-0">
+              <h2 class="text-lg font-medium text-default">{{ formatDayHeader(item.expectedPostAt) }}</h2>
+            </div>
 
-                <div class="flex items-center text-xs text-muted font-medium">
-                  <span class="mr-1">#</span>
-                  <input
-                    type="number"
-                    :value="index + 1"
-                    min="1"
-                    :max="queue.length"
-                    @change="(e) => jumpToPosition(index, e)"
-                    class="w-12 px-1 py-1 text-center border border-default rounded bg-muted text-default focus:outline-none focus:ring-1 focus:ring-primary"
-                    title="Jump to position"
-                  />
-                </div>
+            <div class="flex items-start gap-2 sm:gap-4">
+              <!-- Time Column -->
+              <div class="w-16 sm:w-20 flex-shrink-0 pt-5 text-sm font-medium text-default text-right">
+                {{ formatTimeOnly(item.expectedPostAt) }}
               </div>
 
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-default line-clamp-2">
-                  {{ item.text }}
-                </p>
-                <div
-                  class="mt-2 flex items-center space-x-3 text-xs text-muted"
-                >
-                  <UBadge color="gray" variant="soft"> {{ item.media.length }} media </UBadge>
-                  
-                  <span v-if="item.expectedPostAt" class="flex items-center text-primary font-medium bg-primary-50 px-2 py-0.5 rounded border border-primary-100">
-                    <CalendarClock class="w-3.5 h-3.5 mr-1" />
-                    {{ formatExpectedTime(item.expectedPostAt) }}
-                  </span>
-                  <span v-else class="flex items-center text-warning font-medium">
-                    <CalendarClock class="w-3.5 h-3.5 mr-1" />
-                    No slots configured
-                  </span>
-                </div>
+              <!-- Drag Handle -->
+              <div class="flex-shrink-0 pt-5">
+                <button class="drag-handle cursor-move text-muted hover:text-default">
+                  <GripVertical class="w-5 h-5" />
+                </button>
+              </div>
 
-                <div class="mt-3 flex space-x-2" v-if="item.media.length > 0">
-                  <div
-                    v-for="(m, i) in item.media.slice(0, 3)"
-                    :key="i"
-                    @click="openLightbox(item.media, Number(i))"
-                    class="cursor-pointer hover:opacity-80 transition w-16 h-16 rounded overflow-hidden bg-elevated border border-default"
-                  >
-                    <img
-                      v-if="m.type === 'image'"
-                      :src="m.url"
-                      class="w-full h-full object-cover"
-                    />
-                    <div
-                      v-else
-                      class="w-full h-full flex items-center justify-center text-muted text-xs"
-                    >
-                      Video
+              <!-- Item Card -->
+              <UCard class="flex-1 min-w-0 shadow-sm hover:shadow-md transition-shadow" :ui="{ body: { padding: 'p-4 sm:p-5' }, footer: { padding: 'px-4 py-3 sm:px-5' } }">
+                <div class="flex flex-col sm:flex-row justify-between gap-6">
+                  
+                  <!-- Left: Content -->
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center mb-4">
+                      <div class="relative">
+                        <UAvatar src="https://storage.pelita.tech/logo_kabar_perjuangan_white.png" alt="kabar.perjuangan" size="md" class="bg-black" />
+                        <div class="absolute -bottom-1 -right-1 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500 text-white rounded-full p-0.5 border border-white dark:border-gray-900">
+                          <Instagram class="w-3 h-3" />
+                        </div>
+                      </div>
+                      <span class="ml-3 font-semibold text-default">kabar.perjuangan</span>
+                    </div>
+                    <p class="text-sm text-default whitespace-pre-wrap line-clamp-6">
+                      {{ item.text }}
+                    </p>
+                  </div>
+                  
+                  <!-- Right: Media Grid -->
+                  <div v-if="item.media.length > 0" class="flex-shrink-0">
+                    <div class="grid grid-cols-2 grid-rows-2 gap-0.5 w-full sm:w-56 h-56 rounded-md overflow-hidden bg-black border border-default">
+                      <template v-for="(m, i) in item.media.slice(0, 4)" :key="i">
+                        <div 
+                          @click="openLightbox(item.media, Number(i))"
+                          class="relative cursor-pointer hover:opacity-90 transition group w-full h-full"
+                          :class="{
+                            'col-span-2 row-span-2': item.media.length === 1,
+                            'col-span-1 row-span-2': item.media.length === 2,
+                            'col-span-1 row-span-1': item.media.length >= 3,
+                          }"
+                        >
+                          <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
+                          <div v-else class="w-full h-full flex items-center justify-center bg-gray-800 text-white text-xs">Video</div>
+                          
+                          <div v-if="i === 3 && item.media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                            <span class="text-white font-medium text-xl">+{{ item.media.length - 4 }}</span>
+                          </div>
+                        </div>
+                      </template>
                     </div>
                   </div>
-                  <div
-                    v-if="item.media.length > 3"
-                    @click="openLightbox(item.media, 3)"
-                    class="cursor-pointer hover:opacity-80 transition w-16 h-16 rounded bg-elevated border border-default flex items-center justify-center text-sm font-medium text-muted"
-                  >
-                    +{{ item.media.length - 3 }}
-                  </div>
                 </div>
-              </div>
 
-              <div class="flex-shrink-0 flex space-x-2">
-                <router-link
-                  :to="'/post/' + item.id"
-                  class="p-2 text-muted hover:text-primary rounded-md hover:bg-blue-50"
-                  title="Edit details"
-                >
-                  <Edit class="w-5 h-5" />
-                </router-link>
-                <button
-                  @click="publishNow(item.id)"
-                  class="p-2 text-muted hover:text-success rounded-md hover:bg-green-50"
-                  title="Publish immediately"
-                >
-                  <Send class="w-5 h-5" />
-                </button>
-                <button
-                  @click="deleteItem(item.id)"
-                  class="p-2 text-muted hover:text-error rounded-md hover:bg-red-50"
-                  title="Delete post"
-                >
-                  <Trash2 class="w-5 h-5" />
-                </button>
-              </div>
+                <template #footer>
+                  <div class="flex items-center justify-between">
+                    <div class="text-sm text-muted">
+                      You created this {{ timeAgo(item.createdAt) }}
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <UButton color="white" variant="solid" @click="publishNow(item.id)">
+                        <template #leading><Send class="w-4 h-4" /></template>
+                        Publish Now
+                      </UButton>
+                      <UButton color="white" variant="solid" @click="$router.push('/post/' + item.id)" :padded="false" class="p-2">
+                        <Edit class="w-4 h-4 text-muted" />
+                      </UButton>
+                      <UDropdown :items="[[{ label: 'Delete', click: () => deleteItem(item.id), class: 'text-error' }]]" :popper="{ placement: 'bottom-end' }">
+                        <UButton color="white" variant="solid" :padded="false" class="p-2">
+                          <MoreVertical class="w-4 h-4 text-muted" />
+                        </UButton>
+                      </UDropdown>
+                    </div>
+                  </div>
+                </template>
+              </UCard>
             </div>
           </li>
         </template>
       </draggable>
+      <!-- Published / Error Lists (Non-draggable) -->
+      <ul v-else class="">
+        <li v-for="item in queue" :key="item.id" class="relative mb-6">
+          <div class="flex items-start gap-2 sm:gap-4">
+            
+            <!-- Tab specific column -->
+            <div class="w-16 sm:w-20 flex-shrink-0 pt-5 flex flex-col items-end gap-2">
+               <UBadge :color="activeTab === 'published' ? 'success' : 'error'" class="justify-center uppercase text-[10px]">
+                 {{ activeTab }}
+               </UBadge>
+               <span class="text-xs font-medium text-default text-right">
+                 {{ formatTimeOnly(activeTab === 'published' ? item.publishedAt : item.createdAt) }}
+               </span>
+            </div>
+
+            <UCard class="flex-1 min-w-0 shadow-sm" :ui="{ body: { padding: 'p-4 sm:p-5' }, footer: { padding: 'px-4 py-3 sm:px-5' } }">
+                <div class="flex flex-col sm:flex-row justify-between gap-6">
+                  
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center mb-4">
+                      <div class="relative">
+                        <UAvatar src="https://storage.pelita.tech/logo_kabar_perjuangan_white.png" alt="kabar.perjuangan" size="md" class="bg-black" />
+                        <div class="absolute -bottom-1 -right-1 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500 text-white rounded-full p-0.5 border border-white dark:border-gray-900">
+                          <Instagram class="w-3 h-3" />
+                        </div>
+                      </div>
+                      <span class="ml-3 font-semibold text-default">kabar.perjuangan</span>
+                    </div>
+                    <p class="text-sm text-default whitespace-pre-wrap line-clamp-6">
+                      {{ item.text }}
+                    </p>
+                    <div v-if="item.errorLog" class="mt-4 text-xs text-error bg-red-50/10 p-3 rounded border border-red-200/20">
+                      <span class="font-mono break-all">{{ item.errorLog }}</span>
+                    </div>
+                  </div>
+                  
+                  <div v-if="item.media.length > 0" class="flex-shrink-0">
+                    <div class="grid grid-cols-2 grid-rows-2 gap-0.5 w-full sm:w-56 h-56 rounded-md overflow-hidden bg-black border border-default">
+                      <template v-for="(m, i) in item.media.slice(0, 4)" :key="i">
+                        <div 
+                          @click="openLightbox(item.media, Number(i))"
+                          class="relative cursor-pointer hover:opacity-90 transition group w-full h-full"
+                          :class="{
+                            'col-span-2 row-span-2': item.media.length === 1,
+                            'col-span-1 row-span-2': item.media.length === 2,
+                            'col-span-1 row-span-1': item.media.length >= 3,
+                          }"
+                        >
+                          <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
+                          <div v-else class="w-full h-full flex items-center justify-center bg-gray-800 text-white text-xs">Video</div>
+                          
+                          <div v-if="i === 3 && item.media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                            <span class="text-white font-medium text-xl">+{{ item.media.length - 4 }}</span>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+
+                <template #footer>
+                  <div class="flex items-center justify-between">
+                    <div class="text-sm text-muted">
+                      Created {{ timeAgo(item.createdAt) }}
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <UButton v-if="activeTab === 'error'" color="white" variant="solid" @click="retryError(item.id)">
+                        <template #leading><RotateCcw class="w-4 h-4" /></template>
+                        Retry
+                      </UButton>
+                      
+                      <UDropdown :items="[[{ label: 'Delete', click: () => deleteItem(item.id), class: 'text-error' }]]" :popper="{ placement: 'bottom-end' }">
+                        <UButton color="white" variant="solid" :padded="false" class="p-2">
+                          <MoreVertical class="w-4 h-4 text-muted" />
+                        </UButton>
+                      </UDropdown>
+                    </div>
+                  </div>
+                </template>
+            </UCard>
+          </div>
+        </li>
+      </ul>
     </div>
   </div>
 </template>

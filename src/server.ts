@@ -294,13 +294,21 @@ app.put('/api/settings', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// GET /api/queue - List all queue items
+// GET /api/queue - List queue items (filtered by status)
 app.get('/api/queue', requireDashboardAuth, async (req, res) => {
   try {
-    const items = await db.select()
-      .from(queueTable)
-      .where(eq(queueTable.status, 'pending'))
-      .orderBy(asc(queueTable.sortOrder)); // Smallest sort_order first = top of queue
+    const status = req.query.status as string || 'pending';
+    
+    let query = db.select().from(queueTable).where(eq(queueTable.status, status));
+    
+    if (status === 'pending') {
+      query = query.orderBy(asc(queueTable.sortOrder));
+    } else {
+      // For published and error, show most recent first
+      query = query.orderBy(desc(queueTable.createdAt));
+    }
+    
+    const items = await query;
     res.json(items);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -413,6 +421,32 @@ app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
 
       return res.status(500).json({ error: 'Failed to publish to Buffer', details: publishError.message });
     }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/queue/:id/retry-error - Move an errored queue item back to pending
+app.post('/api/queue/:id/retry-error', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const items = await db.select().from(queueTable).where(eq(queueTable.id, id));
+    if (items.length === 0) return res.status(404).json({ error: 'Post not found' });
+    
+    if (items[0].status !== 'error') {
+      return res.status(400).json({ error: 'Only failed posts can be retried' });
+    }
+
+    await db.update(queueTable)
+      .set({ 
+        status: 'pending',
+        errorLog: null
+      })
+      .where(eq(queueTable.id, id));
+
+    res.json({ message: 'Post moved back to pending queue successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
