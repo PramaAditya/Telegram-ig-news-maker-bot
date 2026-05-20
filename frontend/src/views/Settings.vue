@@ -5,6 +5,8 @@ import { getAuthHeaders } from '../auth'
 import ImageUploader from '../components/ImageUploader.vue'
 import PasswordInput from '../components/PasswordInput.vue'
 
+const toast = useToast()
+
 const settings = ref<any>({
   logoImageUrl: '',
   ctaImageUrl: '',
@@ -35,7 +37,8 @@ const addBannedWord = () => {
   
   // Adding a new word
   if (settings.value.bannedWords.some((w: any) => w.word.toLowerCase() === newBannedWord.value.word.toLowerCase().trim())) {
-    return alert('This word is already in the banned list.')
+    toast.add({ title: 'This word is already in the banned list.', color: 'error' })
+    return
   }
 
   settings.value.bannedWords.push({
@@ -68,7 +71,8 @@ const saveEditedWord = () => {
   if (settings.value.bannedWords.some((w: any, idx: number) => 
       idx !== editingWordIndex.value && 
       w.word.toLowerCase() === editingWordState.value.word.toLowerCase().trim())) {
-    return alert('This word is already in the banned list.')
+    toast.add({ title: 'This word is already in the banned list.', color: 'error' })
+    return
   }
   
   settings.value.bannedWords[editingWordIndex.value] = {
@@ -153,7 +157,7 @@ const generateSlots = async () => {
     settings.value.postingSlots = data.slots
     aiPrompt.value = ''
   } catch (err: any) {
-    alert(err.message)
+    toast.add({ title: err.message, color: 'error' })
   } finally {
     aiGenerating.value = false
   }
@@ -190,10 +194,10 @@ const saveSettings = async () => {
     if (res.status === 401) throw new Error('Unauthorized')
     if (!res.ok) throw new Error('Failed to save settings')
     
-    alert('Settings saved successfully! Publishing changes take effect immediately.')
+    toast.add({ title: 'Settings saved successfully!', description: 'Publishing changes take effect immediately.', color: 'success' })
   } catch (err: any) {
     error.value = err.message
-    alert(err.message)
+    toast.add({ title: err.message, color: 'error' })
   } finally {
     saving.value = false
   }

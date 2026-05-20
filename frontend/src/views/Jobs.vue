@@ -3,6 +3,8 @@ import { ref, onMounted } from "vue";
 import { RotateCcw, AlertCircle } from "lucide-vue-next";
 import { getAuthHeaders, setPassword } from "../auth";
 
+const toast = useToast();
+
 const jobs = ref<any[]>([]);
 const loading = ref(true);
 const error = ref("");
@@ -37,14 +39,17 @@ const retryJob = async (id: number) => {
       method: "POST",
       headers: getAuthHeaders(),
     });
-    if (res.status === 401) return alert("Unauthorized");
+    if (res.status === 401) {
+      toast.add({ title: "Unauthorized", color: "error" });
+      return;
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to retry job");
     
     // Refresh the list
     await fetchJobs();
   } catch (err: any) {
-    alert(err.message);
+    toast.add({ title: err.message, color: "error" });
   } finally {
     retryingId.value = null;
   }

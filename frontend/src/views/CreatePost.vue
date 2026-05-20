@@ -4,6 +4,8 @@ import { PenTool, Loader2, RefreshCw } from 'lucide-vue-next'
 import { getAuthHeaders } from '../auth'
 import ImageUploader from '../components/ImageUploader.vue'
 
+const toast = useToast()
+
 const textInput = ref('')
 const mediaUrl = ref('')
 const templateId = ref('image-multiple:interval')
@@ -48,7 +50,10 @@ onUnmounted(() => {
 })
 
 const generateContent = async () => {
-  if (!textInput.value.trim()) return alert('Topic or text input is required.')
+  if (!textInput.value.trim()) {
+    toast.add({ title: 'Topic or text input is required.', color: 'error' })
+    return
+  }
   
   submitting.value = true
   error.value = ''
@@ -64,12 +69,15 @@ const generateContent = async () => {
       })
     })
     
-    if (res.status === 401) return alert('Unauthorized')
+    if (res.status === 401) {
+      toast.add({ title: 'Unauthorized', color: 'error' })
+      return
+    }
     
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Failed to trigger generation')
     
-    alert('Generation triggered! The worker is processing it.')
+    toast.add({ title: 'Generation triggered!', description: 'The worker is processing it.', color: 'success' })
     textInput.value = ''
     mediaUrl.value = ''
     fetchActiveJobs()
@@ -156,12 +164,12 @@ const generateContent = async () => {
             :icon="job.status === 'pending' ? 'i-lucide-clock' : job.status === 'processing' ? 'i-lucide-loader-2' : 'i-lucide-alert-circle'"
             :class="{ 'animate-pulse': job.status === 'processing' }"
           >
-            <template #title="{ title }">
+            <template #title>
               <div class="flex items-center gap-2">
                 <UBadge :color="job.status === 'pending' ? 'warning' : job.status === 'processing' ? 'primary' : 'error'" variant="subtle" size="xs" class="uppercase">
                   {{ job.status }}
                 </UBadge>
-                <span class="text-sm font-medium line-clamp-1">{{ title }}</span>
+                <span class="text-sm font-medium line-clamp-1">{{ job.text }}</span>
               </div>
             </template>
           </UAlert>

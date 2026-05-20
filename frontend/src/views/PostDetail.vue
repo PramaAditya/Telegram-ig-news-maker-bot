@@ -6,6 +6,8 @@ import { getAuthHeaders, setPassword } from '../auth'
 import { Fancybox } from '@fancyapps/ui'
 import ImageUploader from '../components/ImageUploader.vue'
 
+const toast = useToast()
+
 const route = useRoute()
 const postId = route.params.id
 
@@ -69,11 +71,14 @@ const saveChanges = async () => {
         templateData: post.value.templateData
       })
     })
-    if (res.status === 401) return alert('Unauthorized')
+    if (res.status === 401) {
+      toast.add({ title: 'Unauthorized', color: 'error' })
+      return
+    }
     if (!res.ok) throw new Error('Failed to save')
-    alert('Changes saved!')
+    toast.add({ title: 'Changes saved!', color: 'success' })
   } catch (err: any) {
-    alert(err.message)
+    toast.add({ title: err.message, color: 'error' })
   } finally {
     saving.value = false
   }
@@ -96,7 +101,8 @@ const regenerateMedia = async () => {
   // Hardcoded validation for interval template
   if (post.value.templateId === 'image-multiple:interval') {
     if (!post.value.templateData.title || !post.value.templateData.coverImageUrl || !post.value.templateData.slides || post.value.templateData.slides.length === 0) {
-      return alert('Title, Cover Image URL, and at least 1 Slide cannot be empty to regenerate.')
+      toast.add({ title: 'Title, Cover Image URL, and at least 1 Slide cannot be empty to regenerate.', color: 'error' })
+      return
     }
   }
   
@@ -109,15 +115,18 @@ const regenerateMedia = async () => {
       method: 'POST',
       headers: getAuthHeaders()
     })
-    if (res.status === 401) return alert('Unauthorized')
+    if (res.status === 401) {
+      toast.add({ title: 'Unauthorized', color: 'error' })
+      return
+    }
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Failed to regenerate media')
     
     // Update local media state with newly generated ones
     post.value.media = data.media
-    alert('Media regenerated successfully!')
+    toast.add({ title: 'Media regenerated successfully!', color: 'success' })
   } catch (err: any) {
-    alert(err.message)
+    toast.add({ title: err.message, color: 'error' })
   } finally {
     generating.value = false
   }

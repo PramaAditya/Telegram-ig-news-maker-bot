@@ -5,6 +5,8 @@ import { getAuthHeaders, setPassword } from "../auth";
 import { Fancybox } from "@fancyapps/ui";
 import draggable from "vuedraggable";
 
+const toast = useToast();
+
 const queue = ref<any[]>([]);
 const postingSlots = ref<{day: string, time: string}[]>([]);
 const loading = ref(true);
@@ -144,11 +146,11 @@ const syncReorder = async () => {
       body: JSON.stringify({ orderedIds: queue.value.map((i) => i.id) }),
     });
     if (res.status === 401) {
-      alert("Unauthorized. Please refresh and re-enter password.");
+      toast.add({ title: "Unauthorized", description: "Please refresh and re-enter password.", color: "error" });
       return;
     }
   } catch (err) {
-    alert("Failed to reorder items");
+    toast.add({ title: "Failed to reorder items", color: "error" });
     fetchQueue(); // rollback
   }
 };
@@ -192,10 +194,13 @@ const deleteItem = async (id: number) => {
       method: "DELETE",
       headers: getAuthHeaders(),
     });
-    if (res.status === 401) return alert("Unauthorized");
+    if (res.status === 401) {
+      toast.add({ title: "Unauthorized", color: "error" });
+      return;
+    }
     fetchQueue();
   } catch (err) {
-    alert("Failed to delete");
+    toast.add({ title: "Failed to delete", color: "error" });
   }
 };
 
@@ -211,13 +216,16 @@ const publishNow = async (id: number) => {
       method: "POST",
       headers: getAuthHeaders(),
     });
-    if (res.status === 401) return alert("Unauthorized");
+    if (res.status === 401) {
+      toast.add({ title: "Unauthorized", color: "error" });
+      return;
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to publish");
-    alert("Published successfully!");
+    toast.add({ title: "Published successfully!", color: "success" });
     fetchQueue();
   } catch (err: any) {
-    alert(err.message);
+    toast.add({ title: err.message, color: "error" });
   }
 };
 
@@ -228,13 +236,16 @@ const retryError = async (id: number) => {
       method: "POST",
       headers: getAuthHeaders(),
     });
-    if (res.status === 401) return alert("Unauthorized");
+    if (res.status === 401) {
+      toast.add({ title: "Unauthorized", color: "error" });
+      return;
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to retry post");
-    alert("Moved back to pending successfully!");
+    toast.add({ title: "Moved back to pending successfully!", color: "success" });
     fetchQueue();
   } catch (err: any) {
-    alert(err.message);
+    toast.add({ title: err.message, color: "error" });
   }
 };
 
@@ -395,7 +406,7 @@ const timeAgo = (dateObj: Date | string | null) => {
               </div>
 
               <!-- Item Card -->
-              <UCard class="flex-1 min-w-0 shadow-sm hover:shadow-md transition-shadow" :ui="{ body: { padding: 'p-4 sm:p-5' }, footer: { padding: 'px-4 py-3 sm:px-5' } }">
+              <UCard class="flex-1 min-w-0 shadow-sm hover:shadow-md transition-shadow" :ui="{ body: 'p-4 sm:p-5', footer: 'px-4 py-3 sm:px-5' }">
                 <div class="flex flex-col sm:flex-row justify-between gap-6">
                   
                   <!-- Left: Content -->
@@ -471,7 +482,7 @@ const timeAgo = (dateObj: Date | string | null) => {
                </span>
             </div>
 
-            <UCard class="flex-1 min-w-0 shadow-sm" :ui="{ body: { padding: 'p-4 sm:p-5' }, footer: { padding: 'px-4 py-3 sm:px-5' } }">
+            <UCard class="flex-1 min-w-0 shadow-sm" :ui="{ body: 'p-4 sm:p-5', footer: 'px-4 py-3 sm:px-5' }">
                 <div class="flex flex-col sm:flex-row justify-between gap-6">
                   
                   <div class="flex-1 min-w-0">
