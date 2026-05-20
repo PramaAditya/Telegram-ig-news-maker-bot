@@ -174,10 +174,14 @@ app.post('/api/settings/slots/generate', requireDashboardAuth, async (req, res) 
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     if (!process.env.LIGHT_MODEL) return res.status(500).json({ error: 'LIGHT_MODEL is not configured' });
 
+    // Get current settings to provide context to the LLM
+    const settings = await getSettings();
+    const currentSlots = settings.postingSlots || [];
+
     const result = await generateObject({
       model: google(process.env.LIGHT_MODEL),
-      system: 'You are an assistant that converts natural language scheduling requests into a precise array of posting slots for a social media queue. Ensure the output accurately reflects the user\'s intended schedule. Valid days are Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday. Times must be in 24-hour HH:mm format (e.g. 08:12, 19:30). "Everyday" means all 7 days.',
-      prompt: `Generate posting slots for this request: "${prompt}"`,
+      system: 'You are an intelligent assistant that manages posting schedules. You will be given the CURRENT posting slots and a user PROMPT. Based on the prompt, you must return the FINAL complete list of posting slots. You can add new slots, remove specific ones, or completely overwrite them depending on what the user asks. Valid days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday. Times MUST be in 24-hour HH:mm format (e.g. 08:12, 19:30). "Everyday" means all 7 days.',
+      prompt: `CURRENT SLOTS:\n${JSON.stringify(currentSlots, null, 2)}\n\nUSER PROMPT: "${prompt}"\n\nPlease output the final complete list of slots after applying the user's request.`,
       schema: z.object({
         slots: z.array(z.object({
           day: z.string().describe('Day of the week (e.g., Monday)'),
@@ -186,25 +190,14 @@ app.post('/api/settings/slots/generate', requireDashboardAuth, async (req, res) 
       })
     });
 
-    const newSlots = result.object.slots;
-
-    // Get current settings
-    const settings = await getSettings();
-    let currentSlots = settings.postingSlots || [];
-    
-    // Add new slots, checking for exact duplicates
-    for (const newSlot of newSlots) {
-      if (!currentSlots.some((s: any) => s.day.toLowerCase() === newSlot.day.toLowerCase() && s.time === newSlot.time)) {
-        currentSlots.push(newSlot);
-      }
-    }
+    const finalSlots = result.object.slots;
 
     // Save back to DB
     await db.update(settingsTable)
-      .set({ postingSlots: currentSlots })
+      .set({ postingSlots: finalSlots })
       .where(eq(settingsTable.id, 1));
 
-    res.json({ message: 'Slots generated successfully', slots: currentSlots });
+    res.json({ message: 'Slots generated successfully', slots: finalSlots });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
