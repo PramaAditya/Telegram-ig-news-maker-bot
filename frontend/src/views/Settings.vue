@@ -248,7 +248,7 @@ const saveSettings = async () => {
             :icon="Info"
             color="neutral"
             variant="subtle"
-            description="Your posting slots determine exactly when the worker will publish the next item in the Pending Queue. Add slots below using Natural Language AI!"
+            description="Your posting slots determine exactly when the worker will publish the next item in the Posts Queue. Add slots below using Natural Language AI!"
             class="mb-4"
           />
 

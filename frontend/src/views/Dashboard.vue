@@ -130,7 +130,7 @@ const publishNow = async (id: number) => {
 <template>
   <div>
     <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-default">Pending Queue</h1>
+      <h1 class="text-2xl font-bold text-default">Posts Queue</h1>
       <button
         @click="fetchQueue"
         class="px-4 py-2 bg-default border border-default rounded-md text-sm font-medium text-default hover:bg-muted"
