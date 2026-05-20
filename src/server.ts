@@ -156,6 +156,48 @@ app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
   }
 });
 
+// GET /api/jobs - Get all jobs (for the jobs page)
+app.get('/api/jobs', requireDashboardAuth, async (req, res) => {
+  try {
+    const allJobs = await db.select()
+      .from(jobsTable)
+      .orderBy(desc(jobsTable.createdAt))
+      .limit(100);
+    res.json(allJobs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/jobs/:id/retry - Retry a failed job
+app.post('/api/jobs/:id/retry', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid job ID' });
+
+    const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+    
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+    if (job.status !== 'error') {
+      return res.status(400).json({ error: 'Job is not in an error state' });
+    }
+
+    await db.update(jobsTable)
+      .set({ 
+        status: 'pending', 
+        errorLog: null,
+        updatedAt: new Date() 
+      })
+      .where(eq(jobsTable.id, id));
+      
+    res.json({ success: true, message: 'Job queued for retry' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to retry job: ' + error.message });
+  }
+});
+
 // GET /api/jobs/dashboard - Get active dashboard jobs
 app.get('/api/jobs/dashboard', requireDashboardAuth, async (req, res) => {
   try {

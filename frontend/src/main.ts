@@ -9,6 +9,7 @@ import Dashboard from './views/Dashboard.vue'
 import PostDetail from './views/PostDetail.vue'
 import CreatePost from './views/CreatePost.vue'
 import Settings from './views/Settings.vue'
+import Jobs from './views/Jobs.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -16,6 +17,7 @@ const router = createRouter({
     { path: '/', component: Dashboard },
     { path: '/create', component: CreatePost },
     { path: '/settings', component: Settings },
+    { path: '/jobs', component: Jobs },
     { path: '/post/:id', component: PostDetail }
   ]
 })
