@@ -24,8 +24,11 @@ export function censorText(text: string, bannedWords: BannedWord[]): string {
   for (const { word, replacement, type } of bannedWords) {
     if (!word || !replacement) continue;
     
+    // Escape regex characters to prevent SyntaxError
+    const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
     // Build regex based on match type
-    const pattern = type === 'exact' ? `\\b${word}\\b` : word;
+    const pattern = type === 'exact' ? `\\b${escapedWord}\\b` : escapedWord;
     const regex = new RegExp(pattern, 'gi');
     
     result = result.replace(regex, (match) => {
