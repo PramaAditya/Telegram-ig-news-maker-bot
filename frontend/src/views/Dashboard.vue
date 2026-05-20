@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { Edit, Send, GripVertical, RotateCcw, MoreVertical, Instagram } from "lucide-vue-next";
+import { Edit, Send, GripVertical, RotateCcw, MoreVertical } from "lucide-vue-next";
 import { getAuthHeaders, setPassword } from "../auth";
 import { Fancybox } from "@fancyapps/ui";
 import draggable from "vuedraggable";
