@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 export async function generateMedia(endpoint: string, payload: any): Promise<string[]> {
-  const baseUrl = process.env.IMAGE_API_URL || 'http://tools-htm2imageapi-pnoxac-b46226-103-197-189-173.traefik.me';
+  const baseUrl = process.env.IMAGE_API_URL || 'http://localhost:3000';
   
   // Clean trailing slashes from baseUrl and leading slashes from endpoint
   const url = `${baseUrl.replace(/\/+$/, '')}/${endpoint.replace(/^\/+/, '')}`;

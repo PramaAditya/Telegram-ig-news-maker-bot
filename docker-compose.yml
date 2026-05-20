@@ -32,6 +32,14 @@ services:
     depends_on:
       - ignews_botapi
     
+  image-renderer:
+    build: ./services/image-renderer
+    container_name: ignews_image_renderer
+    restart: always
+    env_file: .env
+    expose:
+      - "3000"
+
   worker:
     build: .
     container_name: ignews_worker
@@ -39,8 +47,10 @@ services:
     env_file: .env
     environment:
       - TELEGRAM_API_URL=http://ignews_botapi:8081
+      - IMAGE_API_URL=http://image-renderer:3000
     command: npm run start:worker
     volumes:
       - telegram-data:/var/lib/telegram-bot-api
     depends_on:
       - ignews_botapi
+      - image-renderer
