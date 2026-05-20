@@ -12,6 +12,7 @@ export async function getSettings() {
     // Ensure we create a default row if it doesn't exist
     const defaultSettings = { 
       id: 1, 
+      postingSlots: [],
       cronIntervalMinutes: 30, 
       cronStartHour: 6, 
       cronEndHour: 23,
@@ -30,6 +31,7 @@ export async function getSettings() {
   // Provide fallback to env vars if database column is empty
   return {
     ...settings,
+    postingSlots: settings.postingSlots || [],
     logoImageUrl: settings.logoImageUrl || process.env.LOGO_IMAGE_URL || null,
     ctaImageUrl: settings.ctaImageUrl || process.env.CTA_IMAGE_URL || null,
     bufferApiKey: settings.bufferApiKey || process.env.BUFFER_API_KEY || null,

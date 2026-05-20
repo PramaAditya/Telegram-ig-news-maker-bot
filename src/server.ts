@@ -9,6 +9,9 @@ import { publishToBuffer } from './buffer.js';
 import { runAutomatedPipeline } from './agent.js';
 import multer from 'multer';
 import { uploadToS3 } from './s3.js';
+import { generateObject } from 'ai';
+import { google } from '@ai-sdk/google';
+import { z } from 'zod';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 import dotenv from 'dotenv';
@@ -164,6 +167,49 @@ app.get('/api/jobs/dashboard', requireDashboardAuth, async (req, res) => {
   }
 });
 
+// POST /api/settings/slots/generate - Generate posting slots using AI
+app.post('/api/settings/slots/generate', requireDashboardAuth, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+    if (!process.env.LIGHT_MODEL) return res.status(500).json({ error: 'LIGHT_MODEL is not configured' });
+
+    const result = await generateObject({
+      model: google(process.env.LIGHT_MODEL),
+      system: 'You are an assistant that converts natural language scheduling requests into a precise array of posting slots for a social media queue. Ensure the output accurately reflects the user\'s intended schedule. Valid days are Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday. Times must be in 24-hour HH:mm format (e.g. 08:12, 19:30). "Everyday" means all 7 days.',
+      prompt: `Generate posting slots for this request: "${prompt}"`,
+      schema: z.object({
+        slots: z.array(z.object({
+          day: z.string().describe('Day of the week (e.g., Monday)'),
+          time: z.string().describe('24-hour time string in HH:mm format (e.g. "08:12" or "19:30")')
+        }))
+      })
+    });
+
+    const newSlots = result.object.slots;
+
+    // Get current settings
+    const settings = await getSettings();
+    let currentSlots = settings.postingSlots || [];
+    
+    // Add new slots, checking for exact duplicates
+    for (const newSlot of newSlots) {
+      if (!currentSlots.some((s: any) => s.day.toLowerCase() === newSlot.day.toLowerCase() && s.time === newSlot.time)) {
+        currentSlots.push(newSlot);
+      }
+    }
+
+    // Save back to DB
+    await db.update(settingsTable)
+      .set({ postingSlots: currentSlots })
+      .where(eq(settingsTable.id, 1));
+
+    res.json({ message: 'Slots generated successfully', slots: currentSlots });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/settings - Get dynamic settings
 app.get('/api/settings', requireDashboardAuth, async (req, res) => {
   try {
@@ -197,6 +243,7 @@ app.put('/api/settings', requireDashboardAuth, async (req, res) => {
     if (cronIntervalMinutes !== undefined) updateData.cronIntervalMinutes = parseInt(cronIntervalMinutes, 10);
     if (cronStartHour !== undefined) updateData.cronStartHour = parseInt(cronStartHour, 10);
     if (cronEndHour !== undefined) updateData.cronEndHour = parseInt(cronEndHour, 10);
+    if (req.body.postingSlots !== undefined) updateData.postingSlots = req.body.postingSlots;
 
     // Make sure the row exists first
     await getSettings();

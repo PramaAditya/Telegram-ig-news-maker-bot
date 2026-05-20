@@ -154,23 +154,46 @@ async function autoPublishQueue() {
     const settings = await getSettings();
     const now = new Date();
     
-    // Check if current hour is within allowed bounds (Asia/Jakarta timezone)
-    const currentHourStr = new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Jakarta' }).format(now);
-    const currentHour = parseInt(currentHourStr, 10);
-    
-    if (currentHour < settings.cronStartHour || currentHour > settings.cronEndHour) {
-      return; // Outside of allowed publishing hours
+    // Check if we have posting slots configured
+    if (!settings.postingSlots || settings.postingSlots.length === 0) {
+      return; // No slots configured
     }
 
-    // Check if enough time has passed since last publish
+    // Get current day and time in Asia/Jakarta
+    const formatter = new Intl.DateTimeFormat('en-US', { 
+      weekday: 'long', 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false, 
+      timeZone: 'Asia/Jakarta' 
+    });
+    
+    const parts = formatter.formatToParts(now);
+    const day = parts.find(p => p.type === 'weekday')?.value; // e.g. "Monday"
+    const hour = parts.find(p => p.type === 'hour')?.value;
+    const minute = parts.find(p => p.type === 'minute')?.value;
+    
+    // Format to match HH:mm exactly
+    const currentTimeStr = `${hour?.padStart(2, '0')}:${minute?.padStart(2, '0')}`;
+    
+    // Check if the current time matches any slot for today
+    const matchingSlot = settings.postingSlots.find(
+      (slot: { day: string, time: string }) => slot.day.toLowerCase() === day?.toLowerCase() && slot.time === currentTimeStr
+    );
+
+    if (!matchingSlot) {
+      return; // Not a scheduled slot
+    }
+
+    // Check if we already published during this minute
     if (settings.lastAutoPublishAt) {
       const diffMins = (now.getTime() - settings.lastAutoPublishAt.getTime()) / 60000;
-      if (diffMins < settings.cronIntervalMinutes) {
-        return; // Not enough time has passed
+      if (diffMins < 1) {
+        return; // Already published in this exact minute
       }
     }
 
-    console.log('[Worker] Checking queue for auto-publish...');
+    console.log(`[Worker] Slot matched (${day} ${currentTimeStr}). Checking queue for auto-publish...`);
     
     // Find the oldest pending post
     const pendingPosts = await db.select()
