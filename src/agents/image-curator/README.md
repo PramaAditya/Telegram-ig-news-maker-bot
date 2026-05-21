@@ -10,17 +10,49 @@ It uses **OpenSERP** for image search and the **Vercel AI SDK** with a Multimoda
 2. **URL Deduplication:** Search engines often return the same image URL across different pages or ranks. The agent automatically maintains a memory of `seenUrls` to prevent processing the same image twice.
 3. **Visual Deduplication (Multimodal Memory):** An image might have two different URLs (e.g., one full size, one slightly cropped). Because the agent downloads thumbnails and feeds them into the Multimodal LLM, it actively compares new candidates against **already approved images from previous loops**. The LLM is instructed to reject cropped, zoomed, or slightly altered versions of what it has already curated.
 
+## Output Structure
+
+By default, the function returns an array of curated images:
+
+```typescript
+[
+  {
+    "originalUrl": "https://example.com/high-res-image.jpg",
+    "relevanceScore": 10,
+    "description": "An excellent depiction of a cyberpunk city street at night..."
+  }
+]
+```
+
+If `detailedOutput` is set to `true`, the object will also include:
+* `thumbnailUrl` (string, optional)
+* `sourceUrl` (string, optional) - the webpage where the image was found
+* `title` (string, optional) - the alt text or title from the search engine
+
 ## Architecture Flow
 
-1. **Search:** Query OpenSERP (`bing` engine default for high quality images) and request `N` results with a pagination `offset`.
-2. **Filter:** Remove already `seenUrls`.
-3. **Download:** Fetch image thumbnails as `Buffer` objects in memory using concurrent requests with strict timeouts. (Thumbnails save bandwidth and LLM token processing time).
-4. **Evaluate:** Construct a multimodal prompt including:
+1. **Pre-Evaluate Existing URLs:** If `existingImageUrls` is provided, download and visually evaluate them first. If `targetCount` is met, return early.
+2. **Search:** Query OpenSERP (`bing` engine default) and request `N` results with a pagination `offset`.
+3. **Filter:** Remove already `seenUrls`.
+4. **Download:** Fetch image thumbnails into a memory `Buffer`, safely handling Base64 Data URIs and stripping out invalid MIME types (like SVGs or HTML masquerading as images).
+5. **Evaluate:** Construct a multimodal prompt including:
    * The User Context.
-   * `ALREADY SELECTED IMAGES` (if in loop > 1) to establish visual memory.
+   * `ALREADY SELECTED IMAGES` to establish visual memory.
    * `NEW CANDIDATES` to be evaluated.
-5. **Decide:** Use `generateObject` and `zod` to force the LLM to output a strictly typed array of selected Candidate IDs, Relevance Scores (1-10), and descriptions.
-6. **Iterate:** If the target count is not met, increase the `offset`, fetch page 2, and repeat the process.
+6. **Decide:** Use `generateObject` and `zod` to force the LLM to output a strictly typed array of selected Candidate IDs, Relevance Scores (1-10), and descriptions.
+7. **Iterate:** If the target count is not met, increase the `offset`, fetch the next page, and repeat the process.
+
+## Inputs / Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `query` | `string` | **Required** | The search query used to find images on the web via OpenSERP. |
+| `context` | `string` | **Required** | The context/topic the visual AI uses to evaluate whether the image is actually a good fit. |
+| `targetCount` | `number` | `1` | The exact number of images the agent will attempt to curate. |
+| `maxAttempts` | `number` | `3` | Maximum pagination/retry attempts to reach `targetCount`. |
+| `engine` | `string` | `'bing'` | OpenSERP engine (`'bing'`, `'google'`, `'yandex'`, `'duckduckgo'`). |
+| `existingImageUrls` | `string[]` | `undefined` | Optional array of direct image URLs to evaluate *before* falling back to search engine curation. Great for validating images scraped from an article. |
+| `detailedOutput` | `boolean` | `false` | If `true`, includes extra metadata (`title`, `thumbnailUrl`, `sourceUrl`) in the output array. Defaults to `false` to save context tokens. |
 
 ## Usage
 
