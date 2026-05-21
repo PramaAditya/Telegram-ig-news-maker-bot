@@ -388,17 +388,7 @@ app.post('/api/queue/:id/regenerate-media', requireDashboardAuth, async (req, re
     try {
       const settings = await getSettings();
       // Re-render the images
-      const renderPayload = template.prepareRenderPayload(post.templateData, settings);
-      const renderedUrls = await generateMedia(template.renderEndpoint, renderPayload);
-
-      if (!renderedUrls || renderedUrls.length === 0) {
-        throw new Error('Failed to render images from external API.');
-      }
-
-      const allPublishUrls = renderedUrls.map((url: string) => ({
-        type: 'image' as const,
-        url
-      }));
+      const allPublishUrls = await template.regenerateMedia(post.templateData, settings);
 
       // Update the DB with the newly generated media URLs
       await db.update(queueTable)

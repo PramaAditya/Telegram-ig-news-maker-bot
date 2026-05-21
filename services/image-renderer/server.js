@@ -232,8 +232,8 @@ async function uploadToS3(buffer, filename) {
   return `${process.env.S3_ENDPOINT}/${process.env.S3_BUCKET}/${key}`;
 }
 
-// 3. New /render-template-multiple endpoint for Interval
-app.post('/render-template-multiple', async (req, res) => {
+// 3. New /render/image-multiple/interval endpoint for Interval
+app.post('/render/image-multiple/interval', async (req, res) => {
   try {
     const { logo, cover_image, title, slides } = req.body;
 
@@ -259,8 +259,8 @@ app.post('/render-template-multiple', async (req, res) => {
       return Handlebars.compile(templateSource);
     };
 
-    const coverTemplate = compileTemplate('interval_cover');
-    const slideTemplate = compileTemplate('interval_slide');
+    const coverTemplate = compileTemplate('image-multiple-interval-cover');
+    const slideTemplate = compileTemplate('image-multiple-interval-slide');
 
     // Process Markdown for title using dynamic import for the ESM module
     const { marked } = await import('marked');
