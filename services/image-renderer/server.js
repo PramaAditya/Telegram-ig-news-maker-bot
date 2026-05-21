@@ -97,27 +97,34 @@ app.post('/render', async (req, res) => {
   }
 });
 
-// 2. New /render-template endpoint
-app.post('/render-template', async (req, res) => {
-  let browser;
+// Helper function to compile template
+const compileTemplate = (templateName) => {
+  const templatePath = path.join(__dirname, 'templates', `${templateName}.html`);
+  if (!fs.existsSync(templatePath)) {
+    throw new Error(`Template "${templateName}" not found.`);
+  }
+  let templateSource = fs.readFileSync(templatePath);
+  
+  // Check for UTF-16 LE BOM
+  if (templateSource.length >= 2 && templateSource[0] === 0xff && templateSource[1] === 0xfe) {
+    templateSource = templateSource.toString('utf16le');
+  } else {
+    templateSource = templateSource.toString('utf8');
+  }
+  
+  return Handlebars.compile(templateSource);
+};
+
+// 2. New /render/image-single/breaking-news-1 endpoint
+app.post('/render/image-single/breaking-news-1', async (req, res) => {
   try {
-    const { template, params, viewport } = req.body;
+    const { image_url, title, subtitle, source, my_handle, date } = req.body;
     
-    if (!template) {
-      return res.status(400).json({ error: 'The "template" field is required' });
+    if (!image_url || !title) {
+      return res.status(400).json({ error: 'The "image_url" and "title" fields are required' });
     }
 
-    const safeTemplateName = path.basename(template);
-    const templatePath = path.join(__dirname, 'templates', `${safeTemplateName}.html`);
-    if (!fs.existsSync(templatePath)) {
-      return res.status(404).json({ error: `Template "${safeTemplateName}" not found.` });
-    }
-
-    const templateSource = fs.readFileSync(templatePath, 'utf8');
-    const compiledTemplate = Handlebars.compile(templateSource);
-
-    // Prepare params
-    const templateParams = { ...params };
+    const templateParams = { image_url, title, subtitle, source, my_handle, date };
     
     // Process Markdown for title and subtitle using dynamic import for the ESM module
     const { marked } = await import('marked');
@@ -131,8 +138,7 @@ app.post('/render-template', async (req, res) => {
 
     // Default Date
     if (!templateParams.date) {
-      // e.g. Senin, 27/04/2026
-      moment.locale('id'); // Attempt Indonesian locale if available, else fallback
+      moment.locale('id');
       templateParams.date = moment().tz('Asia/Jakarta').format('dddd, DD/MM/YYYY');
     }
 
@@ -141,42 +147,69 @@ app.post('/render-template', async (req, res) => {
       templateParams.my_handle = '@poros.perjuangan';
     }
 
+    const compiledTemplate = compileTemplate('carousel_news_1_cover');
     const htmlContent = compiledTemplate(templateParams)
       .replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/textfit\/2\.4\.0\/textFit\.min\.js/g, `http://localhost:${port}/textFit.min.js`);
 
-    const width = parseInt(viewport?.width, 10) || 1080;
-    const height = parseInt(viewport?.height, 10) || 1350;
+    const viewport = { width: 1080, height: 1350 };
+    const imageBuffer = await renderHtmlToBuffer(htmlContent, viewport.width, viewport.height);
+    
+    const filename = `breaking-news-1-${uuidv4()}.png`;
+    const url = await uploadToS3(imageBuffer, filename);
 
-    browser = await getBrowser();
-    const page = await browser.newPage();
-    await page.setViewport({ width, height });
-
-    const pendingRequests = new Set();
-    page.on('request', request => pendingRequests.add(request.url()));
-    page.on('requestfinished', request => pendingRequests.delete(request.url()));
-    page.on('requestfailed', request => pendingRequests.delete(request.url()));
-
-    try {
-      await page.setContent(htmlContent, {
-        waitUntil: ['networkidle0', 'load', 'domcontentloaded'],
-        timeout: 15000
-      });
-    } catch (e) {
-      console.warn('Timeout waiting for networkidle0, proceeding with screenshot anyway.');
-      console.warn('Pending requests:', Array.from(pendingRequests));
-    }
-
-    const imageBuffer = await page.screenshot({ type: 'png' });
-
-    res.setHeader('Content-Type', 'image/png');
-    res.send(Buffer.from(imageBuffer));
+    res.json({ urls: [url] });
   } catch (error) {
     console.error('Template Rendering error:', error);
-    res.status(500).json({ error: 'Failed to render template', details: error.message });
-  } finally {
-    if (browser) {
-      await browser.close();
+    res.status(500).json({ error: 'Failed to render breaking-news-1 template', details: error.message });
+  }
+});
+
+// 3. New /render/image-single/breaking-news-2 endpoint
+app.post('/render/image-single/breaking-news-2', async (req, res) => {
+  try {
+    const { image_url, title, subtitle, source, my_handle, date } = req.body;
+    
+    if (!image_url || !title) {
+      return res.status(400).json({ error: 'The "image_url" and "title" fields are required' });
     }
+
+    const templateParams = { image_url, title, subtitle, source, my_handle, date };
+    
+    // Process Markdown for title and subtitle using dynamic import for the ESM module
+    const { marked } = await import('marked');
+    
+    if (templateParams.title) {
+      templateParams.title = marked.parseInline(templateParams.title);
+    }
+    if (templateParams.subtitle) {
+      templateParams.subtitle = marked.parseInline(templateParams.subtitle);
+    }
+
+    // Default Date
+    if (!templateParams.date) {
+      moment.locale('id');
+      templateParams.date = moment().tz('Asia/Jakarta').format('dddd, DD/MM/YYYY');
+    }
+
+    // Default Handle
+    if (!templateParams.my_handle) {
+      templateParams.my_handle = '@poros.perjuangan';
+    }
+
+    const compiledTemplate = compileTemplate('carousel_news_2_cover');
+    const htmlContent = compiledTemplate(templateParams)
+      .replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/textfit\/2\.4\.0\/textFit\.min\.js/g, `http://localhost:${port}/textFit.min.js`);
+
+    const viewport = { width: 1080, height: 1350 };
+    const imageBuffer = await renderHtmlToBuffer(htmlContent, viewport.width, viewport.height);
+    
+    const filename = `breaking-news-2-${uuidv4()}.png`;
+    const url = await uploadToS3(imageBuffer, filename);
+
+    res.json({ urls: [url] });
+  } catch (error) {
+    console.error('Template Rendering error:', error);
+    res.status(500).json({ error: 'Failed to render breaking-news-2 template', details: error.message });
   }
 });
 
@@ -243,21 +276,6 @@ app.post('/render/image-multiple/interval', async (req, res) => {
 
     const viewport = { width: 1080, height: 1350 };
     const imageUrls = [];
-
-    // Helper function to compile template
-    const compileTemplate = (templateName) => {
-      const templatePath = path.join(__dirname, 'templates', `${templateName}.html`);
-      let templateSource = fs.readFileSync(templatePath);
-      
-      // Check for UTF-16 LE BOM
-      if (templateSource.length >= 2 && templateSource[0] === 0xff && templateSource[1] === 0xfe) {
-        templateSource = templateSource.toString('utf16le');
-      } else {
-        templateSource = templateSource.toString('utf8');
-      }
-      
-      return Handlebars.compile(templateSource);
-    };
 
     const coverTemplate = compileTemplate('image-multiple-interval-cover');
     const slideTemplate = compileTemplate('image-multiple-interval-slide');
