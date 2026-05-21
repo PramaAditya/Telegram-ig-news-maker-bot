@@ -7,7 +7,7 @@ import ImageUploader from '../components/ImageUploader.vue'
 const toast = useToast()
 
 const textInput = ref('')
-const mediaUrl = ref('')
+const mediaUrls = ref<string[]>([])
 const templateId = ref('image-multiple:interval')
 const submitting = ref(false)
 const error = ref('')
@@ -19,11 +19,10 @@ const handlePaste = (e: ClipboardEvent) => {
   if (!items) return
 
   for (const item of items) {
-    if (item.type.indexOf('image') !== -1) {
+    if (item.type.startsWith('image/') || item.type.startsWith('video/')) {
       const file = item.getAsFile()
       if (file && uploaderRef.value) {
         uploaderRef.value.uploadFile(file)
-        break // Only handle first image
       }
     }
   }
@@ -64,7 +63,7 @@ const generateContent = async () => {
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text: textInput.value,
-        mediaUrl: mediaUrl.value,
+        mediaUrls: mediaUrls.value,
         templateId: templateId.value
       })
     })
@@ -79,7 +78,7 @@ const generateContent = async () => {
     
     toast.add({ title: 'Generation triggered!', description: 'The worker is processing it.', color: 'success' })
     textInput.value = ''
-    mediaUrl.value = ''
+    mediaUrls.value = []
     fetchActiveJobs()
     
     // Optionally redirect to dashboard or let them wait here
@@ -127,9 +126,9 @@ const generateContent = async () => {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-default mb-2">Optional Reference Image</label>
-          <p class="text-xs text-muted mb-2">Upload an image to be used as a reference for the cover image generation, or as the actual cover. You can also paste an image directly anywhere on this page.</p>
-          <ImageUploader ref="uploaderRef" v-model="mediaUrl" />
+          <label class="block text-sm font-medium text-default mb-2">Optional Reference Media</label>
+          <p class="text-xs text-muted mb-2">Upload images or videos to be used as a reference or as the actual media. You can also paste media directly anywhere on this page.</p>
+          <ImageUploader ref="uploaderRef" v-model="mediaUrls" />
         </div>
 
         <UAlert v-if="error" color="error" variant="soft" :description="error" />

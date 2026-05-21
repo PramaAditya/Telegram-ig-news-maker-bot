@@ -110,19 +110,24 @@ app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
 
 // --- CRUD API Endpoints for Dashboard ---
 
-// POST /api/upload - Upload image to S3
+// POST /api/upload - Upload media to S3
 app.post('/api/upload', requireDashboardAuth, upload.single('image'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No image provided' });
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
     
     const buffer = req.file.buffer;
     const mimeType = req.file.mimetype;
     
-    if (!mimeType.startsWith('image/')) {
-      return res.status(400).json({ error: 'Only image files are allowed' });
+    if (!mimeType.startsWith('image/') && !mimeType.startsWith('video/')) {
+      return res.status(400).json({ error: 'Only image and video files are allowed' });
     }
 
-    const ext = mimeType === 'image/png' ? '.png' : mimeType === 'image/webp' ? '.webp' : '.jpg';
+    let ext = '.jpg';
+    if (mimeType === 'image/png') ext = '.png';
+    else if (mimeType === 'image/webp') ext = '.webp';
+    else if (mimeType === 'video/mp4') ext = '.mp4';
+    else if (mimeType === 'video/quicktime') ext = '.mov';
+    else if (mimeType === 'video/webm') ext = '.webm';
     
     const s3Url = await uploadToS3(buffer, mimeType, ext);
     if (!s3Url) throw new Error('Failed to upload to S3');
@@ -136,10 +141,18 @@ app.post('/api/upload', requireDashboardAuth, upload.single('image'), async (req
 // POST /api/generate-content - Enqueue a new generation job from dashboard
 app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
   try {
-    const { text, mediaUrl, templateId } = req.body;
+    const { text, mediaUrl, mediaUrls, templateId } = req.body;
     if (!text) return res.status(400).json({ error: 'Text input is required' });
 
-    const media = mediaUrl ? [{ type: 'image' as const, url: mediaUrl }] : [];
+    let media: { type: 'image' | 'video', url: string }[] = [];
+    if (mediaUrls && Array.isArray(mediaUrls)) {
+      media = mediaUrls.map((url: string) => ({ 
+        type: url.match(/\.(mp4|mov|webm)$/i) ? 'video' : 'image', 
+        url 
+      }));
+    } else if (mediaUrl) {
+      media = [{ type: 'image' as const, url: mediaUrl }];
+    }
 
     const result = await db.insert(jobsTable).values({
       chatId: 'DASHBOARD',

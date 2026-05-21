@@ -86,9 +86,9 @@ export async function runIntervalPipeline(context: PipelineContext, research: Re
   let baseImageBuffer: Buffer | null = null;
 
   if (processedMedia && processedMedia.length > 0) {
-    const firstMedia = processedMedia[0];
-    if (firstMedia.type === 'image' && firstMedia.buffer) {
-      baseImageBuffer = firstMedia.buffer;
+    const firstImage = processedMedia.find(m => m.type === 'image' && m.buffer);
+    if (firstImage) {
+      baseImageBuffer = firstImage.buffer;
       console.log(`[Phase 3] Using uploaded cover image for enhancement`);
     }
   } else if (scrapedImageUrl) {
