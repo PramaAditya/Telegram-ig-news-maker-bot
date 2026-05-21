@@ -268,7 +268,7 @@ async function uploadToS3(buffer, filename) {
 // 3. New /render/image-multiple/interval endpoint for Interval
 app.post('/render/image-multiple/interval', async (req, res) => {
   try {
-    const { logo, cover_image, title, slides } = req.body;
+    const { logo, cover_image, title, slides, input_images } = req.body;
 
     if (!title || !slides || !Array.isArray(slides)) {
       return res.status(400).json({ error: 'title and slides array are required' });
@@ -279,6 +279,7 @@ app.post('/render/image-multiple/interval', async (req, res) => {
 
     const coverTemplate = compileTemplate('image-multiple-interval-cover');
     const slideTemplate = compileTemplate('image-multiple-interval-slide');
+    const imageTemplate = compileTemplate('image-multiple-interval-image');
 
     // Process Markdown for title using dynamic import for the ESM module
     const { marked } = await import('marked');
@@ -317,6 +318,17 @@ app.post('/render/image-multiple/interval', async (req, res) => {
       const slideFilename = `interval-slide-${i+1}-${uuidv4()}.png`;
       const slideUrl = await uploadToS3(slideBuffer, slideFilename);
       imageUrls.push(slideUrl);
+    }
+
+    // 3. Render Additional Images
+    if (input_images && Array.isArray(input_images)) {
+      for (let i = 0; i < input_images.length; i++) {
+        const inputImage = input_images[i];
+        const html = imageTemplate({ logo: logo || 'interval', image_url: inputImage });
+        const buffer = await renderHtmlToBuffer(html, viewport.width, viewport.height);
+        const url = await uploadToS3(buffer, `interval-image-${i+1}-${uuidv4()}.png`);
+        imageUrls.push(url);
+      }
     }
 
     res.json({ urls: imageUrls });

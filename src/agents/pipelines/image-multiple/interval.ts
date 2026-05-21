@@ -33,7 +33,8 @@ export async function generateIntervalMedia(templateData: any, settings: any): P
     logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
     cover_image: templateData.coverImageUrl,
     title: templateData.title,
-    slides: templateData.slides.map((text: string) => ({ text }))
+    slides: templateData.slides.map((text: string) => ({ text })),
+    input_images: templateData.inputImages || []
   };
 
   const renderedUrls = await generateMedia('/render/image-multiple/interval', renderPayload);
@@ -60,14 +61,33 @@ export async function runIntervalPipeline(context: PipelineContext, research: Re
     ? `\n\nCRITICAL MODERATION RULE:\nYou MUST NOT use the following words in your output: ${bannedWords.map((w: any) => w.word).join(', ')}. Use safe synonyms instead, or if you absolutely must convey the exact concept, use the provided safe replacements: ${bannedWords.map((w: any) => `${w.word}->${w.replacement}`).join(', ')}.`
     : '';
 
+  const imageMediaItems = processedMedia ? processedMedia.filter(m => m.type === 'image' && m.buffer) : [];
+  const isAlbum = imageMediaItems.length > 1;
+  const slideCount = isAlbum ? 1 : 2;
+
+  const dynamicSystemPromptAdditions = `
+Your task is to parse the gathered facts into final components for an Instagram news carousel.
+- title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing clichAc slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
+- slides: An array of exactly ${slideCount} string${slideCount > 1 ? 's' : ''}, representing ${slideCount} slide${slideCount > 1 ? 's' : ''} explaining the news. Write in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span. AVOID complex political or academic jargon (e.g. use "hak penuh sebagai negara merdeka" instead of "hak kedaulatan"). Each slide MUST be exactly 1 short paragraph containing at most 2 sentences. Get straight to the point without unnecessary fluff. Answer the 5W1H comprehensively across the ${slideCount} slide${slideCount > 1 ? 's' : ''}. Do NOT repeat information already stated in the title.
+- source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
+- image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "masterpiece professional photography, dramatic backlighting, heavy chiaroscuro, extreme low key".
+`;
+
+  const dynamicSchema = z.object({
+    title: z.string(),
+    slides: z.array(z.string()).length(slideCount),
+    source_name: z.string(),
+    image_prompt: z.string(),
+  });
+
   // Phase 2: Content Generation
   console.log(`[Phase 2] Generating content using template schema`);
-  const writerSystemPrompt = baseSystemPrompt + `\n\nEDITORIAL GUIDELINES & FRAMING:\n${editorialGuidelines}\n\n${systemPromptAdditions}` + bannedWordsPrompt;
+  const writerSystemPrompt = baseSystemPrompt + `\n\nEDITORIAL GUIDELINES & FRAMING:\n${editorialGuidelines}\n\n${dynamicSystemPromptAdditions}` + bannedWordsPrompt;
   
   const { object: contentParams } = await generateObject({
     model: googleAI(process.env.CONTENT_WRITER_MODEL || 'gemini-3.1-pro-preview'),
     system: writerSystemPrompt,
-    schema: schema,
+    schema: dynamicSchema,
     prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchText}`,
   });
   
@@ -85,12 +105,9 @@ export async function runIntervalPipeline(context: PipelineContext, research: Re
   // Phase 3: Image Sourcing
   let baseImageBuffer: Buffer | null = null;
 
-  if (processedMedia && processedMedia.length > 0) {
-    const firstImage = processedMedia.find(m => m.type === 'image' && m.buffer);
-    if (firstImage) {
-      baseImageBuffer = firstImage.buffer;
-      console.log(`[Phase 3] Using uploaded cover image for enhancement`);
-    }
+  if (imageMediaItems.length > 0) {
+    baseImageBuffer = imageMediaItems[0].buffer!;
+    console.log(`[Phase 3] Using uploaded cover image for enhancement`);
   } 
   
   if (!baseImageBuffer && scrapedImageUrl) {
@@ -184,6 +201,17 @@ export async function runIntervalPipeline(context: PipelineContext, research: Re
     throw new Error('Gagal mendapatkan URL gambar.');
   }
 
+  let extraImageUrls: string[] = [];
+  if (isAlbum) {
+    console.log(`[Phase 3] Uploading raw input images for album...`);
+    for (const item of imageMediaItems) {
+      if (item.buffer) {
+         const url = await uploadToS3(item.buffer, item.mimeType || 'image/jpeg', item.mimeType === 'image/png' ? '.png' : '.jpg');
+         if (url) extraImageUrls.push(url);
+      }
+    }
+  }
+
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
 
   // Phase 4: Image Rendering
@@ -230,7 +258,8 @@ RULES:
     logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
     cover_image: coverImageUrl,
     title: templateData.title,
-    slides: templateData.slides.map((text: string) => ({ text }))
+    slides: templateData.slides.map((text: string) => ({ text })),
+    input_images: extraImageUrls
   };
 
   const renderedUrls = await generateMedia('/render/image-multiple/interval', renderPayload);
@@ -274,6 +303,7 @@ RULES:
   console.log(`[Phase 5] Saving to Queue with ${allPublishUrls.length} media items`);
   
   templateData.coverImageUrl = coverImageUrl; 
+  templateData.inputImages = extraImageUrls;
   
   await insertQueueItem({
     templateId: intervalTemplateConfig.id,
