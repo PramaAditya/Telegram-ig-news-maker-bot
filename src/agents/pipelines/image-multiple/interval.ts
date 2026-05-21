@@ -124,9 +124,8 @@ Your task is to parse the gathered facts into final components for an Instagram 
   if (!baseImageBuffer) {
     console.log(`[Phase 3] No image found so far. Searching the web for an image related to: ${contentParams.title}`);
     try {
-      const FirecrawlApp = (await import('@mendable/firecrawl-js')).default;
-      const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY || '' });
-      const searchRes = await firecrawl.search(`${contentParams.title} image`, { limit: 1 });
+      const { firecrawlService } = await import('../../../utils/firecrawl.js');
+      const searchRes = await firecrawlService.search(`${contentParams.title} image`, { limit: 1 });
       
       // Look through search results to see if any have an image
       let foundImageUrl: string | null = null;

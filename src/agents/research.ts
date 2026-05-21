@@ -1,12 +1,12 @@
 import { generateText, tool, stepCountIs } from 'ai';
 import { z } from 'zod';
-import FirecrawlApp from '@mendable/firecrawl-js';
+import { firecrawlService } from '../utils/firecrawl.js';
 import axios from 'axios';
 import fs from 'fs/promises';
 import { uploadToS3 } from '../s3.js';
 import { PipelineContext, ResearchResult, googleAI, withRetry } from '../utils.js';
 
-const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY || '' });
+
 
 export async function runResearchPhase(context: PipelineContext): Promise<ResearchResult> {
   const { userInput, uploadedMedia, currentYear, baseSystemPrompt, telegram, statusMsg } = context;
@@ -110,7 +110,7 @@ export async function runResearchPhase(context: PipelineContext): Promise<Resear
         inputSchema: z.object({ query: z.string() }),
         execute: async ({ query }: { query: string }) => {
           console.log(`[Tool: searchWeb] Searching for: "${query}"`);
-          const res = await firecrawl.search(query, { limit: 3, scrapeOptions: { formats: ['markdown'] } });
+          const res = await firecrawlService.search(query, { limit: 3, scrapeOptions: { formats: ['markdown'] } });
           
           if (res && (res as any).data) {
             (res as any).data.forEach((item: any) => {
@@ -128,7 +128,7 @@ export async function runResearchPhase(context: PipelineContext): Promise<Resear
         inputSchema: z.object({ url: z.string() }),
         execute: async ({ url }: { url: string }) => {
           console.log(`[Tool: scrapeUrl] Scraping URL: ${url}`);
-          const res = await firecrawl.scrape(url, { formats: ['markdown'] });
+          const res = await firecrawlService.scrape(url, { formats: ['markdown'] });
           const metadata = (res as any).metadata;
           const markdown = (res as any).markdown;
           
