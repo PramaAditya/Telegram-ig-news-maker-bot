@@ -12,7 +12,7 @@ This is an internal Express.js microservice (`subtitle-maker`) within the broade
 - **Local Volume Mapping:** This service shares a Docker volume (`telegram-data`) with the local `telegram-bot-api` server. It can process files via standard `multipart/form-data` uploads, OR by receiving an absolute path (`filePath` in the body) referencing the shared volume. The latter is preferred for large files to avoid network I/O.
 - **Environment Variables:**
   - `ELEVENLABS_API_KEY`: Required for transcription.
-  - `GOOGLE_GENERATIVE_AI_API_KEY`: Required for Gemini (translation & captioning).
+  - `GOOGLE_GENERATIVE_AI_API_KEY`: Required for Gemini (translation).
   - `SUBTITLE_GENERATOR_MODEL`: Gemini model to use (defaults to `gemini-1.5-flash`).
   - `TARGET_LANG`: Default target language code (defaults to `ind`).
   - `PORT`: Express port (defaults to 3001).
@@ -21,7 +21,7 @@ This is an internal Express.js microservice (`subtitle-maker`) within the broade
 - `src/index.ts`: The Express server and main orchestration pipeline.
 - `src/elevenlabs.ts`: Handles the `multipart/form-data` upload to ElevenLabs `scribe_v1` model to get word-level timestamped transcriptions.
 - `src/chunker.ts`: Programmatic logic to merge individual words into cohesive subtitle chunks based on character limits, durations, and silence gaps.
-- `src/gemini.ts`: Handles LLM interactions. Translates chunks while strictly maintaining their IDs, and generates a punchy social media caption based on the full text.
+- `src/gemini.ts`: Handles LLM interactions. Translates chunks while strictly maintaining their IDs, using context from the original media.
 - `src/sanitize.ts`: A dictionary-based string replacer that obfuscates sensitive keywords to prevent algorithm shadowbans.
 
 ## API Reference
@@ -44,5 +44,4 @@ Accepts either `multipart/form-data` (with a `file` field) OR `application/json`
 2. Formats into `Chunk` objects.
 3. Detects audio language. If `audioLanguage` (first 2 chars) matches `targetLanguage` (first 2 chars), translation is skipped.
 4. Applies `sanitize.ts` to the final text.
-5. Generates a social media caption.
-6. Cleans up any uploaded files from Multer's `temp` directory.
+5. Cleans up any uploaded files from Multer's `temp` directory and from Gemini's File API.

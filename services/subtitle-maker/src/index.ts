@@ -6,7 +6,7 @@ import crypto from 'crypto';
 
 import { transcribeAudio } from './elevenlabs';
 import { chunkWords, buildSRT } from './chunker';
-import { translateChunks, generateCaption, getLanguageName } from './gemini';
+import { translateChunks, getLanguageName, uploadMediaToGemini, deleteMediaFromGemini } from './gemini';
 import { censorText, BannedWord } from './sanitize';
 
 const app = express();
@@ -30,6 +30,7 @@ const upload = multer({ storage });
 // Ensure api keys exist in env or pass from headers
 app.post('/process', upload.single('file'), async (req, res) => {
   const filePath = req.file?.path || req.body.filePath; // Allow internal path if shared volume
+  let uploadedMedia: any = null; // Track the uploaded file
   
   if (!filePath || !fs.existsSync(filePath)) {
     return res.status(400).json({ error: 'File is required (upload or valid internal filePath)' });
@@ -67,8 +68,19 @@ app.post('/process', upload.single('file'), async (req, res) => {
     const targetLangCodeMatch = targetLangCode.substring(0, 2);
 
     if (sourceLangCodeMatch !== targetLangCodeMatch) {
+      // Helper to guess mime type for Gemini if sent via absolute volume path
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeType = req.file?.mimetype || (ext === '.mp4' ? 'video/mp4' : ext === '.mp3' ? 'audio/mpeg' : 'audio/mp4');
+
+      console.log(`[subtitle-maker] Uploading media to Gemini for context...`);
+      try {
+        uploadedMedia = await uploadMediaToGemini(filePath, mimeType, geminiKey);
+      } catch (e: any) {
+        console.log('[subtitle-maker] Failed to upload media to Gemini, proceeding without video context:', e.message);
+      }
+
       console.log(`[subtitle-maker] Translating from ${audioLang} to ${targetLanguage}...`);
-      const translatedMap = await translateChunks(chunks, geminiKey, context);
+      const translatedMap = await translateChunks(chunks, geminiKey, context, uploadedMedia);
       
       for (const chunk of finalChunks) {
         if (translatedMap[chunk.id]) {
@@ -85,24 +97,24 @@ app.post('/process', upload.single('file'), async (req, res) => {
     const srtContent = buildSRT(finalChunks, 'censoredText');
     const fullText = finalChunks.map(c => c.censoredText).join(' ');
 
-    console.log(`[subtitle-maker] Generating caption...`);
-    const caption = await generateCaption(fullText, geminiKey);
-
     if (outputFormat === 'json') {
       return res.json({
         srt: srtContent,
         chunks: finalChunks,
-        caption,
         fullText
       });
     }
 
     // Default outputFormat 'srt'
-    res.json({ srt: srtContent, caption, fullText });
+    res.json({ srt: srtContent, fullText });
   } catch (error: any) {
     console.error('[subtitle-maker] Error:', error);
     res.status(500).json({ error: error.message });
   } finally {
+    if (uploadedMedia && uploadedMedia.name) {
+      await deleteMediaFromGemini(uploadedMedia.name, geminiKey);
+    }
+
     // Cleanup uploaded file if it was uploaded via multer
     if (req.file?.path && fs.existsSync(req.file.path)) {
       try { fs.unlinkSync(req.file.path); } catch(e) {}
