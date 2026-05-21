@@ -49,6 +49,7 @@ export interface PipelineContext {
 export interface ResearchResult {
   researchText: string;
   scrapedImageUrl: string | null;
+  scrapedImageUrls?: string[];
   processedMedia: MediaItem[];
 }
 

@@ -14,7 +14,7 @@ export async function runResearchPhase(context: PipelineContext): Promise<Resear
   console.log(`[Phase 1] Researching: ${userInput}`);
   
   // Research prompt: strictly neutral 5W1H
-  const researchSystemPrompt = baseSystemPrompt + `\n\nRESEARCH GUIDELINES:\nMaintain a strictly neutral, objective, and highly informative investigative journalistic tone. Focus on gathering factual news, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How). Do not apply any political bias, emotive language, or specific framing during the research phase.\n\nYour task is to gather facts on the user's input. If the user input contains an http/https URL, you MUST prioritize using the \`scrapeUrl\` tool on that specific URL to read its content. If it's just a topic or keywords, use the \`searchWeb\` tool. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.`;
+  const researchSystemPrompt = baseSystemPrompt + `\n\nRESEARCH GUIDELINES:\nMaintain a strictly neutral, objective, and highly informative investigative journalistic tone. Focus on gathering factual news, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How). Do not apply any political bias, emotive language, or specific framing during the research phase.\n\nYour task is to gather facts on the user's input. If the user input contains an http/https URL, you MUST prioritize using the \`scrapeUrl\` tool on that specific URL to read its content. If it's just a topic or keywords, use the \`searchWeb\` tool. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.\n\nIMPORTANT IMAGE CURATION:\nIf you find highly relevant news photographs or editorial images within the scraped markdown content, list them at the end of your summary under a "### Relevant Images" section using markdown image syntax: ![description](url). Do NOT include logos, icons, avatars, promotional banners, or irrelevant UI elements.`;
 
   const messageContent: any[] = [
     { type: 'text', text: `User Input: ${userInput}` }
@@ -82,6 +82,18 @@ export async function runResearchPhase(context: PipelineContext): Promise<Resear
   }
 
   let scrapedImageUrl: string | null = null;
+  let scrapedImageUrls: string[] = [];
+
+  const extractImagesFromMarkdown = (md: string) => {
+    const regex = /!\[.*?\]\((.*?)\)/g;
+    let match;
+    while ((match = regex.exec(md)) !== null) {
+      const url = match[1].trim();
+      if (url.startsWith('http') && !url.includes('firecrawl')) {
+        scrapedImageUrls.push(url);
+      }
+    }
+  };
 
   const { text: researchText } = await generateText({
     model: googleAI(process.env.CONTENT_RESEARCHER_MODEL || 'gemini-3.1-pro-preview'),
@@ -99,6 +111,15 @@ export async function runResearchPhase(context: PipelineContext): Promise<Resear
         execute: async ({ query }: { query: string }) => {
           console.log(`[Tool: searchWeb] Searching for: "${query}"`);
           const res = await firecrawl.search(query, { limit: 3, scrapeOptions: { formats: ['markdown'] } });
+          
+          if (res && (res as any).data) {
+            (res as any).data.forEach((item: any) => {
+              if (item.metadata && (item.metadata.ogImage || item.metadata.image)) {
+                const img = item.metadata.ogImage || item.metadata.image;
+                if (img && img.startsWith('http')) scrapedImageUrls.push(img);
+              }
+            });
+          }
           return JSON.stringify(res);
         },
       }),
@@ -109,11 +130,16 @@ export async function runResearchPhase(context: PipelineContext): Promise<Resear
           console.log(`[Tool: scrapeUrl] Scraping URL: ${url}`);
           const res = await firecrawl.scrape(url, { formats: ['markdown'] });
           const metadata = (res as any).metadata;
+          const markdown = (res as any).markdown;
+          
           if (metadata && (metadata.ogImage || metadata.image)) {
              scrapedImageUrl = metadata.ogImage || metadata.image;
+             if (scrapedImageUrl && scrapedImageUrl.startsWith('http')) {
+               scrapedImageUrls.push(scrapedImageUrl);
+             }
              console.log(`[Tool: scrapeUrl] Found image URL in metadata: ${scrapedImageUrl}`);
           }
-          return (res as any).markdown || JSON.stringify(res);
+          return markdown || JSON.stringify(res);
         },
       }),
     },
@@ -122,10 +148,20 @@ export async function runResearchPhase(context: PipelineContext): Promise<Resear
 
   console.log(`[Phase 1] Research Complete. Text length: ${researchText.length}`);
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✍️ Menyusun konten...'));
+  
+  // Extract AI-curated images from the final response
+  extractImagesFromMarkdown(researchText);
+
+  // Deduplicate image URLs
+  scrapedImageUrls = [...new Set(scrapedImageUrls)];
+  if (scrapedImageUrls.length > 0) {
+    console.log(`[Phase 1] Found ${scrapedImageUrls.length} relevant images during research.`);
+  }
 
   return {
     researchText,
     scrapedImageUrl,
+    scrapedImageUrls,
     processedMedia
   };
 }

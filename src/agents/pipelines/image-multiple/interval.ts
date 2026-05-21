@@ -130,8 +130,8 @@ Your task is to parse the gathered facts into final components for an Instagram 
       
       // Look through search results to see if any have an image
       let foundImageUrl: string | null = null;
-      if (searchRes.data && searchRes.data.length > 0) {
-        for (const item of searchRes.data) {
+      if ((searchRes as any).data && (searchRes as any).data.length > 0) {
+        for (const item of (searchRes as any).data) {
           if (item.metadata && (item.metadata.ogImage || item.metadata.image)) {
             foundImageUrl = item.metadata.ogImage || item.metadata.image;
             break;
