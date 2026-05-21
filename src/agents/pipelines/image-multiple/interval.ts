@@ -5,8 +5,7 @@ import { PipelineContext, ResearchResult, googleAI, withRetry } from '../../../u
 import { censorText } from '../../../sanitize.js';
 import { uploadToS3 } from '../../../s3.js';
 import { generateMedia } from '../../../image.js';
-import { db } from '../../../db/index.js';
-import { queueTable } from '../../../db/schema.js';
+import { insertQueueItem } from '../../../db/queue.js';
 
 export const intervalTemplateConfig = {
   id: 'image-multiple:interval',
@@ -243,12 +242,12 @@ RULES:
   
   templateData.coverImageUrl = coverImageUrl; 
   
-  await db.insert(queueTable).values({
+  await insertQueueItem({
     templateId: intervalTemplateConfig.id,
     templateData: templateData,
     text: finalCaption,
     media: allPublishUrls,
-    status: 'pending',
+    status: 'pending', // Allows passing 'draft' or other statuses in the future
     researchResult: researchText
   });
 
