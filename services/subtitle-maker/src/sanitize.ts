@@ -1,28 +1,37 @@
-export const dictionary: Record<string, string> = {
-  "israel": "1srαǝl",
-  "hamas": "Hαmαs",
-  "zionis": "Zıønıs",
-  "hizbullah": "Hızbullαh",
-  "hezbollah": "Hǝzbøllαh",
-  "houthi": "Høuthı",
-  "genosida": "Gǝnøsıdα",
-  "bunuh": "bvnvh",
-  "bantai": "bαntα1",
-  "teroris": "tǝrørıs",
-  "bom": "bøm",
-  "syahid": "syαhıd",
-  "gaza": "Gαzα",
-  "palestina": "Pαlǝstınα",
-  "penjajah": "pǝnjαjαh",
-  "perang": "pǝrαng",
-  "mati": "mαtı",
-  "meledak": "mǝlǝdαk",
-  "hancur": "hαncvr",
-  "tewas": "tǝwαs"
-};
+export interface BannedWord {
+  word: string;
+  replacement: string;
+  type: 'exact' | 'partial';
+}
 
-export function censorText(text: string): string {
+export const defaultDictionary: BannedWord[] = [
+  { word: "israel", replacement: "1srI?l", type: "partial" },
+  { word: "hamas", replacement: "HImIs", type: "partial" },
+  { word: "zionis", replacement: "ZA,ns", type: "partial" },
+  { word: "hizbullah", replacement: "HzbullIh", type: "partial" },
+  { word: "hezbollah", replacement: "H?zbA,llIh", type: "partial" },
+  { word: "houthi", replacement: "HA,uth", type: "partial" },
+  { word: "genosida", replacement: "G?nA,sdI", type: "partial" },
+  { word: "bunuh", replacement: "bvnvh", type: "partial" },
+  { word: "bantai", replacement: "bIntI1", type: "partial" },
+  { word: "teroris", replacement: "t?rA,rs", type: "partial" },
+  { word: "bom", replacement: "bA,m", type: "partial" },
+  { word: "syahid", replacement: "syIhd", type: "partial" },
+  { word: "gaza", replacement: "GIzI", type: "partial" },
+  { word: "palestina", replacement: "PIl?stnI", type: "partial" },
+  { word: "penjajah", replacement: "p?njIjIh", type: "partial" },
+  { word: "perang", replacement: "p?rIng", type: "partial" },
+  { word: "mati", replacement: "mIt", type: "partial" },
+  { word: "meledak", replacement: "m?l?dIk", type: "partial" },
+  { word: "hancur", replacement: "hIncvr", type: "partial" },
+  { word: "tewas", replacement: "t?wIs", type: "partial" }
+];
+
+export function censorText(text: string, customDictionary?: BannedWord[]): string {
   if (typeof text !== 'string') return text;
+
+  // Use custom dictionary if provided and not empty, otherwise fallback to default
+  const activeDictionary = (customDictionary && customDictionary.length > 0) ? customDictionary : defaultDictionary;
 
   // Step A: Extract and Protect URLs
   const urlRegex = /(https?:\/\/[^\s"'<>]+)/g;
@@ -37,8 +46,15 @@ export function censorText(text: string): string {
   let result = protectedText.replace(/\\n/g, '\n').replace(/\/n/g, '\n');
 
   // Step C: Apply Censor Dictionary with accurate case matching
-  for (const [word, replacement] of Object.entries(dictionary)) {
-    const regex = new RegExp(word, 'gi');
+  for (const { word, replacement, type } of activeDictionary) {
+    if (!word || !replacement) continue;
+    
+    // Escape regex characters to prevent SyntaxError
+    const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Build regex based on match type
+    const pattern = type === 'exact' ? `\\b${escapedWord}\\b` : escapedWord;
+    const regex = new RegExp(pattern, 'gi');
     
     result = result.replace(regex, (match) => {
       const firstCharMatched = match.charAt(0);

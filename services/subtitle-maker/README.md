@@ -34,6 +34,7 @@ Accepts either `multipart/form-data` (with a `file` field) OR `application/json`
 - `filePath` (String, optional): Absolute local path to the media file (useful for shared Docker volumes).
 - `targetLanguage` or `targetLang` (String, optional): Target language for translation (e.g., `en`, `ind`, `es`). Overrides `TARGET_LANG` env var. Can be passed in query string.
 - `context` (String, optional): Additional context passed to Gemini to aid in translation accuracy (e.g., specific names or terminology).
+- `censorDictionary` (Array, optional): Custom dictionary array matching the `BannedWord[]` interface: `[ { "word": "israel", "replacement": "1srI?l", "type": "partial" } ]`. Overrides the default built-in dictionary.
 - `outputFormat` (String, optional): The desired response format. Either `srt` (default) or `json`.
 - `elevenLabsKey` (String, optional): Overrides env variable.
 - `geminiKey` (String, optional): Overrides env variable.

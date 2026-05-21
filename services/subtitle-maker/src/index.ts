@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import { transcribeAudio } from './elevenlabs';
 import { chunkWords, buildSRT } from './chunker';
 import { translateChunks, generateCaption, getLanguageName } from './gemini';
-import { censorText } from './sanitize';
+import { censorText, BannedWord } from './sanitize';
 
 const app = express();
 app.use(express.json());
@@ -41,7 +41,8 @@ app.post('/process', upload.single('file'), async (req, res) => {
     context = '',
     outputFormat = 'srt', // 'srt' or 'json'
     elevenLabsKey = process.env.ELEVENLABS_API_KEY,
-    geminiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
+    geminiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    censorDictionary // Expected to be of type BannedWord[]
   } = req.body;
 
   if (!elevenLabsKey || !geminiKey) {
@@ -78,7 +79,7 @@ app.post('/process', upload.single('file'), async (req, res) => {
 
     console.log(`[subtitle-maker] Censoring and building SRT...`);
     for (const chunk of finalChunks) {
-      chunk.censoredText = censorText(chunk.translatedText || chunk.originalText);
+      chunk.censoredText = censorText(chunk.translatedText || chunk.originalText, censorDictionary as BannedWord[]);
     }
 
     const srtContent = buildSRT(finalChunks, 'censoredText');
