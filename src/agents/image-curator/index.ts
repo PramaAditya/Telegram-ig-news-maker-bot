@@ -6,8 +6,8 @@ import { openserp } from '../../openserp.js';
 export interface CuratedImage {
   originalUrl: string;
   thumbnailUrl?: string;
-  sourceUrl: string;
-  title: string;
+  sourceUrl?: string;
+  title?: string;
   relevanceScore: number;
   description: string;
 }
@@ -19,17 +19,33 @@ interface ImageCandidate {
   sourceUrl: string;
   title: string;
   buffer: Buffer;
+  mimeType: string;
 }
 
 /**
  * Helper to download an image as a Buffer with a timeout.
  */
-async function downloadImageAsBuffer(url: string, timeoutMs = 5000): Promise<Buffer | null> {
+async function downloadImage(url: string, timeoutMs = 5000): Promise<{ buffer: Buffer; mimeType: string } | null> {
   try {
+    if (url.startsWith('data:')) {
+      const parts = url.split(',');
+      const match = parts[0].match(/:(.*?);/);
+      const mimeType = match ? match[1] : 'image/jpeg';
+      const buffer = Buffer.from(parts[1], 'base64');
+      return { buffer, mimeType };
+    }
+    
     const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
     if (!res.ok) return null;
+    
+    let mimeType = res.headers.get('content-type') || 'image/jpeg';
+    mimeType = mimeType.split(';')[0].trim();
+    
+    // Gemini API often rejects SVGs or HTML pages disguised as images
+    if (mimeType.includes('text/html') || mimeType.includes('svg')) return null;
+    
     const arrayBuffer = await res.arrayBuffer();
-    return Buffer.from(arrayBuffer);
+    return { buffer: Buffer.from(arrayBuffer), mimeType };
   } catch (error) {
     return null;
   }
@@ -48,6 +64,8 @@ export interface CurateImagesParams {
   engine?: 'bing' | 'google' | 'yandex' | 'duckduckgo';
   /** Optional list of existing image URLs to evaluate before falling back to OpenSERP */
   existingImageUrls?: string[];
+  /** Whether to include detailed metadata like title and sourceUrl in the output (default: false) */
+  detailedOutput?: boolean;
 }
 
 /**
@@ -61,11 +79,12 @@ export async function curateImages({
   targetCount = 1,
   maxAttempts = 3,
   engine = 'bing',
-  existingImageUrls
+  existingImageUrls,
+  detailedOutput = false
 }: CurateImagesParams): Promise<CuratedImage[]> {
   console.log(`[ImageCurator] Starting curation for: "${query}" (Target: ${targetCount})`);
 
-  const approvedImages: (CuratedImage & { buffer: Buffer })[] = [];
+  const approvedImages: (CuratedImage & { buffer: Buffer; mimeType: string })[] = [];
   const seenUrls = new Set<string>();
   
   let attempt = 0;
@@ -76,15 +95,16 @@ export async function curateImages({
     const downloadedCandidates: ImageCandidate[] = [];
     const fetchPromises = candidatesRaw.map(async (res: any, idx: number) => {
       const urlToFetch = res.image.thumbnail || res.image.url;
-      const buffer = await downloadImageAsBuffer(urlToFetch);
-      if (buffer) {
+      const downloaded = await downloadImage(urlToFetch);
+      if (downloaded) {
         downloadedCandidates.push({
           id: idx,
           originalUrl: res.image.url,
           thumbnailUrl: res.image.thumbnail,
           sourceUrl: res.source.page_url,
           title: res.title,
-          buffer
+          buffer: downloaded.buffer,
+          mimeType: downloaded.mimeType
         });
       }
     });
@@ -109,14 +129,14 @@ export async function curateImages({
       content.push({ type: 'text', text: `\n--- ALREADY SELECTED IMAGES (DO NOT DUPLICATE THESE, NOT EVEN CROPS) ---` });
       approvedImages.forEach((img, idx) => {
         content.push({ type: 'text', text: `Already Selected [${idx}]` });
-        content.push({ type: 'image', image: img.buffer });
+        content.push({ type: 'image', image: img.buffer, mimeType: img.mimeType });
       });
     }
 
     content.push({ type: 'text', text: `\n--- NEW CANDIDATES ---` });
     downloadedCandidates.forEach(candidate => {
       content.push({ type: 'text', text: `Candidate ID: ${candidate.id}` });
-      content.push({ type: 'image', image: candidate.buffer });
+      content.push({ type: 'image', image: candidate.buffer, mimeType: candidate.mimeType });
     });
 
     const modelName = process.env.MIDDLE_MODEL || 'gemini-3.5-flash';
@@ -138,18 +158,19 @@ export async function curateImages({
         .map((sel: any) => {
           const candidate = downloadedCandidates.find(c => c.id === sel.candidateId);
           if (!candidate) return null;
-          const result: CuratedImage & { buffer: Buffer } = {
+          const result: CuratedImage & { buffer: Buffer; mimeType: string } = {
             originalUrl: candidate.originalUrl,
             thumbnailUrl: candidate.thumbnailUrl,
             sourceUrl: candidate.sourceUrl,
             title: candidate.title,
             relevanceScore: sel.relevanceScore,
             description: sel.description,
-            buffer: candidate.buffer
+            buffer: candidate.buffer,
+            mimeType: candidate.mimeType
           };
           return result;
         })
-        .filter((c): c is (CuratedImage & { buffer: Buffer }) => c !== null)
+        .filter((c): c is (CuratedImage & { buffer: Buffer; mimeType: string }) => c !== null)
         .sort((a, b) => b.relevanceScore - a.relevanceScore);
 
       console.log(`[ImageCurator] LLM approved ${newlyApproved.length} images from batch ${batchName}.`);
@@ -209,7 +230,14 @@ export async function curateImages({
   // 7. Cleanup and Return
   const finalSelection = approvedImages.slice(0, targetCount).map(img => {
     // Remove buffer from final output to save memory
-    const { buffer, ...rest } = img;
+    const { buffer, mimeType, ...rest } = img;
+    
+    if (!detailedOutput) {
+      delete rest.title;
+      delete rest.thumbnailUrl;
+      delete rest.sourceUrl;
+    }
+    
     return rest;
   });
 
@@ -227,6 +255,7 @@ const inputSchema = z.object({
   context: z.string().describe('The context or topic to evaluate the images against. The visual AI uses this to pick the best matching visual.'),
   targetCount: z.number().min(1).max(10).optional().describe('How many images to curate. Defaults to 1.'),
   existingImageUrls: z.array(z.string()).optional().describe('Optional list of existing image URLs to evaluate before falling back to OpenSERP.'),
+  detailedOutput: z.boolean().optional().describe('Set to true to include detailed metadata like title, thumbnailUrl, and sourceUrl in the output. Defaults to false.'),
 });
 
 export const imageCuratorTool = tool({
@@ -237,7 +266,8 @@ export const imageCuratorTool = tool({
       query: args.query, 
       context: args.context, 
       targetCount: args.targetCount || 1,
-      existingImageUrls: args.existingImageUrls
+      existingImageUrls: args.existingImageUrls,
+      detailedOutput: args.detailedOutput
     });
     return {
       success: images.length > 0,
