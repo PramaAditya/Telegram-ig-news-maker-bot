@@ -25,6 +25,7 @@ services:
     environment:
       - TELEGRAM_API_URL=http://ignews_botapi:8081
       - IMAGE_API_URL=http://image-renderer:3000
+      - SUBTITLE_API_URL=http://subtitle-maker:3001
     command: npm run start:bot
     ports:
       - "3000:3000"
@@ -33,6 +34,7 @@ services:
     depends_on:
       - ignews_botapi
       - image-renderer
+      - subtitle-maker
     
   image-renderer:
     build: ./services/image-renderer
@@ -42,6 +44,14 @@ services:
     expose:
       - "3000"
 
+  subtitle-maker:
+    build: ./services/subtitle-maker
+    container_name: ignews_subtitle_maker
+    restart: always
+    env_file: .env
+    expose:
+      - "3001"
+
   worker:
     build: .
     container_name: ignews_worker
@@ -50,9 +60,11 @@ services:
     environment:
       - TELEGRAM_API_URL=http://ignews_botapi:8081
       - IMAGE_API_URL=http://image-renderer:3000
+      - SUBTITLE_API_URL=http://subtitle-maker:3001
     command: npm run start:worker
     volumes:
       - telegram-data:/var/lib/telegram-bot-api
     depends_on:
       - ignews_botapi
       - image-renderer
+      - subtitle-maker
