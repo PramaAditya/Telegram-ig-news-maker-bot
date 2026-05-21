@@ -46,6 +46,8 @@ export interface CurateImagesParams {
   maxAttempts?: number;
   /** OpenSERP search engine to use (default: bing) */
   engine?: 'bing' | 'google' | 'yandex' | 'duckduckgo';
+  /** Optional list of existing image URLs to evaluate before falling back to OpenSERP */
+  existingImageUrls?: string[];
 }
 
 /**
@@ -58,7 +60,8 @@ export async function curateImages({
   context,
   targetCount = 1,
   maxAttempts = 3,
-  engine = 'bing'
+  engine = 'bing',
+  existingImageUrls
 }: CurateImagesParams): Promise<CuratedImage[]> {
   console.log(`[ImageCurator] Starting curation for: "${query}" (Target: ${targetCount})`);
 
@@ -68,6 +71,112 @@ export async function curateImages({
   let attempt = 0;
   let offset = 0;
   const pageSize = 20; // Fetch more to increase chances of finding good images per batch
+
+  const evaluateBatch = async (candidatesRaw: any[], neededCount: number, batchName: string) => {
+    const downloadedCandidates: ImageCandidate[] = [];
+    const fetchPromises = candidatesRaw.map(async (res: any, idx: number) => {
+      const urlToFetch = res.image.thumbnail || res.image.url;
+      const buffer = await downloadImageAsBuffer(urlToFetch);
+      if (buffer) {
+        downloadedCandidates.push({
+          id: idx,
+          originalUrl: res.image.url,
+          thumbnailUrl: res.image.thumbnail,
+          sourceUrl: res.source.page_url,
+          title: res.title,
+          buffer
+        });
+      }
+    });
+
+    await Promise.all(fetchPromises);
+
+    if (downloadedCandidates.length === 0) {
+      console.log(`[ImageCurator] Failed to download any candidates in batch ${batchName}.`);
+      return;
+    }
+
+    console.log(`[ImageCurator] Successfully downloaded ${downloadedCandidates.length} candidate thumbnails. Evaluating...`);
+
+    const content: any[] = [
+      { type: 'text', text: `You are an expert image curator. Your task is to select the most highly relevant images based on the following context.` },
+      { type: 'text', text: `Context:\n${context}` },
+      { type: 'text', text: `\nGoal: We need exactly ${neededCount} more image(s). Select up to ${neededCount} best images from the new candidates.` },
+      { type: 'text', text: `CRITICAL RULES:\n1. Ensure selected images are highly relevant to the context.\n2. Ensure selected images are VISUALLY DISTINCT.\n3. DO NOT select images that are cropped, zoomed-in, heavily watermarked, or slightly color-altered versions of each other or the Already Selected list.` }
+    ];
+
+    if (approvedImages.length > 0) {
+      content.push({ type: 'text', text: `\n--- ALREADY SELECTED IMAGES (DO NOT DUPLICATE THESE, NOT EVEN CROPS) ---` });
+      approvedImages.forEach((img, idx) => {
+        content.push({ type: 'text', text: `Already Selected [${idx}]` });
+        content.push({ type: 'image', image: img.buffer });
+      });
+    }
+
+    content.push({ type: 'text', text: `\n--- NEW CANDIDATES ---` });
+    downloadedCandidates.forEach(candidate => {
+      content.push({ type: 'text', text: `Candidate ID: ${candidate.id}` });
+      content.push({ type: 'image', image: candidate.buffer });
+    });
+
+    const modelName = process.env.MIDDLE_MODEL || 'gemini-3.5-flash';
+    
+    try {
+      const { object } = await generateObject({
+        model: google(modelName),
+        schema: z.object({
+          selected: z.array(z.object({
+            candidateId: z.number().describe('The ID of the new candidate image you are selecting.'),
+            relevanceScore: z.number().min(1).max(10).describe('How relevant the image is to the context (1-10)'),
+            description: z.string().describe('A brief explanation of why this image is great and how it visually differs from others.'),
+          })).max(neededCount).describe('Pick visually distinct, high-quality images matching the exact needed amount (or fewer if not enough good ones exist).')
+        }),
+        messages: [{ role: 'user', content }]
+      });
+
+      const newlyApproved = object.selected
+        .map((sel: any) => {
+          const candidate = downloadedCandidates.find(c => c.id === sel.candidateId);
+          if (!candidate) return null;
+          const result: CuratedImage & { buffer: Buffer } = {
+            originalUrl: candidate.originalUrl,
+            thumbnailUrl: candidate.thumbnailUrl,
+            sourceUrl: candidate.sourceUrl,
+            title: candidate.title,
+            relevanceScore: sel.relevanceScore,
+            description: sel.description,
+            buffer: candidate.buffer
+          };
+          return result;
+        })
+        .filter((c): c is (CuratedImage & { buffer: Buffer }) => c !== null)
+        .sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+      console.log(`[ImageCurator] LLM approved ${newlyApproved.length} images from batch ${batchName}.`);
+      approvedImages.push(...newlyApproved);
+
+    } catch (error) {
+      console.error(`[ImageCurator] LLM evaluation failed on batch ${batchName}:`, error);
+    }
+  };
+
+  // 0. Process existingImageUrls first
+  if (existingImageUrls && existingImageUrls.length > 0) {
+    const uniqueExisting = existingImageUrls.filter(url => {
+      if (seenUrls.has(url)) return false;
+      seenUrls.add(url);
+      return true;
+    }).map(url => ({
+      image: { url: url, thumbnail: url },
+      source: { page_url: url },
+      title: 'Existing Source Image'
+    }));
+
+    if (uniqueExisting.length > 0) {
+      console.log(`[ImageCurator] Processing ${uniqueExisting.length} existing image URLs...`);
+      await evaluateBatch(uniqueExisting, targetCount, 'existing');
+    }
+  }
 
   while (approvedImages.length < targetCount && attempt < maxAttempts) {
     attempt++;
@@ -92,97 +201,8 @@ export async function curateImages({
     });
 
     console.log(`[ImageCurator] Found ${uniqueCandidatesRaw.length} unique URLs in this batch.`);
-
-    // 3. Download Thumbnails for Multimodal Evaluation
-    const downloadedCandidates: ImageCandidate[] = [];
-    const fetchPromises = uniqueCandidatesRaw.map(async (res: any, idx: number) => {
-      const urlToFetch = res.image.thumbnail || res.image.url;
-      const buffer = await downloadImageAsBuffer(urlToFetch);
-      if (buffer) {
-        downloadedCandidates.push({
-          id: idx,
-          originalUrl: res.image.url,
-          thumbnailUrl: res.image.thumbnail,
-          sourceUrl: res.source.page_url,
-          title: res.title,
-          buffer
-        });
-      }
-    });
-
-    await Promise.all(fetchPromises);
-
-    if (downloadedCandidates.length === 0) {
-      console.log(`[ImageCurator] Failed to download any candidates on attempt ${attempt}.`);
-      continue;
-    }
-
-    console.log(`[ImageCurator] Successfully downloaded ${downloadedCandidates.length} candidate thumbnails. Evaluating...`);
-
-    // 4. Build Multimodal Prompt
-    const content: any[] = [
-      { type: 'text', text: `You are an expert image curator. Your task is to select the most highly relevant images based on the following context.` },
-      { type: 'text', text: `Context:\n${context}` },
-      { type: 'text', text: `\nGoal: We need exactly ${needed} more image(s). Select up to ${needed} best images from the new candidates.` },
-      { type: 'text', text: `CRITICAL RULES:\n1. Ensure selected images are highly relevant to the context.\n2. Ensure selected images are VISUALLY DISTINCT.\n3. DO NOT select images that are cropped, zoomed-in, heavily watermarked, or slightly color-altered versions of each other or the Already Selected list.` }
-    ];
-
-    // Visual Deduplication Memory: Show what we already picked
-    if (approvedImages.length > 0) {
-      content.push({ type: 'text', text: `\n--- ALREADY SELECTED IMAGES (DO NOT DUPLICATE THESE, NOT EVEN CROPS) ---` });
-      approvedImages.forEach((img, idx) => {
-        content.push({ type: 'text', text: `Already Selected [${idx}]` });
-        content.push({ type: 'image', image: img.buffer });
-      });
-    }
-
-    // Show the new candidates
-    content.push({ type: 'text', text: `\n--- NEW CANDIDATES ---` });
-    downloadedCandidates.forEach(candidate => {
-      content.push({ type: 'text', text: `Candidate ID: ${candidate.id}` });
-      content.push({ type: 'image', image: candidate.buffer });
-    });
-
-    // 5. Ask LLM to evaluate and pick
-    const modelName = process.env.MIDDLE_MODEL || 'gemini-3.5-flash';
-    
-    try {
-      const { object } = await generateObject({
-        model: google(modelName),
-        schema: z.object({
-          selected: z.array(z.object({
-            candidateId: z.number().describe('The ID of the new candidate image you are selecting.'),
-            relevanceScore: z.number().min(1).max(10).describe('How relevant the image is to the context (1-10)'),
-            description: z.string().describe('A brief explanation of why this image is great and how it visually differs from others.'),
-          })).max(needed).describe('Pick visually distinct, high-quality images matching the exact needed amount (or fewer if not enough good ones exist).')
-        }),
-        messages: [{ role: 'user', content }]
-      });
-
-      // 6. Map back to objects, validate, and append
-      const newlyApproved = object.selected
-        .map((sel: any) => {
-          const candidate = downloadedCandidates.find(c => c.id === sel.candidateId);
-          if (!candidate) return null;
-          const result: CuratedImage & { buffer: Buffer } = {
-            originalUrl: candidate.originalUrl,
-            thumbnailUrl: candidate.thumbnailUrl,
-            sourceUrl: candidate.sourceUrl,
-            title: candidate.title,
-            relevanceScore: sel.relevanceScore,
-            description: sel.description,
-            buffer: candidate.buffer // Keep buffer for next iteration's visual memory
-          };
-          return result;
-        })
-        .filter((c): c is (CuratedImage & { buffer: Buffer }) => c !== null)
-        .sort((a, b) => b.relevanceScore - a.relevanceScore);
-
-      console.log(`[ImageCurator] LLM approved ${newlyApproved.length} images from this batch.`);
-      approvedImages.push(...newlyApproved);
-
-    } catch (error) {
-      console.error(`[ImageCurator] LLM evaluation failed on attempt ${attempt}:`, error);
+    if (uniqueCandidatesRaw.length > 0) {
+      await evaluateBatch(uniqueCandidatesRaw, needed, String(attempt));
     }
   }
 
@@ -206,13 +226,19 @@ const inputSchema = z.object({
   query: z.string().describe('The search query to find images on the web'),
   context: z.string().describe('The context or topic to evaluate the images against. The visual AI uses this to pick the best matching visual.'),
   targetCount: z.number().min(1).max(10).optional().describe('How many images to curate. Defaults to 1.'),
+  existingImageUrls: z.array(z.string()).optional().describe('Optional list of existing image URLs to evaluate before falling back to OpenSERP.'),
 });
 
 export const imageCuratorTool = tool({
   description: 'Searches for images and uses a visual AI to curate and select the most relevant ones based on the given context. It automatically deduplicates and iterates until the target count is met. Returns the selected high-res image URLs along with descriptions.',
   inputSchema,
-  execute: async (args: z.infer<typeof inputSchema>) => {
-    const images = await curateImages({ query: args.query, context: args.context, targetCount: args.targetCount || 1 });
+  execute: async (args) => {
+    const images = await curateImages({ 
+      query: args.query, 
+      context: args.context, 
+      targetCount: args.targetCount || 1,
+      existingImageUrls: args.existingImageUrls
+    });
     return {
       success: images.length > 0,
       targetReached: images.length === (args.targetCount || 1),
