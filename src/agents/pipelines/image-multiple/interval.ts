@@ -91,13 +91,46 @@ export async function runIntervalPipeline(context: PipelineContext, research: Re
       baseImageBuffer = firstImage.buffer;
       console.log(`[Phase 3] Using uploaded cover image for enhancement`);
     }
-  } else if (scrapedImageUrl) {
+  } 
+  
+  if (!baseImageBuffer && scrapedImageUrl) {
     console.log(`[Phase 3] Using scraped image URL as base: ${scrapedImageUrl}`);
     try {
       const response = await axios.get(scrapedImageUrl, { responseType: 'arraybuffer' });
       baseImageBuffer = Buffer.from(response.data);
     } catch (err: any) {
       console.warn(`[Phase 3] Failed to download scraped image: ${err.message}`);
+    }
+  }
+
+  // Fallback: search for an image using Firecrawl based on the topic
+  if (!baseImageBuffer) {
+    console.log(`[Phase 3] No image found so far. Searching the web for an image related to: ${contentParams.title}`);
+    try {
+      const FirecrawlApp = (await import('@mendable/firecrawl-js')).default;
+      const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY || '' });
+      const searchRes = await firecrawl.search(`${contentParams.title} image`, { limit: 1 });
+      
+      // Look through search results to see if any have an image
+      let foundImageUrl: string | null = null;
+      if (searchRes.data && searchRes.data.length > 0) {
+        for (const item of searchRes.data) {
+          if (item.metadata && (item.metadata.ogImage || item.metadata.image)) {
+            foundImageUrl = item.metadata.ogImage || item.metadata.image;
+            break;
+          }
+        }
+      }
+
+      if (foundImageUrl) {
+         console.log(`[Phase 3] Found image URL via web search: ${foundImageUrl}`);
+         const response = await axios.get(foundImageUrl, { responseType: 'arraybuffer' });
+         baseImageBuffer = Buffer.from(response.data);
+      } else {
+         console.log(`[Phase 3] Web search didn't yield a usable image URL.`);
+      }
+    } catch (err: any) {
+      console.warn(`[Phase 3] Web search for image failed: ${err.message}`);
     }
   }
 
