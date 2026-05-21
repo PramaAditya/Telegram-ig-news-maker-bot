@@ -166,12 +166,16 @@ onMounted(() => {
 
 const jumpToPosition = async (currentIndex: number, event: Event) => {
   const target = event.target as HTMLInputElement;
-  const newIndex = parseInt(target.value) - 1;
+  let newIndex = parseInt(target.value) - 1;
+
+  // If they enter a giant number, clamp it to the end of the queue
+  if (newIndex >= queue.value.length) {
+    newIndex = queue.value.length - 1;
+  }
 
   if (
     isNaN(newIndex) ||
     newIndex < 0 ||
-    newIndex >= queue.value.length ||
     newIndex === currentIndex
   ) {
     target.value = (currentIndex + 1).toString();
