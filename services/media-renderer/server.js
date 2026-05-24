@@ -115,6 +115,58 @@ const compileTemplate = (templateName) => {
   return Handlebars.compile(templateSource);
 };
 
+// Helper to render HTML to image buffer
+async function renderHtmlToBuffer(htmlContent, width, height) {
+  const browser = await getBrowser();
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width, height });
+
+    const pendingRequests = new Set();
+    page.on('request', request => pendingRequests.add(request.url()));
+    page.on('requestfinished', request => pendingRequests.delete(request.url()));
+    page.on('requestfailed', request => pendingRequests.delete(request.url()));
+
+    try {
+      await page.setContent(htmlContent, {
+        waitUntil: ['networkidle0', 'load', 'domcontentloaded'],
+        timeout: 15000
+      });
+    } catch (e) {
+      console.warn('Timeout waiting for networkidle0, proceeding with screenshot anyway.');
+    }
+
+    const imageBuffer = await page.screenshot({ type: 'png' });
+    return imageBuffer;
+  } finally {
+    await browser.close();
+  }
+}
+
+// Helper to upload buffer to S3
+async function uploadToS3(buffer, filename) {
+  const rootFolder = process.env.S3_ROOT_FOLDER ? `${process.env.S3_ROOT_FOLDER}/` : '';
+  const key = `${rootFolder}${filename}`;
+
+  const command = new PutObjectCommand({
+    Bucket: process.env.S3_BUCKET,
+    Key: key,
+    Body: buffer,
+    ContentType: 'image/png',
+  });
+
+  await s3Client.send(command);
+  
+  if (process.env.S3_PUBLIC_URL_BASE) {
+    // If a public URL base is provided, assume it maps directly to the bucket root
+    // e.g. CDN or custom domain
+    return `${process.env.S3_PUBLIC_URL_BASE}/${key}`;
+  }
+  
+  // Fallback to endpoint + bucket name for standard path-style S3 URLs
+  return `${process.env.S3_ENDPOINT}/${process.env.S3_BUCKET}/${key}`;
+}
+
 // Unified Dynamic Endpoint
 app.post('/render/:mediaType/:brand/:templateName', async (req, res) => {
   const { mediaType, brand, templateName } = req.params;
