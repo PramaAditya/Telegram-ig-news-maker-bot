@@ -8,6 +8,8 @@ import { getSettings } from './db/settings.js';
 import { TEMPLATES } from './templates.js';
 import { eq } from 'drizzle-orm';
 import dns from 'dns';
+import axios from 'axios';
+import { uploadToS3 } from './s3.js';
 
 // Fix for ECONNRESET issues in Docker (Node.js 17+ prefers IPv6 by default, which can break in some Docker networks)
 dns.setDefaultResultOrder('ipv4first');
@@ -34,6 +36,27 @@ const bot = new Telegraf(botToken, {
 });
 
 const mediaGroupAccumulator = new Map<string, { timer: NodeJS.Timeout, items: { fileId: string, caption?: string, msgId: number, type: 'image' | 'video', mimeType?: string }[] }>();
+
+async function uploadTelegramMediaToS3(url: string, mimeType?: string): Promise<string> {
+  const response = await axios.get(url, { responseType: 'arraybuffer' });
+  const buffer = Buffer.from(response.data, 'binary');
+  
+  let ext = '.jpg';
+  if (mimeType === 'image/png') ext = '.png';
+  else if (mimeType === 'image/webp') ext = '.webp';
+  else if (mimeType === 'video/mp4') ext = '.mp4';
+  else if (mimeType === 'video/quicktime') ext = '.mov';
+  else if (mimeType === 'video/webm') ext = '.webm';
+  else if (!mimeType && url.includes('.')) {
+      const extMatch = url.match(/\.([a-zA-Z0-9]+)(\?|$)/);
+      if (extMatch) ext = `.${extMatch[1]}`;
+  }
+
+  const defaultMimeType = url.match(/\.(mp4|mov|webm)$/i) ? 'video/mp4' : 'image/jpeg';
+  const resolvedMimeType = mimeType || defaultMimeType;
+
+  return uploadToS3(buffer, resolvedMimeType, ext);
+}
 
 bot.on(message('text'), async (ctx) => {
   const chatId = ctx.chat.id.toString();
@@ -133,14 +156,13 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
               while (retries > 0) {
                 try {
                   const fileUrl = await ctx.telegram.getFileLink(item.fileId);
-                  url = fileUrl.toString();
-                  // When using the local Bot API, it returns http://botapi:8081/... 
-                  // If we are mapping ports or using the local bot API in production, axios can reach this url natively
-                  // because our bot and worker containers are in the same docker network as 'botapi'.
+                  const telegramUrl = fileUrl.toString();
+                  // Upload to S3 immediately
+                  url = await uploadTelegramMediaToS3(telegramUrl, item.mimeType);
                   break;
                 } catch (e: any) {
                   retries--;
-                  console.warn(`[Bot] Failed to getFileLink for ${item.fileId}, retries left: ${retries}. Error: ${e.message}`);
+                  console.warn(`[Bot] Failed to download/upload ${item.fileId}, retries left: ${retries}. Error: ${e.message}`);
                   if (retries === 0) throw e;
                   await new Promise(res => setTimeout(res, 1000)); // wait 1s before retrying
                 }
@@ -192,24 +214,23 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
 
   // Single media case (no media_group_id)
   console.log(`[Bot] Received single ${isVideo ? 'video' : 'photo'} message from ${ctx.chat.id}`);
-  let fileLink: URL | undefined = undefined;
+  let finalS3Url: string | undefined = undefined;
   let retries = 3;
   while (retries > 0) {
     try {
       const fileUrl = await ctx.telegram.getFileLink(fileId);
-      fileLink = fileUrl;
-      // Similar to above, this will return an internal docker URL (http://botapi:8081/...)
-      // which axios in agent.ts can resolve directly.
+      const telegramUrl = fileUrl.toString();
+      finalS3Url = await uploadTelegramMediaToS3(telegramUrl, mimeType);
       break;
     } catch (e: any) {
       retries--;
-      console.warn(`[Bot] Failed to getFileLink for ${fileId}, retries left: ${retries}. Error: ${e.message}`);
+      console.warn(`[Bot] Failed to download/upload ${fileId}, retries left: ${retries}. Error: ${e.message}`);
       if (retries === 0) throw e;
       await new Promise(res => setTimeout(res, 1000));
     }
   }
   
-  if (!fileLink) return;
+  if (!finalS3Url) return;
   const text = caption ? caption : 'No specific text provided, analyze the media context if possible.';
   
   try {
@@ -217,7 +238,7 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
       chatId,
       messageId: ctx.message.message_id,
       text,
-      media: [{ type: isVideo ? 'video' : 'image', url: fileLink.toString(), mimeType }],
+      media: [{ type: isVideo ? 'video' : 'image', url: finalS3Url, mimeType }],
       status: 'pending'
     }).returning();
     

@@ -9,7 +9,7 @@ import { insertQueueItem } from '../../../../db/queue.js';
 
 export const carouselDarkTemplateConfig = {
   id: 'image:kabar.perjuangan:carousel_dark',
-  name: 'Interval News (Carousel)',
+  name: 'Carousel Dark (kabar.perjuangan)',
   description: 'A 2-slide breaking news carousel with a cover image.',
 };
 
