@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { db } from './db/index.js';
-import { jobsTable, queueTable, settingsTable } from './db/schema.js';
+import { jobsTable, queueTable, settingsTable, ideasTable } from './db/schema.js';
 import { getSettings } from './db/settings.js';
 import { eq, asc, desc, sql } from 'drizzle-orm';
 import { TEMPLATES } from './templates.js';
@@ -164,6 +164,73 @@ app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
     }).returning();
 
     res.json({ message: 'Job enqueued successfully', job: result[0] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ideas - Get ideas
+app.get('/api/ideas', requireDashboardAuth, async (req, res) => {
+  try {
+    const status = req.query.status as string;
+    
+    const allIdeas = await db.select()
+      .from(ideasTable)
+      .where(status ? eq(ideasTable.status, status) : undefined)
+      .orderBy(desc(ideasTable.createdAt))
+      .limit(100);
+      
+    res.json(allIdeas);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/ideas/:id/convert - Convert idea to job
+app.post('/api/ideas/:id/convert', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const [idea] = await db.select().from(ideasTable).where(eq(ideasTable.id, id));
+    if (!idea) return res.status(404).json({ error: 'Idea not found' });
+    
+    if (idea.status === 'converted') {
+      return res.status(400).json({ error: 'Idea already converted' });
+    }
+
+    const { templateId } = req.body;
+
+    await db.insert(jobsTable).values({
+      chatId: idea.chatId,
+      messageId: idea.messageId,
+      text: idea.text,
+      media: idea.media,
+      templateId: templateId || 'image:kabar.perjuangan:carousel_dark',
+      status: 'pending'
+    });
+
+    await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, id));
+    
+    res.json({ message: 'Idea converted to job successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/ideas/:id/status - Update idea status
+app.put('/api/ideas/:id/status', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const { status } = req.body;
+    
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+    if (!status || !['pending', 'converted', 'rejected'].includes(status)) {
+       return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    await db.update(ideasTable).set({ status }).where(eq(ideasTable.id, id));
+    res.json({ message: 'Status updated successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

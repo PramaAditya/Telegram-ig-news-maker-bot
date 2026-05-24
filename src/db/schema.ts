@@ -14,6 +14,16 @@ export const queueTable = pgTable('queue', {
   publishedAt: timestamp('published_at'),
 });
 
+export const ideasTable = pgTable('ideas', {
+  id: serial('id').primaryKey(),
+  chatId: text('chat_id').notNull(),
+  messageId: bigint('message_id', { mode: 'number' }).notNull(),
+  text: text('text').notNull(),
+  media: jsonb('media').$type<{ type: 'image' | 'video', url: string, mimeType?: string }[]>().default([]).notNull(),
+  status: text('status').notNull().default('pending'), // pending, converted, rejected
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 export const jobsTable = pgTable('jobs', {
   id: serial('id').primaryKey(),
   chatId: text('chat_id').notNull(),

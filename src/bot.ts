@@ -3,7 +3,7 @@ import { message } from 'telegraf/filters';
 import dotenv from 'dotenv';
 import { startServer } from './server.js';
 import { db } from './db/index.js';
-import { jobsTable } from './db/schema.js';
+import { jobsTable, ideasTable } from './db/schema.js';
 import { getSettings } from './db/settings.js';
 import { eq } from 'drizzle-orm';
 import dns from 'dns';
@@ -54,17 +54,24 @@ bot.on(message('text'), async (ctx) => {
   }
   
   try {
-    await db.insert(jobsTable).values({
+    const [idea] = await db.insert(ideasTable).values({
       chatId,
       messageId: ctx.message.message_id,
       text,
       media: [],
-      templateId: 'image:kabar.perjuangan:carousel_dark', // Default template for Telegram
       status: 'pending'
+    }).returning();
+    
+    await ctx.reply('Ide tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
+          [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
+        ]
+      }
     });
-    await ctx.reply('⏳ Pesan diterima dan masuk antrean sistem.');
   } catch (err: any) {
-    console.error('[Bot] Error saving text job:', err);
+    console.error('[Bot] Error saving text idea:', err);
     await ctx.reply('Terjadi kesalahan sistem saat menyimpan antrean.');
   }
 });
@@ -143,18 +150,26 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
             // Find the first caption in the group to use as the text prompt
             const groupCaption = groupData.items.find(item => item.caption)?.caption || 'No specific text provided, analyze the media context if possible.';
             
-            await db.insert(jobsTable).values({
+            const [idea] = await db.insert(ideasTable).values({
               chatId,
               messageId: groupData.items[0].msgId,
               text: groupCaption,
               media: mediaItems,
-              templateId: 'image:kabar.perjuangan:carousel_dark', // Default template for Telegram
               status: 'pending'
+            }).returning();
+            
+            await ctx.reply('Ide (album) tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
+              reply_to_message_id: groupData.items[0].msgId,
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
+                  [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
+                ]
+              }
             });
-            await ctx.reply('⏳ Album media diterima dan masuk antrean sistem.', { reply_to_message_id: groupData.items[0].msgId });
             
           } catch (error) {
-            console.error('[Bot] Error saving media group job:', error);
+            console.error('[Bot] Error saving media group idea:', error);
             try { await ctx.reply('Terjadi kesalahan sistem saat menyimpan antrean album.'); } catch (e) {}
           }
         }, 2000) // Wait 2 seconds for all parts of the album to arrive
@@ -197,20 +212,70 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
   const text = caption ? caption : 'No specific text provided, analyze the media context if possible.';
   
   try {
-    await db.insert(jobsTable).values({
+    const [idea] = await db.insert(ideasTable).values({
       chatId,
       messageId: ctx.message.message_id,
       text,
       media: [{ type: isVideo ? 'video' : 'image', url: fileLink.toString(), mimeType }],
-      templateId: 'image:kabar.perjuangan:carousel_dark', // Default template for Telegram
       status: 'pending'
+    }).returning();
+    
+    await ctx.reply('Ide media tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
+      reply_to_message_id: ctx.message.message_id,
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
+          [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
+        ]
+      }
     });
-    await ctx.reply('⏳ Media diterima dan masuk antrean sistem.', { reply_to_message_id: ctx.message.message_id });
   } catch (error) {
-    console.error(`[Bot] Error saving single media job:`, error);
+    console.error(`[Bot] Error saving single media idea:`, error);
     try { await ctx.reply('Terjadi kesalahan sistem saat menyimpan antrean media.'); } catch (e) {}
   }
 }
+
+bot.on('callback_query', async (ctx: any) => {
+  try {
+    const callbackData = ctx.callbackQuery.data;
+    
+    if (callbackData.startsWith('make_post_')) {
+      const ideaId = parseInt(callbackData.replace('make_post_', ''), 10);
+      
+      const [idea] = await db.select().from(ideasTable).where(eq(ideasTable.id, ideaId));
+      if (!idea) {
+        return ctx.answerCbQuery('Ide tidak ditemukan.');
+      }
+      if (idea.status !== 'pending') {
+         return ctx.answerCbQuery('Ide ini sudah diproses.');
+      }
+
+      await db.insert(jobsTable).values({
+        chatId: idea.chatId,
+        messageId: idea.messageId,
+        text: idea.text,
+        media: idea.media,
+        templateId: 'image:kabar.perjuangan:carousel_dark',
+        status: 'pending'
+      });
+
+      await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, ideaId));
+
+      await ctx.editMessageText('✅ Masuk antrean sistem');
+      await ctx.answerCbQuery('Ide akan diproses.');
+      
+    } else if (callbackData.startsWith('cancel_idea_')) {
+      const ideaId = parseInt(callbackData.replace('cancel_idea_', ''), 10);
+      
+      // Kept pending to show in dashboard, just update message
+      await ctx.editMessageText('⏳ Ide disimpan. Bisa diproses nanti di dashboard.');
+      await ctx.answerCbQuery('Disimpan ke dashboard.');
+    }
+  } catch (error) {
+    console.error('[Bot] Error in callback_query:', error);
+    try { await ctx.answerCbQuery('Terjadi kesalahan.'); } catch (e) {}
+  }
+});
 
 bot.on(message('photo'), (ctx) => handleMediaMessage(ctx, false));
 bot.on(message('video'), (ctx) => handleMediaMessage(ctx, true));
