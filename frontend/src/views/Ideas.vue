@@ -3,14 +3,32 @@ import { ref, onMounted } from 'vue';
 import { apiFetch } from '../auth';
 
 const ideas = ref<any[]>([]);
+const templates = ref<any[]>([]);
+const selectedTemplates = ref<Record<number, string>>({});
 const currentTab = ref('pending');
 const loading = ref(false);
+
+const fetchTemplates = async () => {
+  try {
+    const data = await apiFetch('/api/templates');
+    templates.value = data || [];
+  } catch (error) {
+    console.error('Failed to fetch templates:', error);
+  }
+};
 
 const fetchIdeas = async () => {
   loading.value = true;
   try {
     const data = await apiFetch(`/api/ideas?status=${currentTab.value}`);
     ideas.value = data || [];
+    
+    // Initialize selected templates for new ideas
+    ideas.value.forEach(idea => {
+      if (!selectedTemplates.value[idea.id] && templates.value.length > 0) {
+        selectedTemplates.value[idea.id] = templates.value[0].id;
+      }
+    });
   } catch (error) {
     console.error('Failed to fetch ideas:', error);
   } finally {
@@ -18,13 +36,17 @@ const fetchIdeas = async () => {
   }
 };
 
-onMounted(fetchIdeas);
+onMounted(async () => {
+  await fetchTemplates();
+  await fetchIdeas();
+});
 
 const convertIdea = async (ideaId: number) => {
+  const templateId = selectedTemplates.value[ideaId] || 'image:kabar.perjuangan:carousel_dark';
   try {
     await apiFetch(`/api/ideas/${ideaId}/convert`, {
       method: 'POST',
-      body: JSON.stringify({ templateId: 'image:kabar.perjuangan:carousel_dark' }) // Or allow template selection
+      body: JSON.stringify({ templateId })
     });
     fetchIdeas();
   } catch (error) {
@@ -116,30 +138,38 @@ const formatDate = (dateStr: string) => {
           </div>
         </div>
         
-        <div class="bg-gray-50 px-5 py-3 border-t border-gray-200 flex gap-2">
-          <button 
-            v-if="idea.status === 'pending' || idea.status === 'rejected'" 
-            @click="convertIdea(idea.id)" 
-            class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            Convert to Post
-          </button>
-          
-          <button 
-            v-if="idea.status === 'pending'" 
-            @click="updateStatus(idea.id, 'rejected')" 
-            class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            Reject
-          </button>
-          
-           <button 
-            v-if="idea.status === 'rejected'" 
-            @click="updateStatus(idea.id, 'pending')" 
-            class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            Move to Pending
-          </button>
+        <div class="bg-gray-50 px-5 py-3 border-t border-gray-200 flex flex-col gap-3">
+          <div v-if="idea.status === 'pending' || idea.status === 'rejected'" class="flex flex-col gap-2">
+            <label class="block text-xs font-medium text-gray-700">Template</label>
+            <select v-model="selectedTemplates[idea.id]" class="mt-1 block w-full pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+              <option v-for="t in templates" :key="t.id" :value="t.id">{{ t.name }}</option>
+            </select>
+          </div>
+          <div class="flex gap-2">
+            <button 
+              v-if="idea.status === 'pending' || idea.status === 'rejected'" 
+              @click="convertIdea(idea.id)" 
+              class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Convert to Post
+            </button>
+            
+            <button 
+              v-if="idea.status === 'pending'" 
+              @click="updateStatus(idea.id, 'rejected')" 
+              class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Reject
+            </button>
+            
+             <button 
+              v-if="idea.status === 'rejected'" 
+              @click="updateStatus(idea.id, 'pending')" 
+              class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Move to Pending
+            </button>
+          </div>
         </div>
       </div>
     </div>

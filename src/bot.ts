@@ -5,6 +5,7 @@ import { startServer } from './server.js';
 import { db } from './db/index.js';
 import { jobsTable, ideasTable } from './db/schema.js';
 import { getSettings } from './db/settings.js';
+import { TEMPLATES } from './templates.js';
 import { eq } from 'drizzle-orm';
 import dns from 'dns';
 
@@ -235,6 +236,7 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
   }
 }
 
+
 bot.on('callback_query', async (ctx: any) => {
   try {
     const callbackData = ctx.callbackQuery.data;
@@ -250,12 +252,41 @@ bot.on('callback_query', async (ctx: any) => {
          return ctx.answerCbQuery('Ide ini sudah diproses.');
       }
 
+      const templateButtons = Object.values(TEMPLATES).map(t => {
+        return [{ text: t.name, callback_data: `convert_${ideaId}_${t.id}` }];
+      });
+
+      templateButtons.push([{ text: '❌ Batal', callback_data: `cancel_idea_${ideaId}` }]);
+
+      await ctx.editMessageText('Pilih template yang ingin digunakan:', {
+        reply_markup: {
+          inline_keyboard: templateButtons
+        }
+      });
+      await ctx.answerCbQuery();
+
+    } else if (callbackData.startsWith('convert_')) {
+      // Format: convert_<ideaId>_<templateId>
+      const match = callbackData.match(/^convert_(\d+)_(.+)$/);
+      if (!match) return ctx.answerCbQuery('Format data tidak valid.');
+      
+      const ideaId = parseInt(match[1], 10);
+      const templateId = match[2];
+
+      const [idea] = await db.select().from(ideasTable).where(eq(ideasTable.id, ideaId));
+      if (!idea) {
+        return ctx.answerCbQuery('Ide tidak ditemukan.');
+      }
+      if (idea.status !== 'pending') {
+         return ctx.answerCbQuery('Ide ini sudah diproses.');
+      }
+
       await db.insert(jobsTable).values({
         chatId: idea.chatId,
         messageId: idea.messageId,
         text: idea.text,
         media: idea.media,
-        templateId: 'image:kabar.perjuangan:carousel_dark',
+        templateId: templateId,
         status: 'pending'
       });
 

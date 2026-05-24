@@ -169,6 +169,16 @@ app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
   }
 });
 
+// GET /api/templates - List available templates
+app.get('/api/templates', requireDashboardAuth, (req, res) => {
+  const templatesList = Object.values(TEMPLATES).map(t => ({
+    id: t.id,
+    name: t.name,
+    description: t.description
+  }));
+  res.json(templatesList);
+});
+
 // GET /api/ideas - Get ideas
 app.get('/api/ideas', requireDashboardAuth, async (req, res) => {
   try {
