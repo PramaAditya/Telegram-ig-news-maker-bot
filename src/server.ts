@@ -624,12 +624,16 @@ app.post('/api/queue/reorder', requireDashboardAuth, async (req, res) => {
     const pendingIds = new Set(pending.map(p => p.id));
     
     let sortOrder = 10;
+    const updates = [];
     for (const id of orderedIds) {
       if (pendingIds.has(id)) {
-        await db.update(queueTable).set({ sortOrder }).where(eq(queueTable.id, id));
+        updates.push(
+          db.update(queueTable).set({ sortOrder }).where(eq(queueTable.id, id))
+        );
         sortOrder += 10;
       }
     }
+    await Promise.all(updates);
 
     res.json({ message: 'Reordered successfully' });
   } catch (error: any) {

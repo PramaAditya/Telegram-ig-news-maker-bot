@@ -8,8 +8,8 @@ export interface BufferMediaItem {
 
 export async function fetchBufferChannelDetails(bufferToken: string, channelId: string): Promise<{ network: string; name: string }> {
   const query = `
-    query GetChannel {
-      channel(input: { id: "${channelId}" }) {
+    query GetChannel($channelId: String!) {
+      channel(input: { id: $channelId }) {
         service
         name
       }
@@ -17,7 +17,8 @@ export async function fetchBufferChannelDetails(bufferToken: string, channelId: 
   `;
 
   const payload = {
-    query
+    query,
+    variables: { channelId }
   };
 
   const url = 'https://api.buffer.com/1/graphql';
@@ -99,7 +100,7 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
     : '';
 
   const assetsString = `assets: [${assets.map(a => 
-    `{ ${Object.keys(a)[0]}: { url: "${Object.values(a)[0].url}" } }`
+    `{ ${Object.keys(a)[0]}: { url: ${JSON.stringify(Object.values(a)[0].url)} } }`
   ).join(',\n')}]`;
 
   const query = `
@@ -107,7 +108,7 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
       createPost(
         input: {
           text: ${JSON.stringify(text)}
-          channelId: "${channelId}"
+          channelId: ${JSON.stringify(channelId)}
           schedulingType: automatic
           mode: shareNow
           ${metadataString}
