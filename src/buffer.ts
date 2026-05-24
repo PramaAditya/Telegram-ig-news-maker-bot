@@ -78,7 +78,7 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
   `;
 
   // Merge the queue item's specific publish metadata, with fallback for instagram
-  let metadata = publishMetadata;
+  let metadata = publishMetadata || {};
   if (Object.keys(metadata).length === 0 && channelNetwork === 'instagram') {
     metadata = {
       instagram: {
