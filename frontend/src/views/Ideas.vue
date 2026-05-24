@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { apiFetch } from '../auth';
+import { useConnectionStore } from '../store';
+
+const connectionStore = useConnectionStore();
 
 const ideas = ref<any[]>([]);
 const templates = ref<any[]>([]);
@@ -32,10 +35,13 @@ const fetchTemplates = async () => {
 const fetchIdeas = async () => {
   loading.value = true;
   try {
-    const data = await apiFetch(`/api/ideas?status=${currentTab.value}`);
+    let url = `/api/ideas?status=${currentTab.value}`;
+    if (connectionStore.activeConnectionId) {
+       url += `&connectionId=${connectionStore.activeConnectionId}`;
+    }
+    const data = await apiFetch(url);
     ideas.value = data || [];
     
-    // Initialize selected templates for new ideas
     ideas.value.forEach(idea => {
       if (!selectedTemplates.value[idea.id] && templates.value.length > 0) {
         selectedTemplates.value[idea.id] = templates.value[0].id;
@@ -48,9 +54,12 @@ const fetchIdeas = async () => {
   }
 };
 
+watch(() => connectionStore.activeConnectionId, () => {
+  fetchIdeas();
+}, { immediate: true });
+
 onMounted(async () => {
   await fetchTemplates();
-  await fetchIdeas();
 });
 
 const convertIdea = async (ideaId: number) => {
@@ -97,8 +106,13 @@ const formatDate = (dateStr: string) => {
       </div>
     </div>
 
+    <div v-if="!connectionStore.activeConnectionId" class="text-center py-10 bg-default border border-default rounded-lg text-muted">
+         Please select or create a connection from the sidebar.
+    </div>
+
     <!-- Tabs -->
     <UTabs 
+      v-else
       v-model="currentTab"
       :items="tabItems" 
       class="w-full mb-6"

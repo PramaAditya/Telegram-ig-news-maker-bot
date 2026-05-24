@@ -1,20 +1,23 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { Save, Settings2, Loader2, Info, Sparkles, X } from 'lucide-vue-next'
+import { ref, computed, watch } from 'vue'
+import { Save, Settings2, Loader2, Info, Sparkles, X, Trash2 } from 'lucide-vue-next'
 import { getAuthHeaders } from '../auth'
 import ImageUploader from '../components/ImageUploader.vue'
 import PasswordInput from '../components/PasswordInput.vue'
 import AiTextarea from '../components/AiTextarea.vue'
+import { useConnectionStore } from '../store'
 
 const toast = useToast()
+const connectionStore = useConnectionStore()
 
 const settings = ref<any>({
+  id: null,
+  name: '',
   logoImageUrl: '',
   ctaImageUrl: '',
   bufferApiKey: '',
   bufferChannelId: '',
   bufferChannelNetwork: '',
-  telegramBotToken: '',
   editorialGuidelines: '',
   postingSlots: [],
   bannedWords: []
@@ -23,6 +26,7 @@ const settings = ref<any>({
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
+const isDeleting = ref(false)
 
 const aiPrompt = ref('')
 const aiGenerating = ref(false)
@@ -143,10 +147,11 @@ const clearAllSlots = () => {
 
 const generateSlots = async () => {
   if (!aiPrompt.value.trim()) return
+  if (!settings.value.id) return
   
   aiGenerating.value = true
   try {
-    const res = await fetch('/api/settings/slots/generate', {
+    const res = await fetch(`/api/connections/${settings.value.id}/slots/generate`, {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: aiPrompt.value })
@@ -167,14 +172,25 @@ const generateSlots = async () => {
 }
 
 const fetchSettings = async () => {
+  if (!connectionStore.activeConnectionId) {
+    loading.value = false
+    return
+  }
+
   loading.value = true
   error.value = ''
   try {
-    const res = await fetch('/api/settings', { headers: getAuthHeaders() })
+    const res = await fetch('/api/connections', { headers: getAuthHeaders() })
     if (res.status === 401) throw new Error('Unauthorized')
     if (!res.ok) throw new Error('Failed to load settings')
-    const data = await res.json()
-    settings.value = { ...settings.value, ...data }
+    const connections = await res.json()
+    const activeSettings = connections.find((c: any) => c.id === connectionStore.activeConnectionId)
+    
+    if (activeSettings) {
+        settings.value = { ...settings.value, ...activeSettings }
+    } else {
+        error.value = 'Connection not found'
+    }
   } catch (err: any) {
     error.value = err.message
   } finally {
@@ -182,9 +198,12 @@ const fetchSettings = async () => {
   }
 }
 
-onMounted(fetchSettings)
+watch(() => connectionStore.activeConnectionId, () => {
+  fetchSettings()
+}, { immediate: true })
 
 const tabItems = [
+  { label: 'General', icon: 'i-lucide-settings', slot: 'general' as const },
   { label: 'Media Assets', icon: 'i-lucide-image', slot: 'media' as const },
   { label: 'Publishing', icon: 'i-lucide-calendar', slot: 'publishing' as const },
   { label: 'Editorial', icon: 'i-lucide-pen-tool', slot: 'editorial' as const },
@@ -193,10 +212,12 @@ const tabItems = [
 ]
 
 const saveSettings = async () => {
+  if (!settings.value.id) return
+
   saving.value = true
   error.value = ''
   try {
-    const res = await fetch('/api/settings', {
+    const res = await fetch(`/api/connections/${settings.value.id}`, {
       method: 'PUT',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(settings.value)
@@ -205,7 +226,8 @@ const saveSettings = async () => {
     if (res.status === 401) throw new Error('Unauthorized')
     if (!res.ok) throw new Error('Failed to save settings')
     
-    toast.add({ title: 'Settings saved successfully!', description: 'Publishing changes take effect immediately.', color: 'success' })
+    toast.add({ title: 'Connection settings saved successfully!', color: 'success' })
+    fetchSettings() // refresh to get updated auto-detected name/network if any
   } catch (err: any) {
     error.value = err.message
     toast.add({ title: err.message, color: 'error' })
@@ -213,21 +235,56 @@ const saveSettings = async () => {
     saving.value = false
   }
 }
+
+const deleteConnection = async () => {
+  if (!settings.value.id) return
+  if (!confirm('Are you sure you want to delete this connection? This action cannot be undone and will delete all associated queue items and ideas.')) return
+
+  isDeleting.value = true
+  try {
+    const res = await fetch(`/api/connections/${settings.value.id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    })
+    
+    if (res.status === 401) throw new Error('Unauthorized')
+    if (!res.ok) throw new Error('Failed to delete connection')
+    
+    toast.add({ title: 'Connection deleted successfully!', color: 'success' })
+    connectionStore.setActiveConnection(null)
+    window.location.reload()
+  } catch (err: any) {
+    toast.add({ title: err.message, color: 'error' })
+  } finally {
+    isDeleting.value = false
+  }
+}
 </script>
 
 <template>
   <div class="container mx-auto space-y-6">
     <div class="bg-default shadow rounded-lg p-6">
-      <h1 class="text-2xl font-bold text-default mb-6 flex items-center">
-        <Settings2 class="w-6 h-6 mr-3 text-primary" />
-        Global Settings
-      </h1>
-      
-      <p class="text-sm text-muted mb-6">
-        Settings defined here will override the <code class="bg-elevated px-1 rounded text-default">.env</code> configurations.
-      </p>
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-default flex items-center">
+          <Settings2 class="w-6 h-6 mr-3 text-primary" />
+          Connection Settings
+        </h1>
+        <button 
+          v-if="settings.id"
+          @click="deleteConnection" 
+          :disabled="isDeleting"
+          class="flex items-center text-sm text-error hover:text-red-700 transition"
+        >
+           <Loader2 v-if="isDeleting" class="w-4 h-4 mr-1 animate-spin" />
+           <Trash2 v-else class="w-4 h-4 mr-1" />
+           Delete Connection
+        </button>
+      </div>
 
-      <div v-if="loading" class="flex justify-center py-10">
+      <div v-if="!connectionStore.activeConnectionId" class="text-center py-10 text-muted">
+         Please select or create a connection from the sidebar.
+      </div>
+      <div v-else-if="loading" class="flex justify-center py-10">
         <Loader2 class="w-8 h-8 text-primary animate-spin" />
       </div>
 
@@ -241,6 +298,18 @@ const saveSettings = async () => {
 
       <div v-else class="space-y-6">
         <UTabs :items="tabItems" class="w-full">
+
+          <template #general>
+             <div class="mt-6 space-y-6">
+              <h2 class="text-lg font-bold text-default border-b border-default pb-2">General</h2>
+              <div>
+                <label class="block text-sm font-medium text-default mb-2">Connection Name</label>
+                <input v-model="settings.name" type="text" class="w-full px-4 py-2 border border-default rounded-md shadow-sm text-sm bg-default text-default" placeholder="e.g. My Instagram" />
+                <p class="text-xs text-muted mt-1">A recognizable name for this connection. If left blank, it will auto-detect from Buffer.</p>
+              </div>
+             </div>
+          </template>
+
           <template #media>
             <div class="mt-6 space-y-6">
               <h2 class="text-lg font-bold text-default border-b border-default pb-2">Media Assets</h2>
@@ -455,12 +524,6 @@ const saveSettings = async () => {
               <h2 class="text-lg font-bold text-default border-b border-default pb-2">API Keys & Tokens</h2>
               
               <div class="space-y-4">
-                <div>
-                  <label class="block text-sm font-medium text-default mb-2">Telegram Bot Token</label>
-                  <PasswordInput v-model="settings.telegramBotToken" placeholder="123456789:ABCDefgh..." />
-                  <p class="text-xs text-muted mt-1">Changes to this require a full container restart to reconnect Telegraf.</p>
-                </div>
-                
                 <div>
                   <label class="block text-sm font-medium text-default mb-2">Buffer API Key (Bearer)</label>
                   <PasswordInput v-model="settings.bufferApiKey" placeholder="1/abcdef..." />

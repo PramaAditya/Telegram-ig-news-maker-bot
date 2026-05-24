@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, watch } from "vue";
 import { RotateCcw, AlertCircle } from "lucide-vue-next";
 import { getAuthHeaders, setPassword } from "../auth";
+import { useConnectionStore } from '../store';
 
 const toast = useToast();
+const connectionStore = useConnectionStore();
 
 const jobs = ref<any[]>([]);
 const loading = ref(true);
@@ -13,7 +15,11 @@ const retryingId = ref<number | null>(null);
 const fetchJobs = async () => {
   loading.value = true;
   try {
-    const res = await fetch("/api/jobs", { headers: getAuthHeaders() });
+    let url = "/api/jobs";
+    if (connectionStore.activeConnectionId) {
+       url += `?connectionId=${connectionStore.activeConnectionId}`;
+    }
+    const res = await fetch(url, { headers: getAuthHeaders() });
     if (res.status === 401) {
       const pwd = prompt("Enter Dashboard Password:");
       if (pwd !== null) {
@@ -64,7 +70,10 @@ const getStatusColor = (status: string) => {
   }
 };
 
-onMounted(fetchJobs);
+watch(() => connectionStore.activeConnectionId, () => {
+  fetchJobs();
+}, { immediate: true });
+
 </script>
 
 <template>
@@ -79,7 +88,10 @@ onMounted(fetchJobs);
       </button>
     </div>
 
-    <div v-if="loading" class="text-center py-10 text-muted">
+    <div v-if="!connectionStore.activeConnectionId" class="text-center py-10 bg-default border border-default rounded-lg text-muted">
+         Please select or create a connection from the sidebar.
+    </div>
+    <div v-else-if="loading" class="text-center py-10 text-muted">
       Loading jobs...
     </div>
     <UAlert

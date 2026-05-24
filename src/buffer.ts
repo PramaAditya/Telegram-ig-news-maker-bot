@@ -1,16 +1,17 @@
 import axios from 'axios';
-import { getSettings } from './db/settings.js';
+import { getConnection } from './db/settings.js';
 
 export interface BufferMediaItem {
   type: 'image' | 'video';
   url: string;
 }
 
-export async function fetchBufferChannelNetwork(bufferToken: string, channelId: string): Promise<string> {
+export async function fetchBufferChannelDetails(bufferToken: string, channelId: string): Promise<{ network: string; name: string }> {
   const query = `
     query GetChannel($channelId: String!) {
       channel(id: $channelId) {
         service
+        name
       }
     }
   `;
@@ -35,33 +36,32 @@ export async function fetchBufferChannelNetwork(bufferToken: string, channelId: 
       throw new Error(data.errors[0].message);
     }
 
-    const service = data.data?.channel?.service;
-    if (!service) {
-      throw new Error('Could not find channel service');
+    const channel = data.data?.channel;
+    if (!channel || !channel.service) {
+      throw new Error('Could not find channel details');
     }
 
-    return service;
+    return { network: channel.service, name: channel.name || channel.service };
   } catch (error: any) {
-    console.error('Buffer API error fetching channel network:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.errors?.[0]?.message || error.message || 'Failed to fetch Buffer channel network');
+    console.error('Buffer API error fetching channel details:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.errors?.[0]?.message || error.message || 'Failed to fetch Buffer channel details');
   }
 }
 
-export async function publishToBuffer(media: BufferMediaItem[], text: string, publishMetadata: any = {}) {
-  const settings = await getSettings();
-  const bufferToken = settings.bufferApiKey;
-  const channelId = settings.bufferChannelId;
-  const channelNetwork = settings.bufferChannelNetwork || 'instagram';
+export async function publishToBuffer(media: BufferMediaItem[], text: string, publishMetadata: any = {}, connectionId: number) {
+  const connection = await getConnection(connectionId);
+  if (!connection) {
+    throw new Error('Connection not found.');
+  }
+  
+  const bufferToken = connection.bufferApiKey;
+  const channelId = connection.bufferChannelId;
+  const channelNetwork = connection.bufferChannelNetwork || 'instagram';
 
   if (!bufferToken || !channelId) {
     throw new Error('Buffer API credentials missing.');
   }
 
-  // Because Buffer's GraphQL schema has very specific enum types for schedulingType and mode
-  // that are hard to pass as string variables, and $assets type might be tricky,
-  // we will construct the query dynamically using JSON.stringify for the complex objects.
-  
-  // Merge the queue item's specific publish metadata, with fallback for instagram
   let metadata = publishMetadata || {};
   if (Object.keys(metadata).length === 0 && channelNetwork === 'instagram') {
     metadata = {
@@ -72,16 +72,12 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
     };
   }
 
-  // Determine the correct asset mapping based on network
   const assets = media.map(m => {
     if (m.type === 'image') return { image: { url: m.url } };
     if (m.type === 'video') return { video: { url: m.url } };
     return { image: { url: m.url } };
   });
 
-  // Convert metadata to GraphQL format (unquoted keys)
-  // For enums (like type: "post"), we need to ensure values are unquoted if they are strings representing enums.
-  // A simple heuristic for Buffer's metadata: all string values inside metadata are actually enums (like 'post', 'reel').
   const formatGraphQLObject = (obj: any): string => {
     let str = '{';
     for (const [key, value] of Object.entries(obj)) {
@@ -89,7 +85,6 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
       if (typeof value === 'object' && value !== null) {
         str += formatGraphQLObject(value);
       } else if (typeof value === 'string') {
-        // Enums in Buffer (like 'post') must NOT have quotes. 
         str += value; 
       } else {
         str += value;
@@ -134,12 +129,9 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
   `;
 
   const payload = { query };
-
   const url = 'https://api.buffer.com/1/graphql';
 
   try {
-    // Note: Bearer token is standard, but sometimes buffer expects basic auth with token or just the token in header
-    // The docs say: 'Authorization': 'Bearer YOUR_API_KEY'
     const response = await axios.post(url, payload, {
       headers: {
         'Content-Type': 'application/json',
@@ -154,7 +146,6 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
 
     const mutationResult = data.data?.createPost;
     if (mutationResult?.message) {
-      // MutationError
       throw new Error(mutationResult.message);
     }
 

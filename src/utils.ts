@@ -44,6 +44,7 @@ export interface PipelineContext {
   currentDateStr: string;
   currentYear: number;
   baseSystemPrompt: string;
+  connectionId: number;
 }
 
 export interface ResearchResult {

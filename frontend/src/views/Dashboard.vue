@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, watch } from "vue";
 import { Edit, Send, GripVertical, RotateCcw, MoreVertical } from "lucide-vue-next";
 import { getAuthHeaders, setPassword } from "../auth";
 import { Fancybox } from "@fancyapps/ui";
 import draggable from "vuedraggable";
+import { useConnectionStore } from '../store';
 
 const toast = useToast();
+const connectionStore = useConnectionStore();
 
 const queue = ref<any[]>([]);
 const postingSlots = ref<{day: string, time: string}[]>([]);
@@ -65,7 +67,6 @@ const getNextSlot = (fromDate: Date, sortedSlots: {day: string, time: string}[])
     }
   }
   
-  // Wrap to next week
   const firstSlot = sortedSlots[0];
   const [h, m] = firstSlot.time.split(':').map(Number);
   const targetDay = dayMap[firstSlot.day.toLowerCase()];
@@ -108,11 +109,14 @@ const calculateExpectedTimes = () => {
 
 const fetchSettings = async () => {
   try {
-    const res = await fetch("/api/settings", { headers: getAuthHeaders() });
+    const res = await fetch("/api/connections", { headers: getAuthHeaders() });
     if (res.ok) {
       const data = await res.json();
-      postingSlots.value = data.postingSlots || [];
-      calculateExpectedTimes();
+      const activeConn = data.find((c: any) => c.id === connectionStore.activeConnectionId);
+      if (activeConn) {
+         postingSlots.value = activeConn.postingSlots || [];
+         calculateExpectedTimes();
+      }
     }
   } catch (e) {}
 };
@@ -120,7 +124,11 @@ const fetchSettings = async () => {
 const fetchQueue = async () => {
   loading.value = true;
   try {
-    const res = await fetch(`/api/queue?status=${activeTab.value}`, { headers: getAuthHeaders() });
+    let url = `/api/queue?status=${activeTab.value}`;
+    if (connectionStore.activeConnectionId) {
+       url += `&connectionId=${connectionStore.activeConnectionId}`;
+    }
+    const res = await fetch(url, { headers: getAuthHeaders() });
     if (res.status === 401) {
       const pwd = prompt("Enter Dashboard Password:");
       if (pwd !== null) {
@@ -143,12 +151,16 @@ const fetchQueue = async () => {
 };
 
 const syncReorder = async () => {
+  if (!connectionStore.activeConnectionId) return;
   try {
-    calculateExpectedTimes(); // update UI instantly before sync
+    calculateExpectedTimes();
     const res = await fetch(`/api/queue/reorder`, {
       method: "POST",
       headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ orderedIds: queue.value.map((i) => i.id) }),
+      body: JSON.stringify({ 
+         orderedIds: queue.value.map((i) => i.id),
+         connectionId: connectionStore.activeConnectionId
+      }),
     });
     if (res.status === 401) {
       toast.add({ title: "Unauthorized", description: "Please refresh and re-enter password.", color: "error" });
@@ -156,7 +168,7 @@ const syncReorder = async () => {
     }
   } catch (err) {
     toast.add({ title: "Failed to reorder items", color: "error" });
-    fetchQueue(); // rollback
+    fetchQueue();
   }
 };
 
@@ -164,16 +176,15 @@ const onDragEnd = async () => {
   await syncReorder();
 };
 
-onMounted(() => {
+watch(() => connectionStore.activeConnectionId, () => {
   fetchQueue();
   fetchSettings();
-});
+}, { immediate: true });
 
 const jumpToPosition = async (currentIndex: number, event: Event) => {
   const target = event.target as HTMLInputElement;
   let newIndex = parseInt(target.value) - 1;
 
-  // If they enter a giant number, clamp it to the end of the queue
   if (newIndex >= queue.value.length) {
     newIndex = queue.value.length - 1;
   }
@@ -333,6 +344,7 @@ const timeAgo = (dateObj: Date | string | null) => {
           color="white"
           variant="solid"
           size="md"
+          :disabled="!connectionStore.activeConnectionId"
         >
           Create New
         </UButton>
@@ -355,7 +367,10 @@ const timeAgo = (dateObj: Date | string | null) => {
       @update:modelValue="onTabChange"
     >
       <template #content="{ item: _item }">
-        <div v-if="loading" class="text-center py-10 text-muted">
+        <div v-if="!connectionStore.activeConnectionId" class="text-center py-10 bg-default border border-default rounded-lg text-muted">
+           Please select or create a connection from the sidebar.
+        </div>
+        <div v-else-if="loading" class="text-center py-10 text-muted">
           Loading queue...
         </div>
         <UAlert

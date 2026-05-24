@@ -4,26 +4,24 @@ import dotenv from 'dotenv';
 import { startServer } from './server.js';
 import { db } from './db/index.js';
 import { jobsTable, ideasTable } from './db/schema.js';
-import { getSettings } from './db/settings.js';
+import { getGlobalSettings, getConnections } from './db/settings.js';
 import { TEMPLATES } from './templates.js';
 import { eq } from 'drizzle-orm';
 import dns from 'dns';
 import axios from 'axios';
 import { uploadToS3 } from './s3.js';
 
-// Fix for ECONNRESET issues in Docker (Node.js 17+ prefers IPv6 by default, which can break in some Docker networks)
 dns.setDefaultResultOrder('ipv4first');
 
 dotenv.config();
 
-// Start the Express API server
 const PORT = parseInt(process.env.PORT || '3000', 10);
 startServer(PORT);
 
-const settings = await getSettings();
-const botToken = settings.telegramBotToken;
+const globalSettings = await getGlobalSettings();
+const botToken = globalSettings.telegramBotToken;
 if (!botToken) {
-  console.error('TELEGRAM_BOT_TOKEN must be provided in Settings (Database) or .env');
+  console.error('TELEGRAM_BOT_TOKEN must be provided in global settings (Database) or .env');
   process.exit(1);
 }
 
@@ -58,10 +56,57 @@ async function uploadTelegramMediaToS3(url: string, mimeType?: string): Promise<
   return uploadToS3(buffer, resolvedMimeType, ext);
 }
 
+async function promptConnectionSelection(ctx: any, ideaId: number) {
+  const connections = await getConnections();
+  
+  if (connections.length === 1) {
+    // Only one connection, auto-assign
+    await db.update(ideasTable).set({ connectionId: connections[0].id }).where(eq(ideasTable.id, ideaId));
+    await askForTemplate(ctx, ideaId);
+    return;
+  }
+
+  if (connections.length === 0) {
+    return ctx.reply('No connections configured. Please set up a connection in the dashboard first.');
+  }
+
+  const buttons = connections.map(conn => [{ text: conn.name, callback_data: `select_conn_${ideaId}_${conn.id}` }]);
+  buttons.push([{ text: '❌ Cancel', callback_data: `cancel_idea_${ideaId}` }]);
+
+  await ctx.reply('Which account should I queue this idea for?', {
+    reply_markup: {
+      inline_keyboard: buttons
+    }
+  });
+}
+
+async function askForTemplate(ctx: any, ideaId: number) {
+  const templateButtons = Object.values(TEMPLATES).map(t => {
+    return [{ text: t.name, callback_data: `convert_${ideaId}_${t.id}` }];
+  });
+
+  templateButtons.push([{ text: '❌ Batal', callback_data: `cancel_idea_${ideaId}` }]);
+
+  const messageText = 'Pilih template yang ingin digunakan:';
+  
+  if (ctx.callbackQuery) {
+    await ctx.editMessageText(messageText, {
+      reply_markup: {
+        inline_keyboard: templateButtons
+      }
+    });
+  } else {
+    await ctx.reply(messageText, {
+      reply_markup: {
+        inline_keyboard: templateButtons
+      }
+    });
+  }
+}
+
 bot.on(message('text'), async (ctx) => {
   const chatId = ctx.chat.id.toString();
   
-  // Reconstruct text with original URLs using message entities
   let text = ctx.message.text;
   if (ctx.message.entities) {
     let offset = 0;
@@ -78,7 +123,11 @@ bot.on(message('text'), async (ctx) => {
   }
   
   try {
+    const connections = await getConnections();
+    const defaultConnectionId = connections.length === 1 ? connections[0].id : null;
+
     const [idea] = await db.insert(ideasTable).values({
+      connectionId: defaultConnectionId,
       chatId,
       messageId: ctx.message.message_id,
       text,
@@ -86,14 +135,18 @@ bot.on(message('text'), async (ctx) => {
       status: 'pending'
     }).returning();
     
-    await ctx.reply('Ide tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
-          [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
-        ]
-      }
-    });
+    if (defaultConnectionId) {
+       await ctx.reply('Ide tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
+            [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
+          ]
+        }
+      });
+    } else {
+      await promptConnectionSelection(ctx, idea.id);
+    }
   } catch (err: any) {
     console.error('[Bot] Error saving text idea:', err);
     await ctx.reply('Terjadi kesalahan sistem saat menyimpan antrean.');
@@ -146,7 +199,6 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
           console.log(`[Bot] Processing accumulated media group ${mediaGroupId} with ${groupData.items.length} items`);
           
           try {
-            // Sort by message ID to preserve original order
             groupData.items.sort((a, b) => a.msgId - b.msgId);
             
             const mediaItems = [];
@@ -157,23 +209,25 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
                 try {
                   const fileUrl = await ctx.telegram.getFileLink(item.fileId);
                   const telegramUrl = fileUrl.toString();
-                  // Upload to S3 immediately
                   url = await uploadTelegramMediaToS3(telegramUrl, item.mimeType);
                   break;
                 } catch (e: any) {
                   retries--;
                   console.warn(`[Bot] Failed to download/upload ${item.fileId}, retries left: ${retries}. Error: ${e.message}`);
                   if (retries === 0) throw e;
-                  await new Promise(res => setTimeout(res, 1000)); // wait 1s before retrying
+                  await new Promise(res => setTimeout(res, 1000));
                 }
               }
               mediaItems.push({ type: item.type, url, mimeType: item.mimeType });
             }
             
-            // Find the first caption in the group to use as the text prompt
             const groupCaption = groupData.items.find(item => item.caption)?.caption || 'No specific text provided, analyze the media context if possible.';
             
+            const connections = await getConnections();
+            const defaultConnectionId = connections.length === 1 ? connections[0].id : null;
+
             const [idea] = await db.insert(ideasTable).values({
+              connectionId: defaultConnectionId,
               chatId,
               messageId: groupData.items[0].msgId,
               text: groupCaption,
@@ -181,25 +235,28 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
               status: 'pending'
             }).returning();
             
-            await ctx.reply('Ide (album) tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
-              reply_to_message_id: groupData.items[0].msgId,
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
-                  [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
-                ]
-              }
-            });
+            if (defaultConnectionId) {
+              await ctx.reply('Ide (album) tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
+                reply_to_message_id: groupData.items[0].msgId,
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
+                    [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
+                  ]
+                }
+              });
+            } else {
+              await promptConnectionSelection(ctx, idea.id);
+            }
             
           } catch (error) {
             console.error('[Bot] Error saving media group idea:', error);
             try { await ctx.reply('Terjadi kesalahan sistem saat menyimpan antrean album.'); } catch (e) {}
           }
-        }, 2000) // Wait 2 seconds for all parts of the album to arrive
+        }, 2000)
       });
     }
     
-    // Add this media to the accumulator
     const group = mediaGroupAccumulator.get(mediaGroupId)!;
     group.items.push({
       fileId,
@@ -209,10 +266,9 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
       mimeType
     });
     
-    return; // Don't process immediately, wait for the timer
+    return;
   }
 
-  // Single media case (no media_group_id)
   console.log(`[Bot] Received single ${isVideo ? 'video' : 'photo'} message from ${ctx.chat.id}`);
   let finalS3Url: string | undefined = undefined;
   let retries = 3;
@@ -234,7 +290,11 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
   const text = caption ? caption : 'No specific text provided, analyze the media context if possible.';
   
   try {
+    const connections = await getConnections();
+    const defaultConnectionId = connections.length === 1 ? connections[0].id : null;
+
     const [idea] = await db.insert(ideasTable).values({
+      connectionId: defaultConnectionId,
       chatId,
       messageId: ctx.message.message_id,
       text,
@@ -242,21 +302,24 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
       status: 'pending'
     }).returning();
     
-    await ctx.reply('Ide media tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
-      reply_to_message_id: ctx.message.message_id,
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
-          [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
-        ]
-      }
-    });
+    if (defaultConnectionId) {
+      await ctx.reply('Ide media tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
+        reply_to_message_id: ctx.message.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
+            [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
+          ]
+        }
+      });
+    } else {
+       await promptConnectionSelection(ctx, idea.id);
+    }
   } catch (error) {
     console.error(`[Bot] Error saving single media idea:`, error);
     try { await ctx.reply('Terjadi kesalahan sistem saat menyimpan antrean media.'); } catch (e) {}
   }
 }
-
 
 bot.on('callback_query', async (ctx: any) => {
   try {
@@ -273,21 +336,22 @@ bot.on('callback_query', async (ctx: any) => {
          return ctx.answerCbQuery('Ide ini sudah diproses.');
       }
 
-      const templateButtons = Object.values(TEMPLATES).map(t => {
-        return [{ text: t.name, callback_data: `convert_${ideaId}_${t.id}` }];
-      });
-
-      templateButtons.push([{ text: '❌ Batal', callback_data: `cancel_idea_${ideaId}` }]);
-
-      await ctx.editMessageText('Pilih template yang ingin digunakan:', {
-        reply_markup: {
-          inline_keyboard: templateButtons
-        }
-      });
+      await askForTemplate(ctx, ideaId);
       await ctx.answerCbQuery();
 
+    } else if (callbackData.startsWith('select_conn_')) {
+      const match = callbackData.match(/^select_conn_(\d+)_(\d+)$/);
+      if (!match) return ctx.answerCbQuery('Format data tidak valid.');
+      
+      const ideaId = parseInt(match[1], 10);
+      const connId = parseInt(match[2], 10);
+
+      await db.update(ideasTable).set({ connectionId: connId }).where(eq(ideasTable.id, ideaId));
+      
+      await askForTemplate(ctx, ideaId);
+      await ctx.answerCbQuery('Connection selected');
+
     } else if (callbackData.startsWith('convert_')) {
-      // Format: convert_<ideaId>_<templateId>
       const match = callbackData.match(/^convert_(\d+)_(.+)$/);
       if (!match) return ctx.answerCbQuery('Format data tidak valid.');
       
@@ -301,8 +365,12 @@ bot.on('callback_query', async (ctx: any) => {
       if (idea.status !== 'pending') {
          return ctx.answerCbQuery('Ide ini sudah diproses.');
       }
+      if (!idea.connectionId) {
+        return ctx.answerCbQuery('Silakan pilih akun/connection terlebih dahulu.');
+      }
 
       await db.insert(jobsTable).values({
+        connectionId: idea.connectionId,
         chatId: idea.chatId,
         messageId: idea.messageId,
         text: idea.text,
@@ -319,8 +387,7 @@ bot.on('callback_query', async (ctx: any) => {
     } else if (callbackData.startsWith('cancel_idea_')) {
       const ideaId = parseInt(callbackData.replace('cancel_idea_', ''), 10);
       
-      // Kept pending to show in dashboard, just update message
-      await ctx.editMessageText('⏳ Ide disimpan. Bisa diproses nanti di dashboard.');
+      await ctx.editMessageText('⏸️ Ide disimpan. Bisa diproses nanti di dashboard.');
       await ctx.answerCbQuery('Disimpan ke dashboard.');
     }
   } catch (error) {
@@ -353,3 +420,4 @@ startBotWithRetry().catch(err => {
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
+

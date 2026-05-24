@@ -1,5 +1,5 @@
 import { db } from './db/index.js';
-import { jobsTable, queueTable } from './db/schema.js';
+import { jobsTable, queueTable, settingsTable } from './db/schema.js';
 import { eq, sql, asc } from 'drizzle-orm';
 import { runAutomatedPipeline } from './agent.js';
 import { publishToBuffer } from './buffer.js';
@@ -7,15 +7,14 @@ import { Telegraf } from 'telegraf';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
 import dns from 'dns';
-import { getSettings } from './db/settings.js';
+import { getGlobalSettings, getConnections } from './db/settings.js';
 
-// Fix for ECONNRESET issues in Docker (Node.js 17+ prefers IPv6 by default, which can break in some Docker networks)
 dns.setDefaultResultOrder('ipv4first');
 
 dotenv.config();
 
-const settings = await getSettings();
-const botToken = settings.telegramBotToken;
+const globalSettings = await getGlobalSettings();
+const botToken = globalSettings.telegramBotToken;
 if (!botToken) {
   console.error('TELEGRAM_BOT_TOKEN must be provided in Settings (Database) or .env');
   process.exit(1);
@@ -33,18 +32,13 @@ let isShuttingDown = false;
 let activeJobs = 0;
 const MAX_CONCURRENT_JOBS = 3;
 
-// --- Telegram Jobs Processing ---
-
 async function processNextJob() {
   if (isShuttingDown) return;
-  if (activeJobs >= MAX_CONCURRENT_JOBS) return; // Wait until a job finishes
+  if (activeJobs >= MAX_CONCURRENT_JOBS) return;
 
   let jobToProcess: any = null;
 
   try {
-    // Atomically claim a pending job using Postgres FOR UPDATE SKIP LOCKED
-    // This allows multiple workers (or concurrent loops in the same worker) 
-    // to pull jobs safely without race conditions.
     const result = await db.execute(sql`
       UPDATE jobs 
       SET status = 'processing', updated_at = NOW() 
@@ -61,7 +55,6 @@ async function processNextJob() {
     const rows = result as any[];
 
     if (rows.length === 0) {
-      // No jobs, wait and poll again if we aren't already polling heavily
       if (activeJobs === 0) {
         setTimeout(processNextJob, 3000);
       }
@@ -71,10 +64,8 @@ async function processNextJob() {
     jobToProcess = rows[0];
     console.log(`[Worker] Picked up job ID ${jobToProcess.id} (Active: ${activeJobs + 1}/${MAX_CONCURRENT_JOBS})`);
     
-    // We successfully claimed a job, increment active count
     activeJobs++;
     
-    // Immediately try to fetch another job if we have capacity
     if (activeJobs < MAX_CONCURRENT_JOBS) {
       setImmediate(processNextJob);
     }
@@ -87,7 +78,6 @@ async function processNextJob() {
     return;
   }
 
-  // Process the claimed job
   try {
     const telegramToUse = jobToProcess.chat_id === 'DASHBOARD'
       ? {
@@ -104,16 +94,16 @@ async function processNextJob() {
         }
       : telegram;
 
-    // Run the pipeline
     await runAutomatedPipeline(
       jobToProcess.chat_id,
       Number(jobToProcess.message_id),
       jobToProcess.text,
       jobToProcess.media && jobToProcess.media.length > 0 ? jobToProcess.media : undefined,
-      telegramToUse
+      telegramToUse,
+      jobToProcess.template_id,
+      jobToProcess.connection_id
     );
 
-    // Mark as completed
     await db.update(jobsTable)
       .set({ status: 'completed', updatedAt: new Date() })
       .where(eq(jobsTable.id, jobToProcess.id));
@@ -122,7 +112,6 @@ async function processNextJob() {
 
   } catch (pipelineError: any) {
     console.error(`[Worker] Job ID ${jobToProcess.id} failed:`, pipelineError);
-    // Mark as error
     await db.update(jobsTable)
       .set({ 
         status: 'error', 
@@ -132,7 +121,6 @@ async function processNextJob() {
       .where(eq(jobsTable.id, jobToProcess.id));
   } finally {
     activeJobs--;
-    // After finishing a job, check for more
     if (!isShuttingDown) {
       setImmediate(processNextJob);
     }
@@ -140,9 +128,8 @@ async function processNextJob() {
 }
 
 console.log(`[Worker] Starting background worker (Concurrency: ${MAX_CONCURRENT_JOBS})...`);
-// Start the initial workers up to the concurrency limit
 for (let i = 0; i < MAX_CONCURRENT_JOBS; i++) {
-  setTimeout(processNextJob, i * 500); // Stagger initial starts slightly
+  setTimeout(processNextJob, i * 500);
 }
 
 // --- Auto Publish Queue ---
@@ -151,15 +138,9 @@ async function autoPublishQueue() {
   if (isShuttingDown) return;
   
   try {
-    const settings = await getSettings();
+    const connections = await getConnections();
     const now = new Date();
     
-    // Check if we have posting slots configured
-    if (!settings.postingSlots || settings.postingSlots.length === 0) {
-      return; // No slots configured
-    }
-
-    // Get current day and time in Asia/Jakarta
     const formatter = new Intl.DateTimeFormat('en-US', { 
       weekday: 'long', 
       hour: '2-digit', 
@@ -169,79 +150,60 @@ async function autoPublishQueue() {
     });
     
     const parts = formatter.formatToParts(now);
-    const day = parts.find(p => p.type === 'weekday')?.value; // e.g. "Monday"
+    const day = parts.find(p => p.type === 'weekday')?.value;
     const hour = parts.find(p => p.type === 'hour')?.value;
     const minute = parts.find(p => p.type === 'minute')?.value;
-    
-    // Format to match HH:mm exactly
     const currentTimeStr = `${hour?.padStart(2, '0')}:${minute?.padStart(2, '0')}`;
-    
-    // Check if the current time matches any slot for today
-    const matchingSlot = settings.postingSlots.find(
-      (slot: { day: string, time: string }) => slot.day.toLowerCase() === day?.toLowerCase() && slot.time === currentTimeStr
-    );
 
-    if (!matchingSlot) {
-      return; // Not a scheduled slot
-    }
+    for (const settings of connections) {
+      if (!settings.postingSlots || settings.postingSlots.length === 0) continue;
 
-    // Check if we already published during this minute
-    if (settings.lastAutoPublishAt) {
-      const diffMins = (now.getTime() - settings.lastAutoPublishAt.getTime()) / 60000;
-      if (diffMins < 1) {
-        return; // Already published in this exact minute
-      }
-    }
+      const matchingSlot = settings.postingSlots.find(
+        (slot: { day: string, time: string }) => slot.day.toLowerCase() === day?.toLowerCase() && slot.time === currentTimeStr
+      );
 
-    console.log(`[Worker] Slot matched (${day} ${currentTimeStr}). Checking queue for auto-publish...`);
-    
-    // Find the oldest pending post
-    const pendingPosts = await db.select()
-      .from(queueTable)
-      .where(eq(queueTable.status, 'pending'))
-      .orderBy(asc(queueTable.sortOrder))
-      .limit(1);
+      if (!matchingSlot) continue;
 
-    if (pendingPosts.length === 0) {
-      return;
-    }
-
-    const post = pendingPosts[0];
-    console.log(`[Worker] Auto-publishing post ID ${post.id}`);
-
-    try {
-      let mediaToPublish = [...post.media];
-      const ctaUrl = settings.ctaImageUrl;
-      if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
-        mediaToPublish.push({ type: 'image', url: ctaUrl });
+      if (settings.lastAutoPublishAt) {
+        const diffMins = (now.getTime() - settings.lastAutoPublishAt.getTime()) / 60000;
+        if (diffMins < 1) continue;
       }
 
-      // Publish to buffer
-      await publishToBuffer(mediaToPublish, post.text, post.publishMetadata);
+      console.log(`[Worker] Slot matched (${day} ${currentTimeStr}) for connection ${settings.id}. Checking queue for auto-publish...`);
       
-      // Update DB
-      await db.update(queueTable)
-        .set({
-          status: 'published',
-          publishedAt: new Date()
-        })
-        .where(eq(queueTable.id, post.id));
+      const pendingPosts = await db.select()
+        .from(queueTable)
+        .where(sql`status = 'pending' AND connection_id = ${settings.id}`)
+        .orderBy(asc(queueTable.sortOrder))
+        .limit(1);
 
-      // Update last publish time in settings
-      const { settingsTable } = await import('./db/schema.js');
-      await db.update(settingsTable).set({ lastAutoPublishAt: new Date() }).where(eq(settingsTable.id, 1));
+      if (pendingPosts.length === 0) continue;
 
-      console.log(`[Worker] Successfully auto-published post ID ${post.id}`);
-    } catch (publishError: any) {
-      console.error(`[Worker] Failed to auto-publish post ID ${post.id}:`, publishError);
-      
-      // Update DB with error so it doesn't get stuck in a retry loop
-      await db.update(queueTable)
-        .set({
-          status: 'error',
-          errorLog: publishError.message || String(publishError)
-        })
-        .where(eq(queueTable.id, post.id));
+      const post = pendingPosts[0];
+      console.log(`[Worker] Auto-publishing post ID ${post.id}`);
+
+      try {
+        let mediaToPublish = [...post.media];
+        const ctaUrl = settings.ctaImageUrl;
+        if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
+          mediaToPublish.push({ type: 'image', url: ctaUrl });
+        }
+
+        await publishToBuffer(mediaToPublish, post.text, post.publishMetadata, settings.id);
+        
+        await db.update(queueTable)
+          .set({ status: 'published', publishedAt: new Date() })
+          .where(eq(queueTable.id, post.id));
+
+        await db.update(settingsTable).set({ lastAutoPublishAt: new Date() }).where(eq(settingsTable.id, settings.id));
+
+        console.log(`[Worker] Successfully auto-published post ID ${post.id}`);
+      } catch (publishError: any) {
+        console.error(`[Worker] Failed to auto-publish post ID ${post.id}:`, publishError);
+        await db.update(queueTable)
+          .set({ status: 'error', errorLog: publishError.message || String(publishError) })
+          .where(eq(queueTable.id, post.id));
+      }
     }
 
   } catch (error: any) {
@@ -249,13 +211,11 @@ async function autoPublishQueue() {
   }
 }
 
-// Run every minute, the function will decide whether to publish based on settings
 console.log(`[Worker] Auto-publish worker started (Checking every minute against DB settings).`);
 cron.schedule('* * * * *', autoPublishQueue, {
   timezone: "Asia/Jakarta"
 });
 
-// Graceful shutdown
 const shutdown = () => {
   console.log('[Worker] Shutting down gracefully... waiting for active jobs to finish.');
   isShuttingDown = true;
@@ -263,3 +223,4 @@ const shutdown = () => {
 
 process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);
+

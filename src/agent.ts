@@ -1,9 +1,9 @@
 import { TEMPLATES } from './templates.js';
-import { getSettings } from './db/settings.js';
+import { getConnection } from './db/settings.js';
 import { runResearchPhase } from './agents/research.js';
 import { MediaItem, PipelineContext, getBaseSystemPrompt, withRetry } from './utils.js';
 
-export async function runAutomatedPipeline(chatId: string, messageId: number, userInput: string, uploadedMedia: MediaItem[] | undefined, telegram: any, templateId: string = 'image:kabar.perjuangan:carousel_dark') {
+export async function runAutomatedPipeline(chatId: string, messageId: number, userInput: string, uploadedMedia: MediaItem[] | undefined, telegram: any, templateId: string = 'image:kabar.perjuangan:carousel_dark', connectionId: number) {
   try {
     const template = TEMPLATES[templateId];
     if (!template) {
@@ -16,7 +16,9 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     const currentYear = currentDateObj.getFullYear();
     const currentDateStr = currentDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
     
-    const settings = await getSettings();
+    const settings = await getConnection(connectionId);
+    if (!settings) throw new Error(`Connection ${connectionId} not found`);
+
     const baseSystemPrompt = getBaseSystemPrompt(currentDateStr, currentYear);
 
     const pipelineContext: PipelineContext = {
@@ -26,10 +28,11 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
       uploadedMedia,
       telegram,
       statusMsg,
-      settings,
+      settings: settings as any,
       currentDateStr,
       currentYear,
-      baseSystemPrompt
+      baseSystemPrompt,
+      connectionId
     };
 
     // Phase 1: Research

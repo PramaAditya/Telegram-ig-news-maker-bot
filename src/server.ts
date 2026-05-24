@@ -1,12 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import { db } from './db/index.js';
-import { jobsTable, queueTable, settingsTable, ideasTable } from './db/schema.js';
-import { getSettings } from './db/settings.js';
+import { jobsTable, queueTable, settingsTable, ideasTable, globalSettingsTable } from './db/schema.js';
+import { getGlobalSettings, getConnections, getConnection } from './db/settings.js';
 import { eq, asc, desc, sql } from 'drizzle-orm';
 import { TEMPLATES } from './templates.js';
 import { generateMedia } from './media.js';
-import { publishToBuffer, fetchBufferChannelNetwork } from './buffer.js';
+import { publishToBuffer, fetchBufferChannelDetails } from './buffer.js';
 import { runAutomatedPipeline } from './agent.js';
 import multer from 'multer';
 import { uploadToS3 } from './s3.js';
@@ -28,10 +28,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static files for the dashboard
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Middleware to protect trigger API routes
 const requireTriggerAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const triggerKey = process.env.TRIGGER_API_KEY;
   const authHeader = req.headers.authorization;
@@ -41,7 +39,6 @@ const requireTriggerAuth = (req: express.Request, res: express.Response, next: e
   next();
 };
 
-// Middleware to protect dashboard CRUD API routes
 const requireDashboardAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const dashboardPassword = process.env.DASHBOARD_PASSWORD;
   const authHeader = req.headers.authorization;
@@ -53,7 +50,6 @@ const requireDashboardAuth = (req: express.Request, res: express.Response, next:
 
 app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
   try {
-    // Find the oldest pending post
     const pendingPosts = await db.select()
       .from(queueTable)
       .where(eq(queueTable.status, 'pending'))
@@ -65,56 +61,47 @@ app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
     }
 
     const post = pendingPosts[0];
+    if (!post.connectionId) {
+      return res.status(400).json({ error: 'Post missing connectionId' });
+    }
+
     console.log(`[API] Triggering publish for post ID ${post.id}`);
 
-      try {
-      const settings = await getSettings();
+    try {
+      const connection = await getConnection(post.connectionId);
+      if (!connection) throw new Error('Connection not found for post.');
+
       let mediaToPublish = [...post.media];
-      const ctaUrl = settings.ctaImageUrl;
+      const ctaUrl = connection.ctaImageUrl;
       if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
         mediaToPublish.push({ type: 'image', url: ctaUrl });
       }
 
-      // Publish to buffer (using shareNow in buffer.ts)
-      const result = await publishToBuffer(mediaToPublish, post.text, post.publishMetadata);
+      const result = await publishToBuffer(mediaToPublish, post.text, post.publishMetadata, post.connectionId);
       
-      // Update DB
       await db.update(queueTable)
-        .set({
-          status: 'published',
-          publishedAt: new Date()
-        })
+        .set({ status: 'published', publishedAt: new Date() })
         .where(eq(queueTable.id, post.id));
 
       console.log(`[API] Successfully published post ID ${post.id}`);
       return res.status(200).json({ message: 'Published successfully', postId: post.id, bufferResult: result });
     } catch (publishError: any) {
       console.error(`[API] Failed to publish post ID ${post.id}:`, publishError);
-      
-      // Update DB with error
       await db.update(queueTable)
-        .set({
-          status: 'error',
-          errorLog: publishError.message || String(publishError)
-        })
+        .set({ status: 'error', errorLog: publishError.message || String(publishError) })
         .where(eq(queueTable.id, post.id));
 
       return res.status(500).json({ error: 'Failed to publish to Buffer', details: publishError.message });
     }
-
   } catch (error: any) {
     console.error('[API] Error in trigger-publish endpoint:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// --- CRUD API Endpoints for Dashboard ---
-
-// POST /api/upload - Upload media to S3
 app.post('/api/upload', requireDashboardAuth, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
-    
     const buffer = req.file.buffer;
     const mimeType = req.file.mimetype;
     
@@ -138,11 +125,11 @@ app.post('/api/upload', requireDashboardAuth, upload.single('image'), async (req
   }
 });
 
-// POST /api/generate-content - Enqueue a new generation job from dashboard
 app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
   try {
-    const { text, mediaUrl, mediaUrls, templateId } = req.body;
+    const { text, mediaUrl, mediaUrls, templateId, connectionId } = req.body;
     if (!text) return res.status(400).json({ error: 'Text input is required' });
+    if (!connectionId) return res.status(400).json({ error: 'connectionId is required' });
 
     let media: { type: 'image' | 'video', url: string }[] = [];
     if (mediaUrls && Array.isArray(mediaUrls)) {
@@ -155,6 +142,7 @@ app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
     }
 
     const result = await db.insert(jobsTable).values({
+      connectionId: parseInt(connectionId),
       chatId: 'DASHBOARD',
       messageId: Date.now(),
       templateId: templateId || 'image:kabar.perjuangan:carousel_dark',
@@ -169,7 +157,6 @@ app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// GET /api/templates - List available templates
 app.get('/api/templates', requireDashboardAuth, (req, res) => {
   const templatesList = Object.values(TEMPLATES).map(t => ({
     id: t.id,
@@ -179,14 +166,19 @@ app.get('/api/templates', requireDashboardAuth, (req, res) => {
   res.json(templatesList);
 });
 
-// GET /api/ideas - Get ideas
 app.get('/api/ideas', requireDashboardAuth, async (req, res) => {
   try {
     const status = req.query.status as string;
+    const connectionId = req.query.connectionId ? parseInt(req.query.connectionId as string) : undefined;
+    
+    let query = db.select().from(ideasTable);
+    const conditions = [];
+    if (status) conditions.push(eq(ideasTable.status, status));
+    if (connectionId) conditions.push(eq(ideasTable.connectionId, connectionId));
     
     const allIdeas = await db.select()
       .from(ideasTable)
-      .where(status ? eq(ideasTable.status, status) : undefined)
+      .where(conditions.length > 0 ? sql`${sql.join(conditions, sql` AND `)}` : undefined)
       .orderBy(desc(ideasTable.createdAt))
       .limit(100);
       
@@ -196,7 +188,6 @@ app.get('/api/ideas', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// POST /api/ideas/:id/convert - Convert idea to job
 app.post('/api/ideas/:id/convert', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
@@ -212,6 +203,7 @@ app.post('/api/ideas/:id/convert', requireDashboardAuth, async (req, res) => {
     const { templateId } = req.body;
 
     await db.insert(jobsTable).values({
+      connectionId: idea.connectionId,
       chatId: idea.chatId,
       messageId: idea.messageId,
       text: idea.text,
@@ -228,7 +220,6 @@ app.post('/api/ideas/:id/convert', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// PUT /api/ideas/:id/status - Update idea status
 app.put('/api/ideas/:id/status', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
@@ -246,11 +237,12 @@ app.put('/api/ideas/:id/status', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// GET /api/jobs - Get all jobs (for the jobs page)
 app.get('/api/jobs', requireDashboardAuth, async (req, res) => {
   try {
+    const connectionId = req.query.connectionId ? parseInt(req.query.connectionId as string) : undefined;
     const allJobs = await db.select()
       .from(jobsTable)
+      .where(connectionId ? eq(jobsTable.connectionId, connectionId) : undefined)
       .orderBy(desc(jobsTable.createdAt))
       .limit(100);
     res.json(allJobs);
@@ -259,7 +251,6 @@ app.get('/api/jobs', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// POST /api/jobs/:id/retry - Retry a failed job
 app.post('/api/jobs/:id/retry', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string);
@@ -267,19 +258,11 @@ app.post('/api/jobs/:id/retry', requireDashboardAuth, async (req, res) => {
 
     const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
     
-    if (!job) {
-      return res.status(404).json({ error: 'Job not found' });
-    }
-    if (job.status !== 'error') {
-      return res.status(400).json({ error: 'Job is not in an error state' });
-    }
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    if (job.status !== 'error') return res.status(400).json({ error: 'Job is not in an error state' });
 
     await db.update(jobsTable)
-      .set({ 
-        status: 'pending', 
-        errorLog: null,
-        updatedAt: new Date() 
-      })
+      .set({ status: 'pending', errorLog: null, updatedAt: new Date() })
       .where(eq(jobsTable.id, id));
       
     res.json({ success: true, message: 'Job queued for retry' });
@@ -288,12 +271,16 @@ app.post('/api/jobs/:id/retry', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// GET /api/jobs/dashboard - Get active dashboard jobs
 app.get('/api/jobs/dashboard', requireDashboardAuth, async (req, res) => {
   try {
+    const connectionId = req.query.connectionId ? parseInt(req.query.connectionId as string) : undefined;
     const activeJobs = await db.select()
       .from(jobsTable)
-      .where(sql`chat_id = 'DASHBOARD' AND status IN ('pending', 'processing', 'error')`)
+      .where(
+        connectionId 
+          ? sql`chat_id = 'DASHBOARD' AND status IN ('pending', 'processing', 'error') AND connection_id = ${connectionId}`
+          : sql`chat_id = 'DASHBOARD' AND status IN ('pending', 'processing', 'error')`
+      )
       .orderBy(desc(jobsTable.createdAt));
     res.json(activeJobs);
   } catch (error: any) {
@@ -303,7 +290,6 @@ app.get('/api/jobs/dashboard', requireDashboardAuth, async (req, res) => {
 
 import { generateText } from 'ai';
 
-// POST /api/ai/refine-text - Refine text using AI
 app.post('/api/ai/refine-text', requireDashboardAuth, async (req, res) => {
   try {
     const { text, instruction, context } = req.body;
@@ -311,38 +297,31 @@ app.post('/api/ai/refine-text', requireDashboardAuth, async (req, res) => {
     if (!process.env.LIGHT_MODEL) return res.status(500).json({ error: 'LIGHT_MODEL is not configured' });
 
     let prompt = `You are a helpful AI editor. I will provide you with some original text. Your job is to strictly improve and refine the text based on the provided instructions. Output ONLY the finalized refined text. Do not add any conversational filler like "Here is the refined text:". If no specific instruction is provided, just improve the grammar, spelling, and general flow while maintaining the original meaning and tone.\n\n`;
-    
-    if (context && context.trim()) {
-      prompt += `CONTEXT ABOUT THIS TEXT:\n${context}\n\n`;
-    }
-
-    if (instruction && instruction.trim()) {
-      prompt += `USER INSTRUCTIONS:\n${instruction}\n\n`;
-    }
-
+    if (context && context.trim()) prompt += `CONTEXT ABOUT THIS TEXT:\n${context}\n\n`;
+    if (instruction && instruction.trim()) prompt += `USER INSTRUCTIONS:\n${instruction}\n\n`;
     prompt += `ORIGINAL TEXT:\n${text}`;
 
     const { text: refinedText } = await generateText({
       model: google(process.env.LIGHT_MODEL),
       prompt: prompt
     });
-
     res.json({ refinedText });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// POST /api/settings/slots/generate - Generate posting slots using AI
-app.post('/api/settings/slots/generate', requireDashboardAuth, async (req, res) => {
+app.post('/api/connections/:id/slots/generate', requireDashboardAuth, async (req, res) => {
   try {
     const { prompt } = req.body;
+    const connectionId = parseInt(req.params.id as string, 10);
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     if (!process.env.LIGHT_MODEL) return res.status(500).json({ error: 'LIGHT_MODEL is not configured' });
 
-    // Get current settings to provide context to the LLM
-    const settings = await getSettings();
-    const currentSlots = settings.postingSlots || [];
+    const connection = await getConnection(connectionId);
+    if (!connection) return res.status(404).json({ error: 'Connection not found' });
+    
+    const currentSlots = connection.postingSlots || [];
 
     const result = await generateObject({
       model: google(process.env.LIGHT_MODEL),
@@ -358,10 +337,9 @@ app.post('/api/settings/slots/generate', requireDashboardAuth, async (req, res) 
 
     const finalSlots = result.object.slots;
 
-    // Save back to DB
     await db.update(settingsTable)
       .set({ postingSlots: finalSlots })
-      .where(eq(settingsTable.id, 1));
+      .where(eq(settingsTable.id, connectionId));
 
     res.json({ message: 'Slots generated successfully', slots: finalSlots });
   } catch (error: any) {
@@ -369,84 +347,138 @@ app.post('/api/settings/slots/generate', requireDashboardAuth, async (req, res) 
   }
 });
 
-// GET /api/settings - Get dynamic settings
-app.get('/api/settings', requireDashboardAuth, async (req, res) => {
+// GLOBAL SETTINGS
+app.get('/api/global-settings', requireDashboardAuth, async (req, res) => {
   try {
-    const settings = await getSettings();
-    res.json(settings);
+    const globalSettings = await getGlobalSettings();
+    res.json(globalSettings);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// PUT /api/settings - Update settings
-app.put('/api/settings', requireDashboardAuth, async (req, res) => {
+app.put('/api/global-settings', requireDashboardAuth, async (req, res) => {
   try {
-    const { 
-      logoImageUrl, 
-      ctaImageUrl, 
-      bufferApiKey, 
-      bufferChannelId, 
-      telegramBotToken, 
-      editorialGuidelines,
-      cronIntervalMinutes, 
-      cronStartHour, 
-      cronEndHour 
-    } = req.body;
+    const { telegramBotToken } = req.body;
+    await db.update(globalSettingsTable).set({ telegramBotToken }).where(eq(globalSettingsTable.id, 1));
+    res.json({ message: 'Global settings updated successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// CONNECTIONS
+app.get('/api/connections', requireDashboardAuth, async (req, res) => {
+  try {
+    const connections = await getConnections();
+    res.json(connections);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/connections', requireDashboardAuth, async (req, res) => {
+  try {
+    const { name, bufferApiKey, bufferChannelId } = req.body;
+    
+    let bufferChannelNetwork = 'instagram';
+    let connectionName = name || 'New Connection';
+
+    if (bufferApiKey && bufferChannelId) {
+      try {
+        const details = await fetchBufferChannelDetails(bufferApiKey, bufferChannelId);
+        bufferChannelNetwork = details.network;
+        if (!name) connectionName = details.name;
+      } catch (err: any) {
+        console.error("Failed to fetch Buffer channel details:", err);
+      }
+    }
+
+    const [inserted] = await db.insert(settingsTable).values({
+      name: connectionName,
+      bufferApiKey,
+      bufferChannelId,
+      bufferChannelNetwork
+    }).returning();
+
+    res.json({ message: 'Connection created', connection: inserted });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/connections/:id', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const connection = await getConnection(id);
+    if (!connection) return res.status(404).json({ error: 'Connection not found' });
 
     const updateData: any = {};
-    if (logoImageUrl !== undefined) updateData.logoImageUrl = logoImageUrl;
-    if (ctaImageUrl !== undefined) updateData.ctaImageUrl = ctaImageUrl;
-    if (bufferApiKey !== undefined) updateData.bufferApiKey = bufferApiKey;
-    if (bufferChannelId !== undefined) updateData.bufferChannelId = bufferChannelId;
-    if (telegramBotToken !== undefined) updateData.telegramBotToken = telegramBotToken;
-    if (editorialGuidelines !== undefined) updateData.editorialGuidelines = editorialGuidelines;
-    if (cronIntervalMinutes !== undefined) updateData.cronIntervalMinutes = parseInt(cronIntervalMinutes, 10);
-    if (cronStartHour !== undefined) updateData.cronStartHour = parseInt(cronStartHour, 10);
-    if (cronEndHour !== undefined) updateData.cronEndHour = parseInt(cronEndHour, 10);
+    if (req.body.name !== undefined) updateData.name = req.body.name;
+    if (req.body.logoImageUrl !== undefined) updateData.logoImageUrl = req.body.logoImageUrl;
+    if (req.body.ctaImageUrl !== undefined) updateData.ctaImageUrl = req.body.ctaImageUrl;
+    if (req.body.bufferApiKey !== undefined) updateData.bufferApiKey = req.body.bufferApiKey;
+    if (req.body.bufferChannelId !== undefined) updateData.bufferChannelId = req.body.bufferChannelId;
+    if (req.body.editorialGuidelines !== undefined) updateData.editorialGuidelines = req.body.editorialGuidelines;
+    if (req.body.cronIntervalMinutes !== undefined) updateData.cronIntervalMinutes = parseInt(req.body.cronIntervalMinutes, 10);
+    if (req.body.cronStartHour !== undefined) updateData.cronStartHour = parseInt(req.body.cronStartHour, 10);
+    if (req.body.cronEndHour !== undefined) updateData.cronEndHour = parseInt(req.body.cronEndHour, 10);
     if (req.body.postingSlots !== undefined) updateData.postingSlots = req.body.postingSlots;
     if (req.body.bannedWords !== undefined) updateData.bannedWords = req.body.bannedWords;
 
-    // Make sure the row exists first
-    const currentSettings = await getSettings();
-
-    // Fetch network if buffer API key or channel ID is being updated
     if (
-      (bufferApiKey !== undefined || bufferChannelId !== undefined) &&
-      (updateData.bufferApiKey || currentSettings.bufferApiKey) &&
-      (updateData.bufferChannelId || currentSettings.bufferChannelId)
+      (req.body.bufferApiKey !== undefined || req.body.bufferChannelId !== undefined) &&
+      (updateData.bufferApiKey || connection.bufferApiKey) &&
+      (updateData.bufferChannelId || connection.bufferChannelId)
     ) {
       try {
-        const apiKey = updateData.bufferApiKey || currentSettings.bufferApiKey;
-        const channelId = updateData.bufferChannelId || currentSettings.bufferChannelId;
-        const network = await fetchBufferChannelNetwork(apiKey, channelId);
-        updateData.bufferChannelNetwork = network;
+        const apiKey = updateData.bufferApiKey || connection.bufferApiKey;
+        const channelId = updateData.bufferChannelId || connection.bufferChannelId;
+        const details = await fetchBufferChannelDetails(apiKey, channelId);
+        updateData.bufferChannelNetwork = details.network;
+        if (!req.body.name && updateData.name === undefined) {
+          updateData.name = details.name;
+        }
       } catch (err: any) {
         console.error("Failed to fetch Buffer channel network:", err);
-        // Optionally fail the request or just let it pass with an error log
-        // return res.status(400).json({ error: "Failed to validate Buffer Channel ID. Make sure API key and Channel ID are correct." });
       }
     }
     
-    await db.update(settingsTable).set(updateData).where(eq(settingsTable.id, 1));
-    
-    res.json({ message: 'Settings updated successfully' });
+    await db.update(settingsTable).set(updateData).where(eq(settingsTable.id, id));
+    res.json({ message: 'Connection updated successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// GET /api/queue - List queue items (filtered by status)
+app.delete('/api/connections/:id', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    await db.delete(settingsTable).where(eq(settingsTable.id, id));
+    res.json({ message: 'Connection deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/queue', requireDashboardAuth, async (req, res) => {
   try {
     const status = req.query.status as string || 'pending';
+    const connectionId = req.query.connectionId ? parseInt(req.query.connectionId as string) : undefined;
+    
+    let query = db.select().from(queueTable);
+    const conditions = [eq(queueTable.status, status)];
+    if (connectionId) conditions.push(eq(queueTable.connectionId, connectionId));
     
     let items;
     if (status === 'pending') {
-      items = await db.select().from(queueTable).where(eq(queueTable.status, status)).orderBy(asc(queueTable.sortOrder));
+      items = await db.select().from(queueTable)
+        .where(sql`${sql.join(conditions, sql` AND `)}`)
+        .orderBy(asc(queueTable.sortOrder));
     } else {
-      // For published and error, show most recent first
-      items = await db.select().from(queueTable).where(eq(queueTable.status, status)).orderBy(desc(queueTable.createdAt));
+      items = await db.select().from(queueTable)
+        .where(sql`${sql.join(conditions, sql` AND `)}`)
+        .orderBy(desc(queueTable.createdAt));
     }
     
     res.json(items);
@@ -455,7 +487,6 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// PUT /api/queue/:id - Update queue item (e.g. edit text or retry a failed post)
 app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
@@ -479,7 +510,6 @@ app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// POST /api/queue/:id/regenerate-media - Re-render media using current draft data
 app.post('/api/queue/:id/regenerate-media', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
@@ -489,16 +519,17 @@ app.post('/api/queue/:id/regenerate-media', requireDashboardAuth, async (req, re
     if (items.length === 0) return res.status(404).json({ error: 'Post not found in queue' });
     
     const post = items[0];
+    if (!post.connectionId) return res.status(400).json({ error: 'Post missing connectionId' });
     
     const template = TEMPLATES[post.templateId];
     if (!template) return res.status(400).json({ error: `Template ${post.templateId} not found` });
 
     try {
-      const settings = await getSettings();
-      // Re-render the images
-      const allPublishUrls = await template.regenerateMedia(post.templateData, settings);
+      const connection = await getConnection(post.connectionId);
+      if (!connection) throw new Error('Connection not found');
+      
+      const allPublishUrls = await template.regenerateMedia(post.templateData, connection as any);
 
-      // Update the DB with the newly generated media URLs
       await db.update(queueTable)
         .set({ media: allPublishUrls })
         .where(eq(queueTable.id, post.id));
@@ -512,7 +543,6 @@ app.post('/api/queue/:id/regenerate-media', requireDashboardAuth, async (req, re
   }
 });
 
-// POST /api/queue/:id/publish - Publish immediately from dashboard
 app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
@@ -522,16 +552,19 @@ app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
     if (items.length === 0) return res.status(404).json({ error: 'Post not found in queue' });
     
     const post = items[0];
+    if (!post.connectionId) return res.status(400).json({ error: 'Post missing connectionId' });
     
-      try {
-      const settings = await getSettings();
+    try {
+      const connection = await getConnection(post.connectionId);
+      if (!connection) throw new Error('Connection not found');
+      
       let mediaToPublish = [...post.media];
-      const ctaUrl = settings.ctaImageUrl;
+      const ctaUrl = connection.ctaImageUrl;
       if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
         mediaToPublish.push({ type: 'image', url: ctaUrl });
       }
 
-      const result = await publishToBuffer(mediaToPublish, post.text, post.publishMetadata);
+      const result = await publishToBuffer(mediaToPublish, post.text, post.publishMetadata, post.connectionId);
       
       await db.update(queueTable)
         .set({
@@ -556,7 +589,6 @@ app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// POST /api/queue/:id/retry-error - Move an errored queue item back to pending
 app.post('/api/queue/:id/retry-error', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
@@ -570,10 +602,7 @@ app.post('/api/queue/:id/retry-error', requireDashboardAuth, async (req, res) =>
     }
 
     await db.update(queueTable)
-      .set({ 
-        status: 'pending',
-        errorLog: null
-      })
+      .set({ status: 'pending', errorLog: null })
       .where(eq(queueTable.id, id));
 
     res.json({ message: 'Post moved back to pending queue successfully' });
@@ -582,22 +611,18 @@ app.post('/api/queue/:id/retry-error', requireDashboardAuth, async (req, res) =>
   }
 });
 
-// POST /api/queue/reorder - Reorder entire queue
 app.post('/api/queue/reorder', requireDashboardAuth, async (req, res) => {
   try {
-    const { orderedIds } = req.body; // Array of IDs in the new order
+    const { orderedIds, connectionId } = req.body;
     if (!Array.isArray(orderedIds)) return res.status(400).json({ error: 'orderedIds array required' });
+    if (!connectionId) return res.status(400).json({ error: 'connectionId is required' });
 
-    // Fetch all pending
     const pending = await db.select().from(queueTable)
-      .where(eq(queueTable.status, 'pending'))
+      .where(sql`status = 'pending' AND connection_id = ${connectionId}`)
       .orderBy(asc(queueTable.sortOrder));
 
-    // Create a set of pending IDs for quick validation
     const pendingIds = new Set(pending.map(p => p.id));
     
-    // Assign new sortOrders based on index
-    // Note: To be safe, we can just use 10 * index
     let sortOrder = 10;
     for (const id of orderedIds) {
       if (pendingIds.has(id)) {
@@ -612,16 +637,15 @@ app.post('/api/queue/reorder', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// POST /api/queue/:id/move - Move item up, down, or to top
 app.post('/api/queue/:id/move', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { direction } = req.body; // 'up', 'down', 'top'
+    const { direction, connectionId } = req.body;
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+    if (!connectionId) return res.status(400).json({ error: 'connectionId is required' });
 
-    // Fetch all pending to determine neighbors
     const pending = await db.select().from(queueTable)
-      .where(eq(queueTable.status, 'pending'))
+      .where(sql`status = 'pending' AND connection_id = ${connectionId}`)
       .orderBy(asc(queueTable.sortOrder));
       
     const index = pending.findIndex(p => p.id === id);
@@ -629,18 +653,16 @@ app.post('/api/queue/:id/move', requireDashboardAuth, async (req, res) => {
 
     if (direction === 'top' && index > 0) {
       const firstItem = pending[0];
-      const newSortOrder = firstItem.sortOrder - 1; // 1 less than the top item
+      const newSortOrder = firstItem.sortOrder - 1;
       await db.update(queueTable).set({ sortOrder: newSortOrder }).where(eq(queueTable.id, id));
     } else if (direction === 'up' && index > 0) {
       const prevItem = pending[index - 1];
       const currentItem = pending[index];
-      // Swap sortOrder to swap order
       await db.update(queueTable).set({ sortOrder: prevItem.sortOrder }).where(eq(queueTable.id, currentItem.id));
       await db.update(queueTable).set({ sortOrder: currentItem.sortOrder }).where(eq(queueTable.id, prevItem.id));
     } else if (direction === 'down' && index < pending.length - 1) {
       const nextItem = pending[index + 1];
       const currentItem = pending[index];
-      // Swap sortOrder to swap order
       await db.update(queueTable).set({ sortOrder: nextItem.sortOrder }).where(eq(queueTable.id, currentItem.id));
       await db.update(queueTable).set({ sortOrder: currentItem.sortOrder }).where(eq(queueTable.id, nextItem.id));
     }
@@ -651,7 +673,6 @@ app.post('/api/queue/:id/move', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/queue/:id - Delete a queue item
 app.delete('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
@@ -676,4 +697,5 @@ export const startServer = (port: number = 3000) => {
     console.log(`API Server is running on port ${port}`);
   });
 };
+
 
