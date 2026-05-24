@@ -305,6 +305,7 @@ RULES:
   templateData.inputImages = extraImageUrls;
   
   await insertQueueItem({
+    connectionId: settings.id,
     templateId: carouselDarkTemplateConfig.id,
     templateData: templateData,
     text: finalCaption,

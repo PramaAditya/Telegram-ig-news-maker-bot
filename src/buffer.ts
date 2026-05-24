@@ -8,8 +8,8 @@ export interface BufferMediaItem {
 
 export async function fetchBufferChannelDetails(bufferToken: string, channelId: string): Promise<{ network: string; name: string }> {
   const query = `
-    query GetChannel($channelId: String!) {
-      channel(id: $channelId) {
+    query GetChannel {
+      channel(input: { id: "${channelId}" }) {
         service
         name
       }
@@ -17,8 +17,7 @@ export async function fetchBufferChannelDetails(bufferToken: string, channelId: 
   `;
 
   const payload = {
-    query,
-    variables: { channelId }
+    query
   };
 
   const url = 'https://api.buffer.com/1/graphql';

@@ -3,6 +3,7 @@ import { queueTable } from './schema.js';
 import { sql } from 'drizzle-orm';
 
 export async function insertQueueItem(data: {
+  connectionId: number;
   templateId: string;
   templateData: any;
   text: string;
@@ -16,6 +17,7 @@ export async function insertQueueItem(data: {
   const nextSortOrder = (maxRecord?.maxSort || 0) + 10;
   
   return await db.insert(queueTable).values({
+    connectionId: data.connectionId,
     sortOrder: nextSortOrder,
     templateId: data.templateId,
     templateData: data.templateData,
