@@ -80,8 +80,28 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
   });
 
   // Convert metadata to GraphQL format (unquoted keys)
+  // For enums (like type: "post"), we need to ensure values are unquoted if they are strings representing enums.
+  // A simple heuristic for Buffer's metadata: all string values inside metadata are actually enums (like 'post', 'reel').
+  const formatGraphQLObject = (obj: any): string => {
+    let str = '{';
+    for (const [key, value] of Object.entries(obj)) {
+      str += `${key}: `;
+      if (typeof value === 'object' && value !== null) {
+        str += formatGraphQLObject(value);
+      } else if (typeof value === 'string') {
+        // Enums in Buffer (like 'post') must NOT have quotes. 
+        str += value; 
+      } else {
+        str += value;
+      }
+      str += ', ';
+    }
+    str += '}';
+    return str;
+  };
+
   const metadataString = Object.keys(metadata).length > 0 
-    ? `metadata: ${JSON.stringify(metadata).replace(/"([^"]+)":/g, '$1:')}`
+    ? `metadata: ${formatGraphQLObject(metadata)}`
     : '';
 
   const assetsString = `assets: [${assets.map(a => 
