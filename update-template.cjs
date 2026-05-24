@@ -1,245 +1,20 @@
-<script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { Save, Settings2, Loader2, Info, Sparkles, X } from 'lucide-vue-next'
-import { getAuthHeaders } from '../auth'
-import ImageUploader from '../components/ImageUploader.vue'
-import PasswordInput from '../components/PasswordInput.vue'
-import AiTextarea from '../components/AiTextarea.vue'
+const fs = require('fs');
+const path = require('path');
 
-const toast = useToast()
+const filePath = path.resolve('frontend/src/views/Settings.vue');
+let content = fs.readFileSync(filePath, 'utf-8');
 
-const settings = ref<any>({
-  logoImageUrl: '',
-  ctaImageUrl: '',
-  bufferApiKey: '',
-  bufferInstagramChannelId: '',
-  telegramBotToken: '',
-  editorialGuidelines: '',
-  postingSlots: [],
-  bannedWords: []
-})
+const oldTemplate = `<div v-else class="space-y-8">
+        
+        <!-- Media Assets -->
+        <div>
+          <h2 class="text-lg font-bold text-default mb-4 border-b border-default pb-2">Media Assets</h2>`;
 
-const loading = ref(true)
-const saving = ref(false)
-const error = ref('')
+// I'll use regex to replace everything from `<div v-else class="space-y-8">` to the end of the template.
+const templateStartRegex = /<div v-else class="space-y-8">([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>\s*<\/template>/;
 
-const aiPrompt = ref('')
-const aiGenerating = ref(false)
-
-const newBannedWord = ref({ word: '', replacement: '', type: 'partial' as 'exact' | 'partial' })
-
-const editingWordIndex = ref<number | null>(null)
-
-const addBannedWord = () => {
-  if (!newBannedWord.value.word.trim()) return
-  
-  if (!settings.value.bannedWords) {
-    settings.value.bannedWords = []
-  }
-  
-  // Adding a new word
-  if (settings.value.bannedWords.some((w: any) => w.word.toLowerCase() === newBannedWord.value.word.toLowerCase().trim())) {
-    toast.add({ title: 'This word is already in the banned list.', color: 'error' })
-    return
-  }
-
-  settings.value.bannedWords.push({
-    word: newBannedWord.value.word.trim(),
-    replacement: newBannedWord.value.replacement.trim() || '***',
-    type: newBannedWord.value.type
-  })
-
-  // Reset form
-  newBannedWord.value = { word: '', replacement: '', type: 'partial' }
-}
-
-const editingWordState = ref({ word: '', replacement: '', type: 'partial' as 'exact' | 'partial' })
-
-const editBannedWord = (index: number) => {
-  const item = settings.value.bannedWords[index]
-  editingWordState.value = { ...item }
-  editingWordIndex.value = index
-}
-
-const cancelEditBannedWord = () => {
-  editingWordIndex.value = null
-}
-
-const saveEditedWord = () => {
-  if (editingWordIndex.value === null) return
-  if (!editingWordState.value.word.trim()) return
-
-  // Check if new word already exists elsewhere in the list
-  if (settings.value.bannedWords.some((w: any, idx: number) => 
-      idx !== editingWordIndex.value && 
-      w.word.toLowerCase() === editingWordState.value.word.toLowerCase().trim())) {
-    toast.add({ title: 'This word is already in the banned list.', color: 'error' })
-    return
-  }
-  
-  settings.value.bannedWords[editingWordIndex.value] = {
-    word: editingWordState.value.word.trim(),
-    replacement: editingWordState.value.replacement.trim() || '***',
-    type: editingWordState.value.type
-  }
-  editingWordIndex.value = null
-}
-
-const removeBannedWord = (index: number) => {
-  settings.value.bannedWords.splice(index, 1)
-  if (editingWordIndex.value === index) {
-    cancelEditBannedWord()
-  } else if (editingWordIndex.value !== null && editingWordIndex.value > index) {
-    editingWordIndex.value--
-  }
-}
-
-const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-
-const slotsByDay = computed(() => {
-  const result: Record<string, any[]> = {}
-  daysOfWeek.forEach(d => result[d] = [])
-  
-  if (settings.value.postingSlots) {
-    settings.value.postingSlots.forEach((slot: any) => {
-      // Find proper capitalization
-      const targetDay = daysOfWeek.find(d => d.toLowerCase() === slot.day.toLowerCase())
-      if (targetDay) {
-        result[targetDay].push(slot)
-      }
-    })
-  }
-
-  // Sort times chronologically
-  daysOfWeek.forEach(d => {
-    result[d].sort((a, b) => a.time.localeCompare(b.time))
-  })
-
-  return result
-})
-
-// Format "HH:mm" to 12-hour AM/PM
-const formatTime = (time24: string) => {
-  if (!time24) return ''
-  const [h, m] = time24.split(':')
-  let hours = parseInt(h, 10)
-  const ampm = hours >= 12 ? 'PM' : 'AM'
-  hours = hours % 12 || 12
-  return `${hours.toString().padStart(2, '0')}:${m} ${ampm}`
-}
-
-const removeSlot = (slotToRemove: any) => {
-  settings.value.postingSlots = settings.value.postingSlots.filter(
-    (s: any) => !(s.day.toLowerCase() === slotToRemove.day.toLowerCase() && s.time === slotToRemove.time)
-  )
-}
-
-const clearAllSlots = () => {
-  if (confirm('Are you sure you want to delete all posting slots?')) {
-    settings.value.postingSlots = []
-  }
-}
-
-const generateSlots = async () => {
-  if (!aiPrompt.value.trim()) return
-  
-  aiGenerating.value = true
-  try {
-    const res = await fetch('/api/settings/slots/generate', {
-      method: 'POST',
-      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: aiPrompt.value })
-    })
-    
-    if (res.status === 401) throw new Error('Unauthorized')
-    
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Failed to generate slots')
-    
-    settings.value.postingSlots = data.slots
-    aiPrompt.value = ''
-  } catch (err: any) {
-    toast.add({ title: err.message, color: 'error' })
-  } finally {
-    aiGenerating.value = false
-  }
-}
-
-const fetchSettings = async () => {
-  loading.value = true
-  error.value = ''
-  try {
-    const res = await fetch('/api/settings', { headers: getAuthHeaders() })
-    if (res.status === 401) throw new Error('Unauthorized')
-    if (!res.ok) throw new Error('Failed to load settings')
-    const data = await res.json()
-    settings.value = { ...settings.value, ...data }
-  } catch (err: any) {
-    error.value = err.message
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(fetchSettings)
-
-const tabItems = [
-  { label: 'Media Assets', icon: 'i-lucide-image', slot: 'media' as const },
-  { label: 'Publishing', icon: 'i-lucide-calendar', slot: 'publishing' as const },
-  { label: 'Editorial', icon: 'i-lucide-pen-tool', slot: 'editorial' as const },
-  { label: 'Moderation', icon: 'i-lucide-shield', slot: 'moderation' as const },
-  { label: 'API Keys', icon: 'i-lucide-key', slot: 'keys' as const }
-]
-
-const saveSettings = async () => {
-  saving.value = true
-  error.value = ''
-  try {
-    const res = await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings.value)
-    })
-    
-    if (res.status === 401) throw new Error('Unauthorized')
-    if (!res.ok) throw new Error('Failed to save settings')
-    
-    toast.add({ title: 'Settings saved successfully!', description: 'Publishing changes take effect immediately.', color: 'success' })
-  } catch (err: any) {
-    error.value = err.message
-    toast.add({ title: err.message, color: 'error' })
-  } finally {
-    saving.value = false
-  }
-}
-</script>
-
-<template>
-  <div class="container mx-auto space-y-6">
-    <div class="bg-default shadow rounded-lg p-6">
-      <h1 class="text-2xl font-bold text-default mb-6 flex items-center">
-        <Settings2 class="w-6 h-6 mr-3 text-primary" />
-        Global Settings
-      </h1>
-      
-      <p class="text-sm text-muted mb-6">
-        Settings defined here will override the <code class="bg-elevated px-1 rounded text-default">.env</code> configurations.
-      </p>
-
-      <div v-if="loading" class="flex justify-center py-10">
-        <Loader2 class="w-8 h-8 text-primary animate-spin" />
-      </div>
-
-      <UAlert 
-        v-else-if="error" 
-        color="error" 
-        variant="soft" 
-        :description="error" 
-        class="mb-6" 
-      />
-
-      <div v-else class="space-y-6">
-        <UTabs :items="tabItems" class="w-full">
+const newTemplate = `<div v-else class="space-y-6">
+        <UTabs :items="tabItems" class="w-full" :ui="{ list: { rounded: 'rounded-full' } }">
           <template #media>
             <div class="mt-6 space-y-6">
               <h2 class="text-lg font-bold text-default border-b border-default pb-2">Media Assets</h2>
@@ -323,7 +98,7 @@ const saveSettings = async () => {
                 :icon="Info"
                 color="neutral"
                 variant="subtle"
-                description="Provide explicit instructions to the Content Writer AI on how to frame the news, tone of voice, perspective, and general editorial stance (e.g., highlighting specific geopolitical perspectives). Note: The Research AI will always remain strictly neutral and objective to gather unbiased facts first. This overwrites the default `.env` fallback."
+                description="Provide explicit instructions to the Content Writer AI on how to frame the news, tone of voice, perspective, and general editorial stance (e.g., highlighting specific geopolitical perspectives). Note: The Research AI will always remain strictly neutral and objective to gather unbiased facts first. This overwrites the default \`.env\` fallback."
               />
               <AiTextarea 
                 v-model="settings.editorialGuidelines" 
@@ -488,4 +263,8 @@ const saveSettings = async () => {
       </div>
     </div>
   </div>
-</template>
+</template>`;
+
+content = content.replace(templateStartRegex, newTemplate);
+fs.writeFileSync(filePath, content);
+console.log('Template successfully updated.');
