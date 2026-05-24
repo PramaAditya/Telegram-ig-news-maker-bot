@@ -3,9 +3,12 @@ import { ref } from 'vue'
 import { UploadCloud, Loader2, X } from 'lucide-vue-next'
 import { getAuthHeaders } from '../auth'
 
-const props = defineProps<{
-  modelValue: string[]
-}>()
+const props = withDefaults(defineProps<{
+  modelValue: string | string[] | null | undefined
+  multiple?: boolean
+}>(), {
+  multiple: false
+})
 
 const emit = defineEmits(['update:modelValue'])
 
@@ -35,7 +38,11 @@ const uploadFile = async (file: File) => {
     }
 
     const { url } = await res.json()
-    emit('update:modelValue', [...(props.modelValue || []), url])
+    if (props.multiple) {
+      emit('update:modelValue', [...(Array.isArray(props.modelValue) ? props.modelValue : []), url])
+    } else {
+      emit('update:modelValue', url)
+    }
   } catch (err: any) {
     error.value = err.message
   } finally {
@@ -62,9 +69,13 @@ const triggerUpload = () => {
 }
 
 const removeMedia = (index: number) => {
-  const newUrls = [...(props.modelValue || [])]
-  newUrls.splice(index, 1)
-  emit('update:modelValue', newUrls)
+  if (props.multiple) {
+    const newUrls = [...(Array.isArray(props.modelValue) ? props.modelValue : [])]
+    newUrls.splice(index, 1)
+    emit('update:modelValue', newUrls)
+  } else {
+    emit('update:modelValue', '')
+  }
 }
 
 const isVideo = (url: string) => {
@@ -79,12 +90,12 @@ const isVideo = (url: string) => {
       ref="fileInput" 
       class="hidden" 
       accept="image/*,video/*" 
-      multiple
+      :multiple="props.multiple"
       @change="handleFileUpload" 
     />
     
-    <div v-if="props.modelValue && props.modelValue.length > 0" class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-      <div v-for="(url, index) in props.modelValue" :key="index" class="relative group aspect-square rounded overflow-hidden shadow-sm bg-default">
+    <div v-if="props.modelValue && (Array.isArray(props.modelValue) ? props.modelValue.length > 0 : true)" class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+      <div v-for="(url, index) in (Array.isArray(props.modelValue) ? props.modelValue : [props.modelValue])" :key="index" class="relative group aspect-square rounded overflow-hidden shadow-sm bg-default">
         <video v-if="isVideo(url)" :src="url" class="w-full h-full object-cover" muted autoplay loop></video>
         <img v-else :src="url" class="w-full h-full object-cover" />
         <div class="absolute inset-0 bg-inverted bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -103,7 +114,7 @@ const isVideo = (url: string) => {
     <div v-else class="py-6 cursor-pointer" @click="triggerUpload">
       <UploadCloud class="w-10 h-10 text-muted mx-auto mb-2" />
       <p class="text-sm text-muted">Click to upload media</p>
-      <p class="text-xs text-muted mt-1">Accepts multiple images & videos (JPG, PNG, MP4)</p>
+      <p class="text-xs text-muted mt-1">Accepts {{ props.multiple ? 'multiple' : 'single' }} image(s) & video(s) (JPG, PNG, MP4)</p>
     </div>
 
     <div v-if="error" class="mt-2 text-sm text-error">

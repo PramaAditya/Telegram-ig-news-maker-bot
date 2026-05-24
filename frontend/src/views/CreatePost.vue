@@ -128,7 +128,7 @@ const generateContent = async () => {
         <div>
           <label class="block text-sm font-medium text-default mb-2">Optional Reference Media</label>
           <p class="text-xs text-muted mb-2">Upload images or videos to be used as a reference or as the actual media. You can also paste media directly anywhere on this page.</p>
-          <ImageUploader ref="uploaderRef" v-model="mediaUrls" />
+          <ImageUploader ref="uploaderRef" v-model="mediaUrls" :multiple="true" />
         </div>
 
         <UAlert v-if="error" color="error" variant="soft" :description="error" />
