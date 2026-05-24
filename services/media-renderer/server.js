@@ -147,7 +147,7 @@ app.post('/render/image-single/breaking-news-1', async (req, res) => {
       templateParams.my_handle = '@poros.perjuangan';
     }
 
-    const compiledTemplate = compileTemplate('carousel_news_1_cover');
+    const compiledTemplate = compileTemplate('image/porosperjuangan/breakingnews_white/cover');
     const htmlContent = compiledTemplate(templateParams)
       .replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/textfit\/2\.4\.0\/textFit\.min\.js/g, `http://localhost:${port}/textFit.min.js`);
 
@@ -196,7 +196,7 @@ app.post('/render/image-single/breaking-news-2', async (req, res) => {
       templateParams.my_handle = '@poros.perjuangan';
     }
 
-    const compiledTemplate = compileTemplate('carousel_news_2_cover');
+    const compiledTemplate = compileTemplate('image/porosperjuangan/breakingnews_red/cover');
     const htmlContent = compiledTemplate(templateParams)
       .replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/textfit\/2\.4\.0\/textFit\.min\.js/g, `http://localhost:${port}/textFit.min.js`);
 
@@ -277,9 +277,9 @@ app.post('/render/image-multiple/interval', async (req, res) => {
     const viewport = { width: 1080, height: 1350 };
     const imageUrls = [];
 
-    const coverTemplate = compileTemplate('image-multiple-interval-cover');
-    const slideTemplate = compileTemplate('image-multiple-interval-slide');
-    const imageTemplate = compileTemplate('image-multiple-interval-image');
+    const coverTemplate = compileTemplate('image/kabarperjuangan/carousel_dark/cover');
+    const slideTemplate = compileTemplate('image/kabarperjuangan/carousel_dark/slide');
+    const imageTemplate = compileTemplate('image/kabarperjuangan/carousel_dark/image');
 
     // Process Markdown for title using dynamic import for the ESM module
     const { marked } = await import('marked');
