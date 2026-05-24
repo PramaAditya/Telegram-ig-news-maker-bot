@@ -26,7 +26,8 @@ export async function getSettings() {
       logoImageUrl: process.env.LOGO_IMAGE_URL || null,
       ctaImageUrl: process.env.CTA_IMAGE_URL || null,
       bufferApiKey: process.env.BUFFER_API_KEY || null,
-      bufferInstagramChannelId: process.env.BUFFER_INSTAGRAM_CHANNEL_ID || null,
+      bufferChannelId: process.env.BUFFER_CHANNEL_ID || null,
+      bufferChannelNetwork: 'instagram', // Default fallback
       telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || null
     };
     await db.insert(settingsTable).values(defaultSettings);
@@ -44,7 +45,8 @@ export async function getSettings() {
     logoImageUrl: settings.logoImageUrl || process.env.LOGO_IMAGE_URL || null,
     ctaImageUrl: settings.ctaImageUrl || process.env.CTA_IMAGE_URL || null,
     bufferApiKey: settings.bufferApiKey || process.env.BUFFER_API_KEY || null,
-    bufferInstagramChannelId: settings.bufferInstagramChannelId || process.env.BUFFER_INSTAGRAM_CHANNEL_ID || null,
+    bufferChannelId: settings.bufferChannelId || process.env.BUFFER_CHANNEL_ID || null,
+    bufferChannelNetwork: settings.bufferChannelNetwork || 'instagram',
     telegramBotToken: settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || null
   };
 }

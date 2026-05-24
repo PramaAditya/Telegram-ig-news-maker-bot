@@ -12,7 +12,8 @@ const settings = ref<any>({
   logoImageUrl: '',
   ctaImageUrl: '',
   bufferApiKey: '',
-  bufferInstagramChannelId: '',
+  bufferChannelId: '',
+  bufferChannelNetwork: '',
   telegramBotToken: '',
   editorialGuidelines: '',
   postingSlots: [],
@@ -466,8 +467,13 @@ const saveSettings = async () => {
                 </div>
 
                 <div>
-                  <label class="block text-sm font-medium text-default mb-2">Buffer Instagram Channel ID</label>
-                  <PasswordInput v-model="settings.bufferInstagramChannelId" placeholder="60abc123..." />
+                  <label class="block text-sm font-medium text-default mb-2">Buffer Channel ID</label>
+                  <PasswordInput v-model="settings.bufferChannelId" placeholder="60abc123..." />
+                </div>
+                
+                <div v-if="settings.bufferChannelNetwork">
+                  <label class="block text-sm font-medium text-default mb-2">Buffer Channel Network (Auto-detected)</label>
+                  <input type="text" disabled :value="settings.bufferChannelNetwork" class="w-full px-4 py-2 border border-default rounded-md shadow-sm text-sm bg-muted text-muted uppercase cursor-not-allowed" />
                 </div>
               </div>
             </div>

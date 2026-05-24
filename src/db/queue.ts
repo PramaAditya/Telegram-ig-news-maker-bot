@@ -7,6 +7,7 @@ export async function insertQueueItem(data: {
   templateData: any;
   text: string;
   media: { type: 'image' | 'video', url: string }[];
+  publishMetadata?: any;
   researchResult?: string;
   status?: string; // e.g., 'pending', 'draft', 'published', 'error'
 }) {
@@ -20,6 +21,7 @@ export async function insertQueueItem(data: {
     templateData: data.templateData,
     text: data.text,
     media: data.media,
+    publishMetadata: data.publishMetadata || {},
     status: data.status || 'pending',
     researchResult: data.researchResult
   }).returning();

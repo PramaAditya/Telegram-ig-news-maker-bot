@@ -217,7 +217,7 @@ async function autoPublishQueue() {
       }
 
       // Publish to buffer
-      await publishToBuffer(mediaToPublish, post.text);
+      await publishToBuffer(mediaToPublish, post.text, post.publishMetadata);
       
       // Update DB
       await db.update(queueTable)

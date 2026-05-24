@@ -7,6 +7,7 @@ export const queueTable = pgTable('queue', {
   templateData: jsonb('template_data').$type<any>().notNull().default({}),
   text: text('text').notNull(),
   media: jsonb('media').$type<{ type: 'image' | 'video', url: string }[]>().notNull(),
+  publishMetadata: jsonb('publish_metadata').$type<any>().notNull().default({}),
   status: text('status').notNull().default('pending'), // pending, published, error
   errorLog: text('error_log'),
   researchResult: text('research_result'),
@@ -42,7 +43,8 @@ export const settingsTable = pgTable('settings', {
   logoImageUrl: text('logo_image_url'),
   ctaImageUrl: text('cta_image_url'),
   bufferApiKey: text('buffer_api_key'),
-  bufferInstagramChannelId: text('buffer_instagram_channel_id'),
+  bufferChannelId: text('buffer_channel_id'),
+  bufferChannelNetwork: text('buffer_channel_network').default('instagram'),
   telegramBotToken: text('telegram_bot_token'),
   editorialGuidelines: text('editorial_guidelines'),
   postingSlots: jsonb('posting_slots').$type<{ day: string, time: string }[]>().default([]).notNull(),

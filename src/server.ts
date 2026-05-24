@@ -6,7 +6,7 @@ import { getSettings } from './db/settings.js';
 import { eq, asc, desc, sql } from 'drizzle-orm';
 import { TEMPLATES } from './templates.js';
 import { generateMedia } from './media.js';
-import { publishToBuffer } from './buffer.js';
+import { publishToBuffer, fetchBufferChannelNetwork } from './buffer.js';
 import { runAutomatedPipeline } from './agent.js';
 import multer from 'multer';
 import { uploadToS3 } from './s3.js';
@@ -76,7 +76,7 @@ app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
       }
 
       // Publish to buffer (using shareNow in buffer.ts)
-      const result = await publishToBuffer(mediaToPublish, post.text);
+      const result = await publishToBuffer(mediaToPublish, post.text, post.publishMetadata);
       
       // Update DB
       await db.update(queueTable)
@@ -386,7 +386,7 @@ app.put('/api/settings', requireDashboardAuth, async (req, res) => {
       logoImageUrl, 
       ctaImageUrl, 
       bufferApiKey, 
-      bufferInstagramChannelId, 
+      bufferChannelId, 
       telegramBotToken, 
       editorialGuidelines,
       cronIntervalMinutes, 
@@ -398,7 +398,7 @@ app.put('/api/settings', requireDashboardAuth, async (req, res) => {
     if (logoImageUrl !== undefined) updateData.logoImageUrl = logoImageUrl;
     if (ctaImageUrl !== undefined) updateData.ctaImageUrl = ctaImageUrl;
     if (bufferApiKey !== undefined) updateData.bufferApiKey = bufferApiKey;
-    if (bufferInstagramChannelId !== undefined) updateData.bufferInstagramChannelId = bufferInstagramChannelId;
+    if (bufferChannelId !== undefined) updateData.bufferChannelId = bufferChannelId;
     if (telegramBotToken !== undefined) updateData.telegramBotToken = telegramBotToken;
     if (editorialGuidelines !== undefined) updateData.editorialGuidelines = editorialGuidelines;
     if (cronIntervalMinutes !== undefined) updateData.cronIntervalMinutes = parseInt(cronIntervalMinutes, 10);
@@ -408,7 +408,25 @@ app.put('/api/settings', requireDashboardAuth, async (req, res) => {
     if (req.body.bannedWords !== undefined) updateData.bannedWords = req.body.bannedWords;
 
     // Make sure the row exists first
-    await getSettings();
+    const currentSettings = await getSettings();
+
+    // Fetch network if buffer API key or channel ID is being updated
+    if (
+      (bufferApiKey !== undefined || bufferChannelId !== undefined) &&
+      (updateData.bufferApiKey || currentSettings.bufferApiKey) &&
+      (updateData.bufferChannelId || currentSettings.bufferChannelId)
+    ) {
+      try {
+        const apiKey = updateData.bufferApiKey || currentSettings.bufferApiKey;
+        const channelId = updateData.bufferChannelId || currentSettings.bufferChannelId;
+        const network = await fetchBufferChannelNetwork(apiKey, channelId);
+        updateData.bufferChannelNetwork = network;
+      } catch (err: any) {
+        console.error("Failed to fetch Buffer channel network:", err);
+        // Optionally fail the request or just let it pass with an error log
+        // return res.status(400).json({ error: "Failed to validate Buffer Channel ID. Make sure API key and Channel ID are correct." });
+      }
+    }
     
     await db.update(settingsTable).set(updateData).where(eq(settingsTable.id, 1));
     
@@ -513,7 +531,7 @@ app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
         mediaToPublish.push({ type: 'image', url: ctaUrl });
       }
 
-      const result = await publishToBuffer(mediaToPublish, post.text);
+      const result = await publishToBuffer(mediaToPublish, post.text, post.publishMetadata);
       
       await db.update(queueTable)
         .set({

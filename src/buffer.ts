@@ -6,34 +6,60 @@ export interface BufferMediaItem {
   url: string;
 }
 
-export async function publishToBuffer(media: BufferMediaItem[], text: string) {
+export async function fetchBufferChannelNetwork(bufferToken: string, channelId: string): Promise<string> {
+  const query = `
+    query GetChannel($channelId: String!) {
+      channel(id: $channelId) {
+        service
+      }
+    }
+  `;
+
+  const payload = {
+    query,
+    variables: { channelId }
+  };
+
+  const url = 'https://api.buffer.com/1/graphql';
+
+  try {
+    const response = await axios.post(url, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${bufferToken}`
+      }
+    });
+
+    const data = response.data;
+    if (data.errors) {
+      throw new Error(data.errors[0].message);
+    }
+
+    const service = data.data?.channel?.service;
+    if (!service) {
+      throw new Error('Could not find channel service');
+    }
+
+    return service;
+  } catch (error: any) {
+    console.error('Buffer API error fetching channel network:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.errors?.[0]?.message || error.message || 'Failed to fetch Buffer channel network');
+  }
+}
+
+export async function publishToBuffer(media: BufferMediaItem[], text: string, publishMetadata: any = {}) {
   const settings = await getSettings();
   const bufferToken = settings.bufferApiKey;
-  const channelId = settings.bufferInstagramChannelId;
+  const channelId = settings.bufferChannelId;
+  const channelNetwork = settings.bufferChannelNetwork || 'instagram';
 
   if (!bufferToken || !channelId) {
     throw new Error('Buffer API credentials missing.');
   }
 
   const query = `
-    mutation CreatePost {
-      createPost(
-        input: {
-          text: ${JSON.stringify(text)}
-          channelId: "${channelId}"
-          schedulingType: automatic
-          mode: shareNow
-          metadata: {
-            instagram: {
-              type: post
-              shouldShareToFeed: true
-            }
-          }
-          assets: [
-            ${media.map(m => `{ ${m.type}: { url: "${m.url}" } }`).join(',\n            ')}
-          ]
-        }
-      ) {
+    mutation CreatePost($input: PostCreateInput!) {
+      createPost(input: $input) {
         ... on PostActionSuccess {
           post {
             id
@@ -51,7 +77,29 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string) {
     }
   `;
 
-  const payload = { query };
+  // Merge the queue item's specific publish metadata, with fallback for instagram
+  let metadata = publishMetadata;
+  if (Object.keys(metadata).length === 0 && channelNetwork === 'instagram') {
+    metadata = {
+      instagram: {
+        type: "post",
+        shouldShareToFeed: true
+      }
+    };
+  }
+
+  const variables = {
+    input: {
+      text,
+      channelId,
+      schedulingType: "automatic",
+      mode: "shareNow",
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+      assets: media.map(m => ({ [m.type]: { url: m.url } }))
+    }
+  };
+
+  const payload = { query, variables };
 
   const url = 'https://api.buffer.com/1/graphql';
 
