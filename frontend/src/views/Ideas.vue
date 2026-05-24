@@ -80,19 +80,19 @@ const formatDate = (dateStr: string) => {
   <div>
     <div class="sm:flex sm:items-center sm:justify-between mb-8">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Ideas</h1>
-        <p class="mt-2 text-sm text-gray-700">Manage ideas submitted via Telegram.</p>
+        <h1 class="text-2xl font-bold text-default">Ideas</h1>
+        <p class="mt-2 text-sm text-muted">Manage ideas submitted via Telegram.</p>
       </div>
     </div>
 
     <!-- Tabs -->
-    <div class="border-b border-gray-200 mb-6">
+    <div class="border-b border-default mb-6">
       <nav class="-mb-px flex space-x-8" aria-label="Tabs">
         <button 
           @click="currentTab = 'pending'; fetchIdeas()"
           :class="[
-            currentTab === 'pending' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
-            'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
+            currentTab === 'pending' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-default hover:border-muted',
+            'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors'
           ]"
         >
           Pending
@@ -100,8 +100,8 @@ const formatDate = (dateStr: string) => {
         <button 
           @click="currentTab = 'converted'; fetchIdeas()"
           :class="[
-            currentTab === 'converted' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
-            'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
+            currentTab === 'converted' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-default hover:border-muted',
+            'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors'
           ]"
         >
           Converted
@@ -109,8 +109,8 @@ const formatDate = (dateStr: string) => {
         <button 
           @click="currentTab = 'rejected'; fetchIdeas()"
           :class="[
-            currentTab === 'rejected' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
-            'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
+            currentTab === 'rejected' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-default hover:border-muted',
+            'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors'
           ]"
         >
           Rejected
@@ -119,29 +119,29 @@ const formatDate = (dateStr: string) => {
     </div>
 
     <div v-if="loading" class="text-center py-10">
-      <p class="text-gray-500">Loading ideas...</p>
+      <p class="text-muted">Loading ideas...</p>
     </div>
     <div v-else-if="ideas.length === 0" class="text-center py-10">
-      <p class="text-gray-500">No ideas found for this status.</p>
+      <p class="text-muted">No ideas found for this status.</p>
     </div>
     <div v-else class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      <div v-for="idea in ideas" :key="idea.id" class="bg-white overflow-hidden shadow rounded-lg border border-gray-200 flex flex-col">
+      <div v-for="idea in ideas" :key="idea.id" class="bg-default overflow-hidden shadow rounded-lg border border-default flex flex-col">
         <div class="p-5 flex-1">
-          <p class="text-xs text-gray-500 mb-2">{{ formatDate(idea.createdAt) }}</p>
-          <p class="text-sm text-gray-900 line-clamp-4">{{ idea.text }}</p>
+          <p class="text-xs text-muted mb-2">{{ formatDate(idea.createdAt) }}</p>
+          <p class="text-sm text-default line-clamp-4">{{ idea.text }}</p>
           
           <div v-if="idea.media && idea.media.length > 0" class="mt-3 flex gap-2 overflow-x-auto">
             <template v-for="(m, i) in idea.media" :key="i">
               <img v-if="m.type === 'image'" :src="m.url" class="h-16 w-16 object-cover rounded" />
-              <div v-else class="h-16 w-16 bg-gray-100 flex items-center justify-center rounded text-xs text-gray-500">Video</div>
+              <div v-else class="h-16 w-16 bg-muted flex items-center justify-center rounded text-xs text-muted">Video</div>
             </template>
           </div>
         </div>
         
-        <div class="bg-gray-50 px-5 py-3 border-t border-gray-200 flex flex-col gap-3">
+        <div class="bg-elevated px-5 py-3 border-t border-default flex flex-col gap-3">
           <div v-if="idea.status === 'pending' || idea.status === 'rejected'" class="flex flex-col gap-2">
-            <label class="block text-xs font-medium text-gray-700">Template</label>
-            <select v-model="selectedTemplates[idea.id]" class="mt-1 block w-full pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+            <label class="block text-xs font-medium text-default">Template</label>
+            <select v-model="selectedTemplates[idea.id]" class="mt-1 block w-full pl-3 pr-10 py-2 text-sm border-default bg-default text-default focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md">
               <option v-for="t in templates" :key="t.id" :value="t.id">{{ t.name }}</option>
             </select>
           </div>
@@ -149,7 +149,7 @@ const formatDate = (dateStr: string) => {
             <button 
               v-if="idea.status === 'pending' || idea.status === 'rejected'" 
               @click="convertIdea(idea.id)" 
-              class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
             >
               Convert to Post
             </button>
@@ -157,7 +157,7 @@ const formatDate = (dateStr: string) => {
             <button 
               v-if="idea.status === 'pending'" 
               @click="updateStatus(idea.id, 'rejected')" 
-              class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-default shadow-sm text-xs font-medium rounded text-default bg-default hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
             >
               Reject
             </button>
@@ -165,7 +165,7 @@ const formatDate = (dateStr: string) => {
              <button 
               v-if="idea.status === 'rejected'" 
               @click="updateStatus(idea.id, 'pending')" 
-              class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              class="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-default shadow-sm text-xs font-medium rounded text-default bg-default hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
             >
               Move to Pending
             </button>
