@@ -19,8 +19,8 @@ const toggleColorMode = () => {
           </div>
           <div class="hidden sm:block sm:ml-6">
             <div class="flex space-x-4">
-              <router-link to="/" class="text-sm font-medium text-muted hover:text-default px-2 py-1 rounded-md" active-class="bg-elevated text-default">Queue</router-link>
               <router-link to="/ideas" class="text-sm font-medium text-muted hover:text-default px-2 py-1 rounded-md" active-class="bg-elevated text-default">Ideas</router-link>
+              <router-link to="/" class="text-sm font-medium text-muted hover:text-default px-2 py-1 rounded-md" active-class="bg-elevated text-default">Queue</router-link>
               <router-link to="/jobs" class="text-sm font-medium text-muted hover:text-default px-2 py-1 rounded-md" active-class="bg-elevated text-default">Jobs</router-link>
               <router-link to="/create" class="text-sm font-medium text-muted hover:text-default px-2 py-1 rounded-md" active-class="bg-elevated text-default">Create New</router-link>
               <router-link to="/settings" class="text-sm font-medium text-muted hover:text-default px-2 py-1 rounded-md" active-class="bg-elevated text-default">Settings</router-link>
