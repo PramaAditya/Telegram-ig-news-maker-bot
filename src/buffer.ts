@@ -8,7 +8,7 @@ export interface BufferMediaItem {
 
 export async function fetchBufferChannelDetails(bufferToken: string, channelId: string): Promise<{ network: string; name: string }> {
   const query = `
-    query GetChannel($channelId: String!) {
+    query GetChannel($channelId: ChannelId!) {
       channel(input: { id: $channelId }) {
         service
         name
