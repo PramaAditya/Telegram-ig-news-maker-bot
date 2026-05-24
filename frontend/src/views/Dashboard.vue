@@ -327,12 +327,24 @@ const timeAgo = (dateObj: Date | string | null) => {
   <div>
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold text-default">Posts Queue</h1>
-      <button
-        @click="fetchQueue"
-        class="px-4 py-2 bg-default border border-default rounded-md text-sm font-medium text-default hover:bg-muted"
-      >
-        Refresh
-      </button>
+      <div class="flex items-center gap-2">
+        <UButton
+          to="/create"
+          color="white"
+          variant="solid"
+          size="md"
+        >
+          Create New
+        </UButton>
+        <UButton
+          @click="fetchQueue"
+          color="white"
+          variant="solid"
+          size="md"
+        >
+          Refresh
+        </UButton>
+      </div>
     </div>
 
     <!-- Tabs -->
