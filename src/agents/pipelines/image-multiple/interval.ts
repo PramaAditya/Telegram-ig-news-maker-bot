@@ -37,7 +37,7 @@ export async function generateIntervalMedia(templateData: any, settings: any): P
     input_images: templateData.inputImages || []
   };
 
-  const renderedUrls = await generateMedia('/render/image/kabarperjuangan/carousel_dark', renderPayload);
+  const renderedUrls = await generateMedia('/render/image/kabar.perjuangan/carousel_dark', renderPayload);
 
   if (!renderedUrls || renderedUrls.length === 0) {
     throw new Error('Failed to render images from external API.');
@@ -261,7 +261,7 @@ RULES:
     input_images: extraImageUrls
   };
 
-  const renderedUrls = await generateMedia('/render/image/kabarperjuangan/carousel_dark', renderPayload);
+  const renderedUrls = await generateMedia('/render/image/kabar.perjuangan/carousel_dark', renderPayload);
 
   if (!renderedUrls || renderedUrls.length === 0) {
     throw new Error('Gagal merender carousel dari API.');
