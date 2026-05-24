@@ -4,7 +4,7 @@ import axios from 'axios';
 import { PipelineContext, ResearchResult, googleAI, withRetry } from '../../../utils.js';
 import { censorText } from '../../../sanitize.js';
 import { uploadToS3 } from '../../../s3.js';
-import { generateMedia } from '../../../image.js';
+import { generateMedia } from '../../../media.js';
 import { insertQueueItem } from '../../../db/queue.js';
 
 export const intervalTemplateConfig = {

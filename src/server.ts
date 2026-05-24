@@ -5,7 +5,7 @@ import { jobsTable, queueTable, settingsTable } from './db/schema.js';
 import { getSettings } from './db/settings.js';
 import { eq, asc, desc, sql } from 'drizzle-orm';
 import { TEMPLATES } from './templates.js';
-import { generateMedia } from './image.js';
+import { generateMedia } from './media.js';
 import { publishToBuffer } from './buffer.js';
 import { runAutomatedPipeline } from './agent.js';
 import multer from 'multer';
