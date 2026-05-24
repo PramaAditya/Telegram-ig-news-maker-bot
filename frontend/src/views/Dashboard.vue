@@ -14,14 +14,13 @@ const error = ref("");
 const activeTab = ref('pending');
 
 const tabItems = [
-  { label: 'Pending', icon: 'i-lucide-clock', slot: 'content', key: 'pending' },
-  { label: 'Published', icon: 'i-lucide-check-circle', slot: 'content', key: 'published' },
-  { label: 'Error', icon: 'i-lucide-alert-circle', slot: 'content', key: 'error' }
+  { label: 'Pending', icon: 'i-lucide-clock', slot: 'content', value: 'pending' },
+  { label: 'Published', icon: 'i-lucide-check-circle', slot: 'content', value: 'published' },
+  { label: 'Error', icon: 'i-lucide-alert-circle', slot: 'content', value: 'error' }
 ];
 
-const selectedTab = ref(0);
-const onTabChange = (index: number | string) => {
-  activeTab.value = tabItems[Number(index)].key;
+const onTabChange = (value: number | string) => {
+  activeTab.value = value as string;
   fetchQueue();
 };
 
@@ -338,7 +337,7 @@ const timeAgo = (dateObj: Date | string | null) => {
 
     <!-- Tabs -->
     <UTabs 
-      v-model="selectedTab"
+      v-model="activeTab"
       :items="tabItems" 
       class="w-full mb-6"
       @update:modelValue="onTabChange"

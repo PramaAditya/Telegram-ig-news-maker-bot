@@ -5,19 +5,19 @@ import { apiFetch } from '../auth';
 const ideas = ref<any[]>([]);
 const templates = ref<any[]>([]);
 const selectedTemplates = ref<Record<number, string>>({});
+const currentTab = ref('pending');
+
 const tabItems = [
-  { label: 'Pending', icon: 'i-lucide-clock', slot: 'content', key: 'pending' },
-  { label: 'Converted', icon: 'i-lucide-check-circle', slot: 'content', key: 'converted' },
-  { label: 'Rejected', icon: 'i-lucide-x-circle', slot: 'content', key: 'rejected' }
+  { label: 'Pending', icon: 'i-lucide-clock', slot: 'content', value: 'pending' },
+  { label: 'Converted', icon: 'i-lucide-check-circle', slot: 'content', value: 'converted' },
+  { label: 'Rejected', icon: 'i-lucide-x-circle', slot: 'content', value: 'rejected' }
 ];
 
-const selectedTab = ref(0);
-const onTabChange = (index: number | string) => {
-  currentTab.value = tabItems[Number(index)].key;
+const onTabChange = (value: number | string) => {
+  currentTab.value = value as string;
   fetchIdeas();
 };
 
-const currentTab = ref('pending');
 const loading = ref(false);
 
 const fetchTemplates = async () => {
@@ -99,7 +99,7 @@ const formatDate = (dateStr: string) => {
 
     <!-- Tabs -->
     <UTabs 
-      v-model="selectedTab"
+      v-model="currentTab"
       :items="tabItems" 
       class="w-full mb-6"
       @update:modelValue="onTabChange"
