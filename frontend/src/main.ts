@@ -1,7 +1,6 @@
 import { createApp } from 'vue'
 import './style.css'
 import '@fancyapps/ui/dist/fancybox/fancybox.css'
-import App from './App.vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import ui from '@nuxt/ui/vue-plugin'
 
@@ -13,14 +12,16 @@ import Jobs from './views/Jobs.vue'
 import Ideas from './views/Ideas.vue'
 import App from './App.vue'
 
-const routes = [
-  { path: '/', component: Dashboard },
-  { path: '/settings', component: Settings },
-  { path: '/post/:id', component: PostDetail },
-  { path: '/create', component: CreatePost },
-  { path: '/jobs', component: Jobs },
-  { path: '/ideas', component: Ideas },
-]
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [
+    { path: '/', component: Dashboard },
+    { path: '/settings', component: Settings },
+    { path: '/post/:id', component: PostDetail },
+    { path: '/create', component: CreatePost },
+    { path: '/jobs', component: Jobs },
+    { path: '/ideas', component: Ideas },
+  ]
 })
 
 createApp(App).use(router).use(ui).mount('#app')
