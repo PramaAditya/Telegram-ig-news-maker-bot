@@ -1,110 +1,33 @@
-<script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { apiFetch } from '../auth';
+const fs = require('fs');
+const path = require('path');
 
-const ideas = ref<any[]>([]);
-const templates = ref<any[]>([]);
-const selectedTemplates = ref<Record<number, string>>({});
-const tabItems = [
+const filePath = path.resolve('frontend/src/views/Ideas.vue');
+let content = fs.readFileSync(filePath, 'utf-8');
+
+const newScript = `const tabItems = [
   { label: 'Pending', icon: 'i-lucide-clock', slot: 'content', key: 'pending' },
   { label: 'Converted', icon: 'i-lucide-check-circle', slot: 'content', key: 'converted' },
   { label: 'Rejected', icon: 'i-lucide-x-circle', slot: 'content', key: 'rejected' }
 ];
 
 const selectedTab = ref(0);
-const onTabChange = (index: number | string) => {
-  currentTab.value = tabItems[Number(index)].key;
+const onTabChange = (index) => {
+  currentTab.value = tabItems[index].key;
   fetchIdeas();
 };
 
-const currentTab = ref('pending');
-const loading = ref(false);
+const currentTab = ref('pending');`;
 
-const fetchTemplates = async () => {
-  try {
-    const data = await apiFetch('/api/templates');
-    templates.value = data || [];
-  } catch (error) {
-    console.error('Failed to fetch templates:', error);
-  }
-};
+content = content.replace(/const currentTab = ref\('pending'\);/, newScript);
 
-const fetchIdeas = async () => {
-  loading.value = true;
-  try {
-    const data = await apiFetch(`/api/ideas?status=${currentTab.value}`);
-    ideas.value = data || [];
-    
-    // Initialize selected templates for new ideas
-    ideas.value.forEach(idea => {
-      if (!selectedTemplates.value[idea.id] && templates.value.length > 0) {
-        selectedTemplates.value[idea.id] = templates.value[0].id;
-      }
-    });
-  } catch (error) {
-    console.error('Failed to fetch ideas:', error);
-  } finally {
-    loading.value = false;
-  }
-};
-
-onMounted(async () => {
-  await fetchTemplates();
-  await fetchIdeas();
-});
-
-const convertIdea = async (ideaId: number) => {
-  const templateId = selectedTemplates.value[ideaId] || 'image:kabar.perjuangan:carousel_dark';
-  try {
-    await apiFetch(`/api/ideas/${ideaId}/convert`, {
-      method: 'POST',
-      body: JSON.stringify({ templateId })
-    });
-    fetchIdeas();
-  } catch (error) {
-    console.error('Failed to convert idea:', error);
-    alert('Failed to convert idea');
-  }
-};
-
-const updateStatus = async (ideaId: number, status: string) => {
-  try {
-    await apiFetch(`/api/ideas/${ideaId}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status })
-    });
-    fetchIdeas();
-  } catch (error) {
-    console.error(`Failed to mark idea as ${status}:`, error);
-    alert(`Failed to update status`);
-  }
-};
-
-const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleString('id-ID', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
-};
-</script>
-
-<template>
-  <div>
-    <div class="sm:flex sm:items-center sm:justify-between mb-8">
-      <div>
-        <h1 class="text-2xl font-bold text-default">Ideas</h1>
-        <p class="mt-2 text-sm text-muted">Manage ideas submitted via Telegram.</p>
-      </div>
-    </div>
-
-    <!-- Tabs -->
+const newTabsTemplate = `<!-- Tabs -->
     <UTabs 
       v-model="selectedTab"
       :items="tabItems" 
       class="w-full mb-6"
       @update:modelValue="onTabChange"
     >
-      <template #content="{ item: _item }">
+      <template #content="{ item }">
         <div v-if="loading" class="text-center py-10">
           <p class="text-muted">Loading ideas...</p>
         </div>
@@ -161,6 +84,9 @@ const formatDate = (dateStr: string) => {
           </div>
         </div>
       </template>
-    </UTabs>
-  </div>
-</template>
+    </UTabs>`;
+
+content = content.replace(/<!-- Tabs -->[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<\/template>/, newTabsTemplate + '\n</template>');
+
+fs.writeFileSync(filePath, content);
+console.log('Successfully updated Ideas.vue');

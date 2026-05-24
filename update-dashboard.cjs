@@ -1,349 +1,31 @@
-<script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { Edit, Send, GripVertical, RotateCcw, MoreVertical } from "lucide-vue-next";
-import { getAuthHeaders, setPassword } from "../auth";
-import { Fancybox } from "@fancyapps/ui";
-import draggable from "vuedraggable";
+const fs = require('fs');
+const path = require('path');
 
-const toast = useToast();
+const filePath = path.resolve('frontend/src/views/Dashboard.vue');
+let content = fs.readFileSync(filePath, 'utf-8');
 
-const queue = ref<any[]>([]);
-const postingSlots = ref<{day: string, time: string}[]>([]);
-const loading = ref(true);
-const error = ref("");
-const activeTab = ref('pending');
-
-const tabItems = [
+const newScript = `const tabItems = [
   { label: 'Pending', icon: 'i-lucide-clock', slot: 'content', key: 'pending' },
   { label: 'Published', icon: 'i-lucide-check-circle', slot: 'content', key: 'published' },
   { label: 'Error', icon: 'i-lucide-alert-circle', slot: 'content', key: 'error' }
 ];
 
 const selectedTab = ref(0);
-const onTabChange = (index: number | string) => {
-  activeTab.value = tabItems[Number(index)].key;
+const onTabChange = (index) => {
+  activeTab.value = tabItems[index].key;
   fetchQueue();
-};
+};`;
 
-const openLightbox = (mediaArray: any[], index: number) => {
-  const items = mediaArray.map((m) => ({
-    src: m.url,
-    type: m.type === "video" ? "video" : "image",
-  }));
-  Fancybox.show(items, { startIndex: index });
-};
+content = content.replace(/const tabs = \[\s*\{ label: 'Pending', key: 'pending' \},\s*\{ label: 'Published', key: 'published' \},\s*\{ label: 'Error', key: 'error' \}\s*\];/, newScript);
 
-const dayMap: Record<string, number> = {
-  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6
-};
-
-const getNextSlot = (fromDate: Date, sortedSlots: {day: string, time: string}[]) => {
-  if (!sortedSlots.length) return null;
-
-  const currentDay = fromDate.getDay();
-  const currentHour = fromDate.getHours();
-  const currentMinute = fromDate.getMinutes();
-
-  for (let i = 0; i < 7; i++) {
-    const searchDay = (currentDay + i) % 7;
-    const slotsForDay = sortedSlots.filter(s => dayMap[s.day.toLowerCase()] === searchDay);
-    
-    for (const slot of slotsForDay) {
-      const [h, m] = slot.time.split(':').map(Number);
-      if (i === 0) {
-        if (h > currentHour || (h === currentHour && m > currentMinute)) {
-          const nextDate = new Date(fromDate);
-          nextDate.setDate(nextDate.getDate() + i);
-          nextDate.setHours(h, m, 0, 0);
-          return nextDate;
-        }
-      } else {
-        const nextDate = new Date(fromDate);
-        nextDate.setDate(nextDate.getDate() + i);
-        nextDate.setHours(h, m, 0, 0);
-        return nextDate;
-      }
-    }
-  }
-  
-  // Wrap to next week
-  const firstSlot = sortedSlots[0];
-  const [h, m] = firstSlot.time.split(':').map(Number);
-  const targetDay = dayMap[firstSlot.day.toLowerCase()];
-  let daysToAdd = targetDay - currentDay;
-  if (daysToAdd <= 0) daysToAdd += 7;
-  
-  const nextDate = new Date(fromDate);
-  nextDate.setDate(nextDate.getDate() + daysToAdd);
-  nextDate.setHours(h, m, 0, 0);
-  return nextDate;
-};
-
-const calculateExpectedTimes = () => {
-  if (!queue.value.length) return;
-
-  const sortedSlots = [...postingSlots.value].sort((a, b) => {
-    const dayA = dayMap[a.day.toLowerCase()] || 0;
-    const dayB = dayMap[b.day.toLowerCase()] || 0;
-    if (dayA !== dayB) return dayA - dayB;
-    return a.time.localeCompare(b.time);
-  });
-
-  let refDate = new Date();
-  
-  for (const item of queue.value) {
-    if (!sortedSlots.length) {
-      item.expectedPostAt = null;
-      continue;
-    }
-
-    const next = getNextSlot(refDate, sortedSlots);
-    if (next) {
-      item.expectedPostAt = next;
-      refDate = new Date(next.getTime() + 60000);
-    } else {
-      item.expectedPostAt = null;
-    }
-  }
-};
-
-const fetchSettings = async () => {
-  try {
-    const res = await fetch("/api/settings", { headers: getAuthHeaders() });
-    if (res.ok) {
-      const data = await res.json();
-      postingSlots.value = data.postingSlots || [];
-      calculateExpectedTimes();
-    }
-  } catch (e) {}
-};
-
-const fetchQueue = async () => {
-  loading.value = true;
-  try {
-    const res = await fetch(`/api/queue?status=${activeTab.value}`, { headers: getAuthHeaders() });
-    if (res.status === 401) {
-      const pwd = prompt("Enter Dashboard Password:");
-      if (pwd !== null) {
-        setPassword(pwd);
-        return fetchQueue();
-      }
-      throw new Error("Unauthorized");
-    }
-    if (!res.ok) throw new Error("Failed to fetch");
-    queue.value = await res.json();
-    if (activeTab.value === 'pending') {
-      calculateExpectedTimes();
-    }
-    error.value = "";
-  } catch (err: any) {
-    error.value = err.message;
-  } finally {
-    loading.value = false;
-  }
-};
-
-const syncReorder = async () => {
-  try {
-    calculateExpectedTimes(); // update UI instantly before sync
-    const res = await fetch(`/api/queue/reorder`, {
-      method: "POST",
-      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ orderedIds: queue.value.map((i) => i.id) }),
-    });
-    if (res.status === 401) {
-      toast.add({ title: "Unauthorized", description: "Please refresh and re-enter password.", color: "error" });
-      return;
-    }
-  } catch (err) {
-    toast.add({ title: "Failed to reorder items", color: "error" });
-    fetchQueue(); // rollback
-  }
-};
-
-const onDragEnd = async () => {
-  await syncReorder();
-};
-
-onMounted(() => {
-  fetchQueue();
-  fetchSettings();
-});
-
-const jumpToPosition = async (currentIndex: number, event: Event) => {
-  const target = event.target as HTMLInputElement;
-  let newIndex = parseInt(target.value) - 1;
-
-  // If they enter a giant number, clamp it to the end of the queue
-  if (newIndex >= queue.value.length) {
-    newIndex = queue.value.length - 1;
-  }
-
-  if (
-    isNaN(newIndex) ||
-    newIndex < 0 ||
-    newIndex === currentIndex
-  ) {
-    target.value = (currentIndex + 1).toString();
-    return;
-  }
-
-  const newQueue = [...queue.value];
-  const [movedItem] = newQueue.splice(currentIndex, 1);
-  newQueue.splice(newIndex, 0, movedItem);
-  queue.value = newQueue;
-
-  target.value = (newIndex + 1).toString();
-  await syncReorder();
-};
-
-const deleteItem = async (id: number) => {
-  if (!confirm("Are you sure you want to delete this post?")) return;
-  try {
-    const res = await fetch(`/api/queue/${id}`, {
-      method: "DELETE",
-      headers: getAuthHeaders(),
-    });
-    if (res.status === 401) {
-      toast.add({ title: "Unauthorized", color: "error" });
-      return;
-    }
-    fetchQueue();
-  } catch (err) {
-    toast.add({ title: "Failed to delete", color: "error" });
-  }
-};
-
-const publishNow = async (id: number) => {
-  if (
-    !confirm(
-      "Are you sure you want to publish this post IMMEDIATELY to Buffer?",
-    )
-  )
-    return;
-  try {
-    const res = await fetch(`/api/queue/${id}/publish`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-    });
-    if (res.status === 401) {
-      toast.add({ title: "Unauthorized", color: "error" });
-      return;
-    }
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to publish");
-    toast.add({ title: "Published successfully!", color: "success" });
-    fetchQueue();
-  } catch (err: any) {
-    toast.add({ title: err.message, color: "error" });
-  }
-};
-
-const retryError = async (id: number) => {
-  if (!confirm("Are you sure you want to move this failed post back to the pending queue?")) return;
-  try {
-    const res = await fetch(`/api/queue/${id}/retry-error`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-    });
-    if (res.status === 401) {
-      toast.add({ title: "Unauthorized", color: "error" });
-      return;
-    }
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to retry post");
-    toast.add({ title: "Moved back to pending successfully!", color: "success" });
-    fetchQueue();
-  } catch (err: any) {
-    toast.add({ title: err.message, color: "error" });
-  }
-};
-
-const isFirstOfDay = (index: number) => {
-  if (index === 0) return true;
-  const current = queue.value[index].expectedPostAt;
-  const previous = queue.value[index - 1].expectedPostAt;
-  
-  if (!current && !previous) return false;
-  if (!current || !previous) return true;
-
-  const d1 = new Date(current);
-  const d2 = new Date(previous);
-  
-  return d1.toDateString() !== d2.toDateString();
-};
-
-const formatDayHeader = (dateObj: Date | string | null) => {
-  if (!dateObj) return 'Unscheduled';
-  
-  const d = new Date(dateObj);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  
-  const isToday = d.toDateString() === today.toDateString();
-  const isTomorrow = d.toDateString() === tomorrow.toDateString();
-  
-  const dateStr = new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric'
-  }).format(d);
-
-  if (isToday) return `Today, ${dateStr}`;
-  if (isTomorrow) return `Tomorrow, ${dateStr}`;
-  
-  const weekday = new Intl.DateTimeFormat('en-US', {
-    weekday: 'long'
-  }).format(d);
-  
-  return `${weekday}, ${dateStr}`;
-};
-
-const formatTimeOnly = (dateObj: Date | string | null) => {
-  if (!dateObj) return '-';
-  const d = new Date(dateObj);
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  }).format(d);
-};
-const timeAgo = (dateObj: Date | string | null) => {
-  if (!dateObj) return '';
-  const d = new Date(dateObj);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - d.getTime()) / 1000);
-  
-  if (diffInSeconds < 60) return `${diffInSeconds} second${diffInSeconds !== 1 ? 's' : ''} ago`;
-  const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes !== 1 ? 's' : ''} ago`;
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`;
-  const diffInDays = Math.floor(diffInHours / 24);
-  return `${diffInDays} day${diffInDays !== 1 ? 's' : ''} ago`;
-};
-</script>
-
-<template>
-  <div>
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-default">Posts Queue</h1>
-      <button
-        @click="fetchQueue"
-        class="px-4 py-2 bg-default border border-default rounded-md text-sm font-medium text-default hover:bg-muted"
-      >
-        Refresh
-      </button>
-    </div>
-
-    <!-- Tabs -->
+const newTabsTemplate = `<!-- Tabs -->
     <UTabs 
       v-model="selectedTab"
       :items="tabItems" 
       class="w-full mb-6"
       @update:modelValue="onTabChange"
     >
-      <template #content="{ item: _item }">
+      <template #content="{ item }">
         <div v-if="loading" class="text-center py-10 text-muted">
           Loading queue...
         </div>
@@ -542,6 +224,9 @@ const timeAgo = (dateObj: Date | string | null) => {
           </ul>
         </div>
       </template>
-    </UTabs>
-  </div>
-</template>
+    </UTabs>`;
+
+content = content.replace(/<!-- Tabs -->[\s\S]*?<\/ul>\n\s*<\/div>/, newTabsTemplate);
+
+fs.writeFileSync(filePath, content);
+console.log('Successfully updated Dashboard.vue');
