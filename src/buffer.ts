@@ -57,26 +57,10 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
     throw new Error('Buffer API credentials missing.');
   }
 
-  const query = `
-    mutation CreatePost($input: PostCreateInput!) {
-      createPost(input: $input) {
-        ... on PostActionSuccess {
-          post {
-            id
-            text
-            assets {
-              id
-              mimeType
-            }
-          }
-        }
-        ... on MutationError {
-          message
-        }
-      }
-    }
-  `;
-
+  // Because Buffer's GraphQL schema has very specific enum types for schedulingType and mode
+  // that are hard to pass as string variables, and $assets type might be tricky,
+  // we will construct the query dynamically using JSON.stringify for the complex objects.
+  
   // Merge the queue item's specific publish metadata, with fallback for instagram
   let metadata = publishMetadata || {};
   if (Object.keys(metadata).length === 0 && channelNetwork === 'instagram') {
@@ -88,18 +72,48 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
     };
   }
 
-  const variables = {
-    input: {
-      text,
-      channelId,
-      schedulingType: "automatic",
-      mode: "shareNow",
-      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-      assets: media.map(m => ({ [m.type]: { url: m.url } }))
-    }
-  };
+  // Determine the correct asset mapping based on network
+  const assets = media.map(m => {
+    if (m.type === 'image') return { image: { url: m.url } };
+    if (m.type === 'video') return { video: { url: m.url } };
+    return { image: { url: m.url } };
+  });
 
-  const payload = { query, variables };
+  // Convert metadata to GraphQL format (unquoted keys)
+  const metadataString = Object.keys(metadata).length > 0 
+    ? `metadata: ${JSON.stringify(metadata).replace(/"([^"]+)":/g, '$1:')}`
+    : '';
+
+  const assetsString = `assets: [${assets.map(a => 
+    `{ ${Object.keys(a)[0]}: { url: "${Object.values(a)[0].url}" } }`
+  ).join(',\n')}]`;
+
+  const query = `
+    mutation CreatePost {
+      createPost(
+        input: {
+          text: ${JSON.stringify(text)}
+          channelId: "${channelId}"
+          schedulingType: automatic
+          mode: shareNow
+          ${metadataString}
+          ${assetsString}
+        }
+      ) {
+        ... on PostActionSuccess {
+          post {
+            id
+            text
+          }
+        }
+        ... on MutationError {
+          message
+        }
+      }
+    }
+  `;
+
+  const payload = { query };
 
   const url = 'https://api.buffer.com/1/graphql';
 
