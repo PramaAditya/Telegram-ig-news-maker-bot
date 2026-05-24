@@ -1,14 +1,14 @@
 import { generateObject, generateText } from 'ai';
 import { z } from 'zod';
 import axios from 'axios';
-import { PipelineContext, ResearchResult, googleAI, withRetry } from '../../../utils.js';
-import { censorText } from '../../../sanitize.js';
-import { uploadToS3 } from '../../../s3.js';
-import { generateMedia } from '../../../media.js';
-import { insertQueueItem } from '../../../db/queue.js';
+import { PipelineContext, ResearchResult, googleAI, withRetry } from '../../../../utils.js';
+import { censorText } from '../../../../sanitize.js';
+import { uploadToS3 } from '../../../../s3.js';
+import { generateMedia } from '../../../../media.js';
+import { insertQueueItem } from '../../../../db/queue.js';
 
-export const intervalTemplateConfig = {
-  id: 'image-multiple:interval',
+export const carouselDarkTemplateConfig = {
+  id: 'image:kabar.perjuangan:carousel_dark',
   name: 'Interval News (Carousel)',
   description: 'A 2-slide breaking news carousel with a cover image.',
 };
@@ -28,7 +28,7 @@ const schema = z.object({
   image_prompt: z.string(),
 });
 
-export async function generateIntervalMedia(templateData: any, settings: any): Promise<{ type: 'image' | 'video', url: string }[]> {
+export async function generateCarouselDarkMedia(templateData: any, settings: any): Promise<{ type: 'image' | 'video', url: string }[]> {
   const renderPayload = {
     logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
     cover_image: templateData.coverImageUrl,
@@ -49,7 +49,7 @@ export async function generateIntervalMedia(templateData: any, settings: any): P
   }));
 }
 
-export async function runIntervalPipeline(context: PipelineContext, research: ResearchResult) {
+export async function runCarouselDarkPipeline(context: PipelineContext, research: ResearchResult) {
   const { chatId, messageId, telegram, statusMsg, userInput, settings, currentDateStr, baseSystemPrompt } = context;
   const { researchText, scrapedImageUrl, processedMedia } = research;
 
@@ -124,7 +124,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
   if (!baseImageBuffer) {
     console.log(`[Phase 3] No image found so far. Searching the web for an image related to: ${contentParams.title}`);
     try {
-      const { firecrawlService } = await import('../../../utils/firecrawl.js');
+      const { firecrawlService } = await import('../../../../utils/firecrawl.js');
       const searchRes = await firecrawlService.search(`${contentParams.title} image`, { limit: 1 });
       
       // Look through search results to see if any have an image
@@ -214,7 +214,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
 
   // Phase 4: Image Rendering
-  console.log(`[Phase 4] Rendering media via API for template ${intervalTemplateConfig.id}`);
+  console.log(`[Phase 4] Rendering media via API for template ${carouselDarkTemplateConfig.id}`);
   
   let cleanTitle = contentParams.title || '';
   if (cleanTitle) {
@@ -305,7 +305,7 @@ RULES:
   templateData.inputImages = extraImageUrls;
   
   await insertQueueItem({
-    templateId: intervalTemplateConfig.id,
+    templateId: carouselDarkTemplateConfig.id,
     templateData: templateData,
     text: finalCaption,
     media: allPublishUrls,

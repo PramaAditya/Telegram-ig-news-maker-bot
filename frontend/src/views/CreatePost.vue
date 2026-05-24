@@ -8,7 +8,7 @@ const toast = useToast()
 
 const textInput = ref('')
 const mediaUrls = ref<string[]>([])
-const templateId = ref('image-multiple:interval')
+const templateId = ref('image:kabar.perjuangan:carousel_dark')
 const submitting = ref(false)
 const error = ref('')
 const activeJobs = ref<any[]>([])
@@ -110,7 +110,7 @@ const generateContent = async () => {
             v-model="templateId"
             class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-base bg-default text-default"
           >
-            <option value="image-multiple:interval">Interval News (Carousel)</option>
+            <option value="image:kabar.perjuangan:carousel_dark">Interval News (Carousel)</option>
             <!-- Add more templates here in the future -->
           </select>
         </div>

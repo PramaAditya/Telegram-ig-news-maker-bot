@@ -3,7 +3,7 @@ import { getSettings } from './db/settings.js';
 import { runResearchPhase } from './agents/research.js';
 import { MediaItem, PipelineContext, getBaseSystemPrompt, withRetry } from './utils.js';
 
-export async function runAutomatedPipeline(chatId: string, messageId: number, userInput: string, uploadedMedia: MediaItem[] | undefined, telegram: any, templateId: string = 'image-multiple:interval') {
+export async function runAutomatedPipeline(chatId: string, messageId: number, userInput: string, uploadedMedia: MediaItem[] | undefined, telegram: any, templateId: string = 'image:kabar.perjuangan:carousel_dark') {
   try {
     const template = TEMPLATES[templateId];
     if (!template) {

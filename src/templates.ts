@@ -1,5 +1,5 @@
 import { PipelineContext, ResearchResult } from './utils.js';
-import { runIntervalPipeline, intervalTemplateConfig, generateIntervalMedia } from './agents/pipelines/image-multiple/interval.js';
+import { runCarouselDarkPipeline, carouselDarkTemplateConfig, generateCarouselDarkMedia } from './agents/pipelines/image/kabar.perjuangan/carousel_dark.js';
 
 export interface TemplateConfig {
   id: string;
@@ -10,9 +10,9 @@ export interface TemplateConfig {
 }
 
 export const TEMPLATES: Record<string, TemplateConfig> = {
-  [intervalTemplateConfig.id]: {
-    ...intervalTemplateConfig,
-    runPipeline: runIntervalPipeline,
-    regenerateMedia: generateIntervalMedia
+  [carouselDarkTemplateConfig.id]: {
+    ...carouselDarkTemplateConfig,
+    runPipeline: runCarouselDarkPipeline,
+    regenerateMedia: generateCarouselDarkMedia
   }
 };

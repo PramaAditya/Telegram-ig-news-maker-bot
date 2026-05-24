@@ -157,7 +157,7 @@ app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
     const result = await db.insert(jobsTable).values({
       chatId: 'DASHBOARD',
       messageId: Date.now(),
-      templateId: templateId || 'image-multiple:interval',
+      templateId: templateId || 'image:kabar.perjuangan:carousel_dark',
       text,
       media,
       status: 'pending'

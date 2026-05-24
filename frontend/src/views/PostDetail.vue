@@ -47,7 +47,7 @@ const fetchPost = async () => {
     if (!post.value.templateData) post.value.templateData = {}
 
     // Specific logic for interval template
-    if (post.value.templateId === 'image-multiple:interval') {
+    if (post.value.templateId === 'image:kabar.perjuangan:carousel_dark') {
       if (!post.value.templateData.slides) post.value.templateData.slides = ['', '']
     }
     
@@ -100,7 +100,7 @@ const addSlide = () => {
 
 const regenerateMedia = async () => {
   // Hardcoded validation for interval template
-  if (post.value.templateId === 'image-multiple:interval') {
+  if (post.value.templateId === 'image:kabar.perjuangan:carousel_dark') {
     if (!post.value.templateData.title || !post.value.templateData.coverImageUrl || !post.value.templateData.slides || post.value.templateData.slides.length === 0) {
       toast.add({ title: 'Title, Cover Image URL, and at least 1 Slide cannot be empty to regenerate.', color: 'error' })
       return
@@ -170,7 +170,7 @@ const regenerateMedia = async () => {
       <div class="bg-default shadow rounded-lg p-6">
         <h2 class="text-lg font-bold mb-4 text-default">Media Data (Template: {{ post.templateId }})</h2>
         
-        <div v-if="post.templateId === 'image-multiple:interval'">
+        <div v-if="post.templateId === 'image:kabar.perjuangan:carousel_dark'">
           <div class="mb-6">
             <label class="block text-sm font-medium text-default mb-2">Title (supports **bold**)</label>
             <AiTextarea 
