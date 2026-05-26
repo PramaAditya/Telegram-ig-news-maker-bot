@@ -29,7 +29,7 @@ const onTabChange = (value: number | string) => {
 const openLightbox = (mediaArray: any[], index: number) => {
   const items = mediaArray.map((m) => ({
     src: m.url,
-    type: m.type === "video" ? "video" : "image",
+    type: m.type === "video" ? "html5video" : "image",
   }));
   Fancybox.show(items, { startIndex: index });
 };
@@ -455,7 +455,7 @@ const timeAgo = (dateObj: Date | string | null) => {
                               }"
                             >
                               <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
-                              <video v-else :src="m.url" class="w-full h-full object-cover pointer-events-none" muted autoplay loop></video>
+                              <video v-else :src="`${m.url}#t=0.1`" class="w-full h-full object-cover pointer-events-none" preload="metadata" muted playsinline></video>
                               
                               <div v-if="i === 3 && qItem.media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
                                 <span class="text-white font-medium text-xl">+{{ qItem.media.length - 4 }}</span>
@@ -532,7 +532,7 @@ const timeAgo = (dateObj: Date | string | null) => {
                               }"
                             >
                               <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
-                              <video v-else :src="m.url" class="w-full h-full object-cover pointer-events-none" muted autoplay loop></video>
+                              <video v-else :src="`${m.url}#t=0.1`" class="w-full h-full object-cover pointer-events-none" preload="metadata" muted playsinline></video>
                               
                               <div v-if="i === 3 && qItem.media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
                                 <span class="text-white font-medium text-xl">+{{ qItem.media.length - 4 }}</span>
