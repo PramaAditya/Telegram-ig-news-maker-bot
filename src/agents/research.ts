@@ -1,7 +1,6 @@
 import { generateText, tool, stepCountIs } from 'ai';
 import { z } from 'zod';
 import { firecrawlService } from '../utils/firecrawl.js';
-import axios from 'axios';
 import fs from 'fs/promises';
 import { uploadToS3 } from '../s3.js';
 import { PipelineContext, ResearchResult, googleAI, withRetry } from '../utils.js';
@@ -30,14 +29,17 @@ export async function runResearchPhase(context: PipelineContext): Promise<Resear
         let retries = 3;
         while (retries > 0) {
           try {
-            if (media.url.startsWith('file://')) {
-              const parsedUrl = new URL(media.url);
-              const filePath = decodeURIComponent(parsedUrl.pathname);
-              const fileBuffer = await fs.readFile(filePath);
-              response = { data: fileBuffer };
-            } else {
-              response = await axios.get(media.url, { responseType: 'arraybuffer' });
-            }
+              if (media.url.startsWith('file://')) {
+                const parsedUrl = new URL(media.url);
+                const filePath = decodeURIComponent(parsedUrl.pathname);
+                const fileBuffer = await fs.readFile(filePath);
+                response = { data: fileBuffer };
+              } else {
+                const fetchRes = await fetch(media.url);
+                if (!fetchRes.ok) throw new Error(`Fetch failed: ${fetchRes.statusText}`);
+                const arrayBuffer = await fetchRes.arrayBuffer();
+                response = { data: Buffer.from(arrayBuffer) };
+              }
             break;
           } catch (e: any) {
             retries--;

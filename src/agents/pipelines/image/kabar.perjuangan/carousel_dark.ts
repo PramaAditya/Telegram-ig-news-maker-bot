@@ -1,6 +1,5 @@
 import { generateObject, generateText } from 'ai';
 import { z } from 'zod';
-import axios from 'axios';
 import { PipelineContext, ResearchResult, googleAI, withRetry } from '../../../../utils.js';
 import { censorText } from '../../../../sanitize.js';
 import { uploadToS3 } from '../../../../s3.js';
@@ -112,10 +111,12 @@ Your task is to parse the gathered facts into final components for an Instagram 
   
   if (!baseImageBuffer && scrapedImageUrl) {
     console.log(`[Phase 3] Using scraped image URL as base: ${scrapedImageUrl}`);
-    try {
-      const response = await axios.get(scrapedImageUrl, { responseType: 'arraybuffer' });
-      baseImageBuffer = Buffer.from(response.data);
-    } catch (err: any) {
+      try {
+        const response = await fetch(scrapedImageUrl);
+        if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
+        const arrayBuffer = await response.arrayBuffer();
+        baseImageBuffer = Buffer.from(arrayBuffer);
+      } catch (err: any) {
       console.warn(`[Phase 3] Failed to download scraped image: ${err.message}`);
     }
   }
@@ -140,8 +141,10 @@ Your task is to parse the gathered facts into final components for an Instagram 
 
       if (foundImageUrl) {
          console.log(`[Phase 3] Found image URL via web search: ${foundImageUrl}`);
-         const response = await axios.get(foundImageUrl, { responseType: 'arraybuffer' });
-         baseImageBuffer = Buffer.from(response.data);
+           const response = await fetch(foundImageUrl);
+           if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
+           const arrayBuffer = await response.arrayBuffer();
+           baseImageBuffer = Buffer.from(arrayBuffer);
       } else {
          console.log(`[Phase 3] Web search didn't yield a usable image URL.`);
       }
@@ -273,10 +276,12 @@ RULES:
   console.log(`[Phase 5] Sending rendered photo to user and preparing Buffer URLs`);
   
   let previewBuffer: Buffer | undefined;
-  try {
-    const response = await axios.get(renderedUrls[0], { responseType: 'arraybuffer' });
-    previewBuffer = Buffer.from(response.data);
-  } catch (e) {
+    try {
+      const response = await fetch(renderedUrls[0]);
+      if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
+      const arrayBuffer = await response.arrayBuffer();
+      previewBuffer = Buffer.from(arrayBuffer);
+    } catch (e) {
     console.warn('Failed to fetch preview cover image:', e);
   }
 
