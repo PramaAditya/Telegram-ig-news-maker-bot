@@ -34,6 +34,7 @@ export const queueTable = pgTable('queue', {
   status: text('status').notNull().default('pending'), // pending, published, error
   errorLog: text('error_log'),
   researchResult: text('research_result'),
+  scheduledAt: timestamp('scheduled_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   publishedAt: timestamp('published_at'),
 });

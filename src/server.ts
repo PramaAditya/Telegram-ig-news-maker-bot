@@ -463,7 +463,7 @@ app.delete('/api/connections/:id', requireDashboardAuth, async (req, res) => {
 
 app.post('/api/queue', requireDashboardAuth, async (req, res) => {
   try {
-    const { connectionId, text, media, type } = req.body;
+    const { connectionId, text, media, type, scheduledAt } = req.body;
     if (!connectionId) return res.status(400).json({ error: 'connectionId is required' });
     if (!text) return res.status(400).json({ error: 'text is required' });
     if (!media || !Array.isArray(media) || media.length === 0) return res.status(400).json({ error: 'media array is required' });
@@ -494,7 +494,8 @@ app.post('/api/queue', requireDashboardAuth, async (req, res) => {
       templateId: 'manual',
       status: 'pending',
       sortOrder: newSortOrder,
-      publishMetadata
+      publishMetadata,
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : null
     }).returning();
 
     res.json({ message: 'Added to queue successfully', item: result[0] });
@@ -536,7 +537,8 @@ app.post('/api/queue/batch', requireDashboardAuth, async (req, res) => {
         templateId: 'manual',
         status: 'pending',
         sortOrder: currentSortOrder,
-        publishMetadata
+        publishMetadata,
+        scheduledAt: item.scheduledAt ? new Date(item.scheduledAt) : null
       };
     });
 
@@ -553,16 +555,24 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
     const status = req.query.status as string || 'pending';
     const connectionId = req.query.connectionId ? parseInt(req.query.connectionId as string) : undefined;
     
-    let query = db.select().from(queueTable);
-    const conditions = [eq(queueTable.status, status)];
+    const conditions = [];
     if (connectionId) conditions.push(eq(queueTable.connectionId, connectionId));
     
     let items;
     if (status === 'pending') {
+      conditions.push(eq(queueTable.status, 'pending'));
+      conditions.push(sql`scheduled_at IS NULL`);
       items = await db.select().from(queueTable)
         .where(sql`${sql.join(conditions, sql` AND `)}`)
         .orderBy(asc(queueTable.sortOrder));
+    } else if (status === 'scheduled') {
+      conditions.push(eq(queueTable.status, 'pending'));
+      conditions.push(sql`scheduled_at IS NOT NULL`);
+      items = await db.select().from(queueTable)
+        .where(sql`${sql.join(conditions, sql` AND `)}`)
+        .orderBy(asc(queueTable.scheduledAt));
     } else {
+      conditions.push(eq(queueTable.status, status));
       items = await db.select().from(queueTable)
         .where(sql`${sql.join(conditions, sql` AND `)}`)
         .orderBy(desc(queueTable.createdAt));
@@ -577,13 +587,16 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
 app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { text, templateData } = req.body;
+    const { text, templateData, scheduledAt } = req.body;
     
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
 
     const updateData: any = {};
     if (text !== undefined) updateData.text = text;
     if (templateData !== undefined) updateData.templateData = templateData;
+    if (scheduledAt !== undefined) {
+      updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
+    }
 
     if (Object.keys(updateData).length > 0) {
       await db.update(queueTable)

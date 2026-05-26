@@ -141,6 +141,48 @@ async function autoPublishQueue() {
     const connections = await getConnections();
     const now = new Date();
     
+    // Process custom scheduled posts FIRST
+    try {
+      const scheduledPosts = await db.select()
+        .from(queueTable)
+        .where(sql`status = 'pending' AND scheduled_at IS NOT NULL AND scheduled_at <= NOW()`);
+        
+      for (const post of scheduledPosts) {
+        if (!post.connectionId) continue;
+        
+        console.log(`[Worker] Custom schedule reached for post ID ${post.id}. Publishing now...`);
+        const connection = connections.find(c => c.id === post.connectionId);
+        if (!connection) {
+           console.error(`[Worker] Connection ${post.connectionId} not found for scheduled post ${post.id}`);
+           continue;
+        }
+
+        try {
+          let mediaToPublish = [...post.media];
+          const ctaUrl = connection.ctaImageUrl;
+          if (ctaUrl && !mediaToPublish.some(m => m.url === ctaUrl)) {
+            mediaToPublish.push({ type: 'image', url: ctaUrl });
+          }
+
+          await publishToBuffer(mediaToPublish, post.text, post.publishMetadata, connection.id);
+          
+          await db.update(queueTable)
+            .set({ status: 'published', publishedAt: new Date() })
+            .where(eq(queueTable.id, post.id));
+
+          console.log(`[Worker] Successfully published scheduled post ID ${post.id}`);
+        } catch (publishError: any) {
+          console.error(`[Worker] Failed to publish scheduled post ID ${post.id}:`, publishError);
+          await db.update(queueTable)
+            .set({ status: 'error', errorLog: publishError.message || String(publishError) })
+            .where(eq(queueTable.id, post.id));
+        }
+      }
+    } catch (scheduleErr) {
+       console.error('[Worker] Error processing custom scheduled posts:', scheduleErr);
+    }
+    
+    // Now process regular auto-queue slots
     const formatter = new Intl.DateTimeFormat('en-US', { 
       weekday: 'long', 
       hour: '2-digit', 
@@ -173,7 +215,7 @@ async function autoPublishQueue() {
       
       const pendingPosts = await db.select()
         .from(queueTable)
-        .where(sql`status = 'pending' AND connection_id = ${settings.id}`)
+        .where(sql`status = 'pending' AND scheduled_at IS NULL AND connection_id = ${settings.id}`)
         .orderBy(asc(queueTable.sortOrder))
         .limit(1);
 

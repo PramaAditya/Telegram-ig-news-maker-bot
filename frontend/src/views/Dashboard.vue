@@ -6,14 +6,75 @@ import { Fancybox } from "@fancyapps/ui";
 import draggable from "vuedraggable";
 import { useConnectionStore } from '../store';
 
-const toast = useToast();
 const connectionStore = useConnectionStore();
+const toast = useToast();
 
 const queue = ref<any[]>([]);
+const scheduledQueue = ref<any[]>([]);
 const postingSlots = ref<{day: string, time: string}[]>([]);
 const loading = ref(true);
 const error = ref("");
 const activeTab = ref('pending');
+
+const isScheduleModalOpen = ref(false);
+const scheduleModalItemId = ref<number | null>(null);
+const scheduleModalDate = ref("");
+
+const openScheduleModal = (item: any) => {
+  scheduleModalItemId.value = item.id;
+  if (item.scheduledAt) {
+     const date = new Date(item.scheduledAt);
+     // Format for datetime-local input: YYYY-MM-DDThh:mm
+     date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+     scheduleModalDate.value = date.toISOString().slice(0, 16);
+  } else {
+     scheduleModalDate.value = "";
+  }
+  isScheduleModalOpen.value = true;
+};
+
+const saveSchedule = async () => {
+  if (!scheduleModalItemId.value) return;
+  
+  try {
+    const res = await fetch(`/api/queue/${scheduleModalItemId.value}`, {
+      method: "PUT",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduledAt: scheduleModalDate.value || null }),
+    });
+    if (res.status === 401) {
+      toast.add({ title: "Unauthorized", color: "error" });
+      return;
+    }
+    if (!res.ok) throw new Error("Failed to save schedule");
+    
+    toast.add({ title: "Schedule updated", color: "success" });
+    isScheduleModalOpen.value = false;
+    fetchQueue();
+  } catch (err: any) {
+    toast.add({ title: err.message, color: "error" });
+  }
+};
+
+const clearSchedule = async (id: number) => {
+   try {
+    const res = await fetch(`/api/queue/${id}`, {
+      method: "PUT",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduledAt: null }),
+    });
+    if (res.status === 401) {
+      toast.add({ title: "Unauthorized", color: "error" });
+      return;
+    }
+    if (!res.ok) throw new Error("Failed to clear schedule");
+    
+    toast.add({ title: "Schedule cleared", color: "success" });
+    fetchQueue();
+  } catch (err: any) {
+    toast.add({ title: err.message, color: "error" });
+  }
+};
 
 const tabItems = [
   { label: 'Pending', icon: 'i-lucide-clock', slot: 'content', value: 'pending' },
@@ -139,9 +200,21 @@ const fetchQueue = async () => {
     }
     if (!res.ok) throw new Error("Failed to fetch");
     queue.value = await res.json();
+    
     if (activeTab.value === 'pending') {
+      let schedUrl = `/api/queue?status=scheduled`;
+      if (connectionStore.activeConnectionId) {
+         schedUrl += `&connectionId=${connectionStore.activeConnectionId}`;
+      }
+      const schedRes = await fetch(schedUrl, { headers: getAuthHeaders() });
+      if (schedRes.ok) {
+         scheduledQueue.value = await schedRes.json();
+      }
       calculateExpectedTimes();
+    } else {
+      scheduledQueue.value = [];
     }
+    
     error.value = "";
   } catch (err: any) {
     error.value = err.message;
@@ -388,6 +461,187 @@ const timeAgo = (dateObj: Date | string | null) => {
         </div>
 
         <div v-else class="overflow-hidden">
+        
+          <!-- Scheduled Queue (Non-draggable) -->
+          <div v-if="activeTab === 'pending' && scheduledQueue.length > 0" class="mb-12 border-b border-default pb-8">
+             <div class="mb-4 flex items-center gap-2 text-primary font-medium">
+               <div class="i-lucide-calendar w-5 h-5"></div>
+               <h2>Custom Scheduled Posts</h2>
+             </div>
+             <ul>
+              <li v-for="qItem in scheduledQueue" :key="(qItem as any).id" class="relative mb-6">
+                <div class="flex items-start gap-2 sm:gap-4">
+                  <!-- Time Column -->
+                  <div class="w-16 sm:w-20 flex-shrink-0 pt-5 flex flex-col items-end gap-1">
+                     <span class="text-xs font-semibold text-primary uppercase text-right leading-tight">
+                       {{ formatDayHeader((qItem as any).scheduledAt) }}
+                     </span>
+                     <span class="text-lg font-bold text-default text-right">
+                       {{ formatTimeOnly((qItem as any).scheduledAt) }}
+                     </span>
+                  </div>
+
+                  <!-- Drag Handle Spacer (to align with auto queue) -->
+                  <div class="flex-shrink-0 w-10 flex flex-col items-center gap-2 pt-5">
+                    <div class="i-lucide-lock text-muted w-4 h-4 mt-1"></div>
+                  </div>
+
+                  <!-- Item Card -->
+                  <UCard class="flex-1 min-w-0 shadow-sm border-primary/30 ring-1 ring-primary/20 bg-primary/5 hover:shadow-md transition-shadow" :ui="{ body: 'p-4 sm:p-5', footer: 'px-4 py-3 sm:px-5' }">
+                    <div class="flex flex-col sm:flex-row justify-between gap-6">
+                      <!-- Left: Content -->
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm text-default whitespace-pre-wrap line-clamp-6">
+                          {{ (qItem as any).text }}
+                        </p>
+                      </div>
+                      <!-- Right: Media Grid -->
+                      <div v-if="(qItem as any).media.length > 0" class="flex-shrink-0">
+                        <div class="grid grid-cols-2 grid-rows-2 gap-0.5 w-full sm:w-56 h-56 rounded-md overflow-hidden bg-black border border-default">
+                          <template v-for="(m, i) in (qItem as any).media.slice(0, 4)" :key="i">
+                            <div 
+                              @click="openLightbox((qItem as any).media, Number(i))"
+                              class="relative cursor-pointer hover:opacity-90 transition group w-full h-full"
+                              :class="{
+                                'col-span-2 row-span-2': (qItem as any).media.length === 1,
+                                'col-span-1 row-span-2': (qItem as any).media.length === 2,
+                                'col-span-1 row-span-1': (qItem as any).media.length >= 3,
+                              }"
+                            >
+                              <img v-if="(m as any).type === 'image'" :src="(m as any).url" class="w-full h-full object-cover" />
+                              <video v-else :src="`${(m as any).url}#t=0.1`" class="w-full h-full object-cover pointer-events-none" preload="metadata" muted playsinline></video>
+                              
+                              <div v-if="i === 3 && (qItem as any).media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                <span class="text-white font-medium text-xl">+{{ (qItem as any).media.length - 4 }}</span>
+                              </div>
+                            </div>
+                          </template>
+                        </div>
+                      </div>
+                    </div>
+
+                    <template #footer>
+                      <div class="flex items-center justify-between">
+                        <div class="text-sm text-muted">
+                          You created this {{ timeAgo((qItem as any).createdAt) }}
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <UButton color="white" variant="solid" @click="publishNow((qItem as any).id as number)">
+                            <template #leading><Send class="w-4 h-4" /></template>
+                            Publish Now
+                          </UButton>
+                          <UButton color="white" variant="solid" @click="openScheduleModal(qItem)" :padded="false" class="p-2">
+                            <div class="i-lucide-calendar-clock w-4 h-4 text-muted"></div>
+                          </UButton>
+                          <UButton color="white" variant="solid" @click="$router.push('/post/' + (qItem as any).id)" :padded="false" class="p-2">
+                            <Edit class="w-4 h-4 text-muted" />
+                          </UButton>
+                          <UDropdownMenu :items="[[
+                             { label: 'Clear Schedule', onSelect: () => clearSchedule((qItem as any).id as number), icon: 'i-lucide-calendar-off' },
+                             { label: 'Delete', onSelect: () => deleteItem((qItem as any).id as number), color: 'error' }
+                          ]]" :content="{ align: 'end' }">
+                            <UButton color="white" variant="solid" :padded="false" class="p-2">
+                              <MoreVertical class="w-4 h-4 text-muted" />
+                            </UButton>
+                          </UDropdownMenu>
+                        </div>
+                      </div>
+                    </template>
+                  </UCard>
+                </div>
+              </li>
+             </ul>
+          </div>
+             <ul>
+              <li v-for="qItem in scheduledQueue" :key="qItem.id" class="relative mb-6">
+                <div class="flex items-start gap-2 sm:gap-4">
+                  <!-- Time Column -->
+                  <div class="w-16 sm:w-20 flex-shrink-0 pt-5 flex flex-col items-end gap-1">
+                     <span class="text-xs font-semibold text-primary uppercase text-right leading-tight">
+                       {{ formatDayHeader(qItem.scheduledAt) }}
+                     </span>
+                     <span class="text-lg font-bold text-default text-right">
+                       {{ formatTimeOnly(qItem.scheduledAt) }}
+                     </span>
+                  </div>
+
+                  <!-- Drag Handle Spacer (to align with auto queue) -->
+                  <div class="flex-shrink-0 w-10 flex flex-col items-center gap-2 pt-5">
+                    <div class="i-lucide-lock text-muted w-4 h-4 mt-1"></div>
+                  </div>
+
+                  <!-- Item Card -->
+                  <UCard class="flex-1 min-w-0 shadow-sm border-primary/30 ring-1 ring-primary/20 bg-primary/5 hover:shadow-md transition-shadow" :ui="{ body: 'p-4 sm:p-5', footer: 'px-4 py-3 sm:px-5' }">
+                    <div class="flex flex-col sm:flex-row justify-between gap-6">
+                      <!-- Left: Content -->
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm text-default whitespace-pre-wrap line-clamp-6">
+                          {{ qItem.text }}
+                        </p>
+                      </div>
+                      <!-- Right: Media Grid -->
+                      <div v-if="qItem.media.length > 0" class="flex-shrink-0">
+                        <div class="grid grid-cols-2 grid-rows-2 gap-0.5 w-full sm:w-56 h-56 rounded-md overflow-hidden bg-black border border-default">
+                          <template v-for="(m, i) in qItem.media.slice(0, 4)" :key="i">
+                            <div 
+                              @click="openLightbox(qItem.media, Number(i))"
+                              class="relative cursor-pointer hover:opacity-90 transition group w-full h-full"
+                              :class="{
+                                'col-span-2 row-span-2': qItem.media.length === 1,
+                                'col-span-1 row-span-2': qItem.media.length === 2,
+                                'col-span-1 row-span-1': qItem.media.length >= 3,
+                              }"
+                            >
+                              <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
+                              <video v-else :src="`${m.url}#t=0.1`" class="w-full h-full object-cover pointer-events-none" preload="metadata" muted playsinline></video>
+                              
+                              <div v-if="i === 3 && qItem.media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                <span class="text-white font-medium text-xl">+{{ qItem.media.length - 4 }}</span>
+                              </div>
+                            </div>
+                          </template>
+                        </div>
+                      </div>
+                    </div>
+
+                    <template #footer>
+                      <div class="flex items-center justify-between">
+                        <div class="text-sm text-muted">
+                          You created this {{ timeAgo(qItem.createdAt) }}
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <UButton color="white" variant="solid" @click="publishNow(qItem.id)">
+                            <template #leading><Send class="w-4 h-4" /></template>
+                            Publish Now
+                          </UButton>
+                          <UButton color="white" variant="solid" @click="openScheduleModal(qItem)" :padded="false" class="p-2">
+                            <div class="i-lucide-calendar-clock w-4 h-4 text-muted"></div>
+                          </UButton>
+                          <UButton color="white" variant="solid" @click="$router.push('/post/' + qItem.id)" :padded="false" class="p-2">
+                            <Edit class="w-4 h-4 text-muted" />
+                          </UButton>
+                          <UDropdownMenu :items="[[
+                             { label: 'Clear Schedule', onSelect: () => clearSchedule(qItem.id), icon: 'i-lucide-calendar-off' },
+                             { label: 'Delete', onSelect: () => deleteItem(qItem.id), color: 'error' }
+                          ]]" :content="{ align: 'end' }">
+                            <UButton color="white" variant="solid" :padded="false" class="p-2">
+                              <MoreVertical class="w-4 h-4 text-muted" />
+                            </UButton>
+                          </UDropdownMenu>
+                        </div>
+                      </div>
+                    </template>
+                  </UCard>
+                </div>
+              </li>
+             </ul>
+          </div>
+          
+          <div v-if="activeTab === 'pending'" class="mb-4 flex items-center gap-2 text-default font-medium">
+             <div class="i-lucide-list-ordered w-5 h-5"></div>
+             <h2>Auto Queue</h2>
+          </div>
+
           <draggable
             v-if="activeTab === 'pending'"
             v-model="queue"
@@ -479,7 +733,10 @@ const timeAgo = (dateObj: Date | string | null) => {
                           <UButton color="white" variant="solid" @click="$router.push('/post/' + qItem.id)" :padded="false" class="p-2">
                             <Edit class="w-4 h-4 text-muted" />
                           </UButton>
-                          <UDropdownMenu :items="[[{ label: 'Delete', onSelect: () => deleteItem(qItem.id), color: 'error' }]]" :content="{ align: 'end' }">
+                          <UDropdownMenu :items="[[
+                            { label: 'Set Custom Schedule', onSelect: () => openScheduleModal(qItem), icon: 'i-lucide-calendar-clock' },
+                            { label: 'Delete', onSelect: () => deleteItem(qItem.id), color: 'error' }
+                          ]]" :content="{ align: 'end' }">
                             <UButton color="white" variant="solid" :padded="false" class="p-2">
                               <MoreVertical class="w-4 h-4 text-muted" />
                             </UButton>
@@ -494,7 +751,7 @@ const timeAgo = (dateObj: Date | string | null) => {
           </draggable>
           <!-- Published / Error Lists (Non-draggable) -->
           <ul v-else class="">
-            <li v-for="qItem in queue" :key="qItem.id" class="relative mb-6">
+            <li v-for="qItem in queue" :key="(qItem as any).id" class="relative mb-6">
               <div class="flex items-start gap-2 sm:gap-4">
                 
                 <!-- Tab specific column -->
@@ -503,7 +760,7 @@ const timeAgo = (dateObj: Date | string | null) => {
                      {{ activeTab }}
                    </UBadge>
                    <span class="text-xs font-medium text-default text-right">
-                     {{ formatTimeOnly(activeTab === 'published' ? qItem.publishedAt : qItem.createdAt) }}
+                     {{ formatTimeOnly(activeTab === 'published' ? (qItem as any).publishedAt : (qItem as any).createdAt) }}
                    </span>
                 </div>
 
@@ -512,30 +769,30 @@ const timeAgo = (dateObj: Date | string | null) => {
                       
                       <div class="flex-1 min-w-0">
                         <p class="text-sm text-default whitespace-pre-wrap line-clamp-6">
-                          {{ qItem.text }}
+                          {{ (qItem as any).text }}
                         </p>
-                        <div v-if="qItem.errorLog" class="mt-4 text-xs text-error bg-red-50/10 p-3 rounded border border-red-200/20">
-                          <span class="font-mono break-all">{{ qItem.errorLog }}</span>
+                        <div v-if="(qItem as any).errorLog" class="mt-4 text-xs text-error bg-red-50/10 p-3 rounded border border-red-200/20">
+                          <span class="font-mono break-all">{{ (qItem as any).errorLog }}</span>
                         </div>
                       </div>
                       
-                      <div v-if="qItem.media.length > 0" class="flex-shrink-0">
+                      <div v-if="(qItem as any).media.length > 0" class="flex-shrink-0">
                         <div class="grid grid-cols-2 grid-rows-2 gap-0.5 w-full sm:w-56 h-56 rounded-md overflow-hidden bg-black border border-default">
-                          <template v-for="(m, i) in qItem.media.slice(0, 4)" :key="i">
+                          <template v-for="(m, i) in (qItem as any).media.slice(0, 4)" :key="i">
                             <div 
-                              @click="openLightbox(qItem.media, Number(i))"
+                              @click="openLightbox((qItem as any).media, Number(i))"
                               class="relative cursor-pointer hover:opacity-90 transition group w-full h-full"
                               :class="{
-                                'col-span-2 row-span-2': qItem.media.length === 1,
-                                'col-span-1 row-span-2': qItem.media.length === 2,
-                                'col-span-1 row-span-1': qItem.media.length >= 3,
+                                'col-span-2 row-span-2': (qItem as any).media.length === 1,
+                                'col-span-1 row-span-2': (qItem as any).media.length === 2,
+                                'col-span-1 row-span-1': (qItem as any).media.length >= 3,
                               }"
                             >
-                              <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
-                              <video v-else :src="`${m.url}#t=0.1`" class="w-full h-full object-cover pointer-events-none" preload="metadata" muted playsinline></video>
+                              <img v-if="(m as any).type === 'image'" :src="(m as any).url" class="w-full h-full object-cover" />
+                              <video v-else :src="`${(m as any).url}#t=0.1`" class="w-full h-full object-cover pointer-events-none" preload="metadata" muted playsinline></video>
                               
-                              <div v-if="i === 3 && qItem.media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
-                                <span class="text-white font-medium text-xl">+{{ qItem.media.length - 4 }}</span>
+                              <div v-if="i === 3 && (qItem as any).media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                <span class="text-white font-medium text-xl">+{{ (qItem as any).media.length - 4 }}</span>
                               </div>
                             </div>
                           </template>
@@ -546,15 +803,14 @@ const timeAgo = (dateObj: Date | string | null) => {
                     <template #footer>
                       <div class="flex items-center justify-between">
                         <div class="text-sm text-muted">
-                          Created {{ timeAgo(qItem.createdAt) }}
+                          Created {{ timeAgo((qItem as any).createdAt) }}
                         </div>
                         <div class="flex items-center gap-2">
-                          <UButton v-if="activeTab === 'error'" color="white" variant="solid" @click="retryError(qItem.id)">
+                          <UButton v-if="activeTab === 'error'" color="white" variant="solid" @click="retryError((qItem as any).id)">
                             <template #leading><RotateCcw class="w-4 h-4" /></template>
                             Retry
                           </UButton>
-                          
-                          <UDropdownMenu :items="[[{ label: 'Delete', onSelect: () => deleteItem(qItem.id), color: 'error' }]]" :content="{ align: 'end' }">
+                          <UDropdownMenu :items="[[{ label: 'Delete', onSelect: () => deleteItem((qItem as any).id), color: 'error' }]]" :content="{ align: 'end' }">
                             <UButton color="white" variant="solid" :padded="false" class="p-2">
                               <MoreVertical class="w-4 h-4 text-muted" />
                             </UButton>
@@ -562,12 +818,36 @@ const timeAgo = (dateObj: Date | string | null) => {
                         </div>
                       </div>
                     </template>
-                </UCard>
+                  </UCard>
               </div>
             </li>
           </ul>
         </div>
       </template>
     </UTabs>
+    
+    <UModal v-model="isScheduleModalOpen" title="Set Custom Schedule">
+       <template #body>
+         <div class="space-y-4">
+            <p class="text-sm text-muted">
+               Choose a specific date and time for this post. It will ignore the global queue slots and be published exactly when you specify.
+            </p>
+            <div class="flex flex-col gap-1.5">
+               <label class="text-sm font-medium text-default">Scheduled Date & Time</label>
+               <input 
+                 type="datetime-local" 
+                 v-model="scheduleModalDate" 
+                 class="w-full px-3 py-2 bg-default border border-default rounded-md text-default focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+               />
+            </div>
+         </div>
+       </template>
+       <template #footer>
+          <div class="flex justify-end gap-2">
+             <UButton color="white" variant="ghost" @click="isScheduleModalOpen = false">Cancel</UButton>
+             <UButton color="primary" variant="solid" @click="saveSchedule" :disabled="!scheduleModalDate">Save Schedule</UButton>
+          </div>
+       </template>
+    </UModal>
   </div>
 </template>
