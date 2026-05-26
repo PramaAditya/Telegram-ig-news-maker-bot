@@ -33,6 +33,7 @@ const openScheduleModal = (item: any) => {
   isScheduleModalOpen.value = true;
 };
 
+// @ts-ignore
 const saveSchedule = async () => {
   if (!scheduleModalItemId.value) return;
   
@@ -539,90 +540,6 @@ const timeAgo = (dateObj: Date | string | null) => {
                           <UDropdownMenu :items="[[
                              { label: 'Clear Schedule', onSelect: () => clearSchedule((qItem as any).id as number), icon: 'i-lucide-calendar-off' },
                              { label: 'Delete', onSelect: () => deleteItem((qItem as any).id as number), color: 'error' }
-                          ]]" :content="{ align: 'end' }">
-                            <UButton color="white" variant="solid" :padded="false" class="p-2">
-                              <MoreVertical class="w-4 h-4 text-muted" />
-                            </UButton>
-                          </UDropdownMenu>
-                        </div>
-                      </div>
-                    </template>
-                  </UCard>
-                </div>
-              </li>
-             </ul>
-          </div>
-             <ul>
-              <li v-for="qItem in scheduledQueue" :key="qItem.id" class="relative mb-6">
-                <div class="flex items-start gap-2 sm:gap-4">
-                  <!-- Time Column -->
-                  <div class="w-16 sm:w-20 flex-shrink-0 pt-5 flex flex-col items-end gap-1">
-                     <span class="text-xs font-semibold text-primary uppercase text-right leading-tight">
-                       {{ formatDayHeader(qItem.scheduledAt) }}
-                     </span>
-                     <span class="text-lg font-bold text-default text-right">
-                       {{ formatTimeOnly(qItem.scheduledAt) }}
-                     </span>
-                  </div>
-
-                  <!-- Drag Handle Spacer (to align with auto queue) -->
-                  <div class="flex-shrink-0 w-10 flex flex-col items-center gap-2 pt-5">
-                    <div class="i-lucide-lock text-muted w-4 h-4 mt-1"></div>
-                  </div>
-
-                  <!-- Item Card -->
-                  <UCard class="flex-1 min-w-0 shadow-sm border-primary/30 ring-1 ring-primary/20 bg-primary/5 hover:shadow-md transition-shadow" :ui="{ body: 'p-4 sm:p-5', footer: 'px-4 py-3 sm:px-5' }">
-                    <div class="flex flex-col sm:flex-row justify-between gap-6">
-                      <!-- Left: Content -->
-                      <div class="flex-1 min-w-0">
-                        <p class="text-sm text-default whitespace-pre-wrap line-clamp-6">
-                          {{ qItem.text }}
-                        </p>
-                      </div>
-                      <!-- Right: Media Grid -->
-                      <div v-if="qItem.media.length > 0" class="flex-shrink-0">
-                        <div class="grid grid-cols-2 grid-rows-2 gap-0.5 w-full sm:w-56 h-56 rounded-md overflow-hidden bg-black border border-default">
-                          <template v-for="(m, i) in qItem.media.slice(0, 4)" :key="i">
-                            <div 
-                              @click="openLightbox(qItem.media, Number(i))"
-                              class="relative cursor-pointer hover:opacity-90 transition group w-full h-full"
-                              :class="{
-                                'col-span-2 row-span-2': qItem.media.length === 1,
-                                'col-span-1 row-span-2': qItem.media.length === 2,
-                                'col-span-1 row-span-1': qItem.media.length >= 3,
-                              }"
-                            >
-                              <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
-                              <video v-else :src="`${m.url}#t=0.1`" class="w-full h-full object-cover pointer-events-none" preload="metadata" muted playsinline></video>
-                              
-                              <div v-if="i === 3 && qItem.media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
-                                <span class="text-white font-medium text-xl">+{{ qItem.media.length - 4 }}</span>
-                              </div>
-                            </div>
-                          </template>
-                        </div>
-                      </div>
-                    </div>
-
-                    <template #footer>
-                      <div class="flex items-center justify-between">
-                        <div class="text-sm text-muted">
-                          You created this {{ timeAgo(qItem.createdAt) }}
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <UButton color="white" variant="solid" @click="publishNow(qItem.id)">
-                            <template #leading><Send class="w-4 h-4" /></template>
-                            Publish Now
-                          </UButton>
-                          <UButton color="white" variant="solid" @click="openScheduleModal(qItem)" :padded="false" class="p-2">
-                            <div class="i-lucide-calendar-clock w-4 h-4 text-muted"></div>
-                          </UButton>
-                          <UButton color="white" variant="solid" @click="$router.push('/post/' + qItem.id)" :padded="false" class="p-2">
-                            <Edit class="w-4 h-4 text-muted" />
-                          </UButton>
-                          <UDropdownMenu :items="[[
-                             { label: 'Clear Schedule', onSelect: () => clearSchedule(qItem.id), icon: 'i-lucide-calendar-off' },
-                             { label: 'Delete', onSelect: () => deleteItem(qItem.id), color: 'error' }
                           ]]" :content="{ align: 'end' }">
                             <UButton color="white" variant="solid" :padded="false" class="p-2">
                               <MoreVertical class="w-4 h-4 text-muted" />
