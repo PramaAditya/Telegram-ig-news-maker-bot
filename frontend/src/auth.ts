@@ -13,12 +13,18 @@ export const getAuthHeaders = () => ({
 })
 
 export const apiFetch = async (url: string, options: RequestInit = {}): Promise<any> => {
+  const headers: Record<string, string> = {
+    ...getAuthHeaders(),
+    ...(options.headers as Record<string, string> || {})
+  };
+
+  if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const res = await fetch(url, {
     ...options,
-    headers: {
-      ...options.headers,
-      ...getAuthHeaders()
-    }
+    headers
   });
 
   if (res.status === 401) {
