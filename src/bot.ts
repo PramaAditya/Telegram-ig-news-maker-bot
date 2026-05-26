@@ -8,7 +8,6 @@ import { getGlobalSettings, getConnections } from './db/settings.js';
 import { TEMPLATES } from './templates.js';
 import { eq } from 'drizzle-orm';
 import dns from 'dns';
-import axios from 'axios';
 import { uploadToS3 } from './s3.js';
 
 dns.setDefaultResultOrder('ipv4first');
@@ -36,8 +35,12 @@ const bot = new Telegraf(botToken, {
 const mediaGroupAccumulator = new Map<string, { timer: NodeJS.Timeout, items: { fileId: string, caption?: string, msgId: number, type: 'image' | 'video', mimeType?: string }[] }>();
 
 async function uploadTelegramMediaToS3(url: string, mimeType?: string): Promise<string> {
-  const response = await axios.get(url, { responseType: 'arraybuffer' });
-  const buffer = Buffer.from(response.data, 'binary');
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch media: ${response.statusText}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
   
   let ext = '.jpg';
   if (mimeType === 'image/png') ext = '.png';
@@ -281,7 +284,10 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
     } catch (e: any) {
       retries--;
       console.warn(`[Bot] Failed to download/upload ${fileId}, retries left: ${retries}. Error: ${e.message}`);
-      if (retries === 0) throw e;
+      if (retries === 0) {
+        await ctx.reply('❌ Gagal mengunduh media dari Telegram. Silakan coba lagi.');
+        return;
+      }
       await new Promise(res => setTimeout(res, 1000));
     }
   }
