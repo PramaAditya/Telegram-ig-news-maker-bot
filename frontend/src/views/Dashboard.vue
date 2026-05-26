@@ -341,7 +341,7 @@ const timeAgo = (dateObj: Date | string | null) => {
       <div class="flex items-center gap-2">
         <UButton
           to="/create"
-          color="white"
+          color="primary"
           variant="solid"
           size="md"
           :disabled="!connectionStore.activeConnectionId"
@@ -350,7 +350,7 @@ const timeAgo = (dateObj: Date | string | null) => {
         </UButton>
         <UButton
           @click="fetchQueue"
-          color="white"
+          color="primary"
           variant="solid"
           size="md"
         >
