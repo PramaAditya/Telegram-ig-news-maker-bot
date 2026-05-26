@@ -9,6 +9,8 @@ import { TEMPLATES } from './templates.js';
 import { eq } from 'drizzle-orm';
 import dns from 'dns';
 import { uploadToS3 } from './s3.js';
+import fs from 'fs/promises';
+import { fileURLToPath } from 'url';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -35,12 +37,20 @@ const bot = new Telegraf(botToken, {
 const mediaGroupAccumulator = new Map<string, { timer: NodeJS.Timeout, items: { fileId: string, caption?: string, msgId: number, type: 'image' | 'video', mimeType?: string }[] }>();
 
 async function uploadTelegramMediaToS3(url: string, mimeType?: string): Promise<string> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch media: ${response.statusText}`);
+  console.log(`[Bot] Fetching media from URL: ${url}`);
+  let buffer: Buffer;
+
+  if (url.startsWith('file://')) {
+    const filePath = fileURLToPath(url);
+    buffer = await fs.readFile(filePath);
+  } else {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch media: ${response.statusText}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    buffer = Buffer.from(arrayBuffer);
   }
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
   
   let ext = '.jpg';
   if (mimeType === 'image/png') ext = '.png';
@@ -216,7 +226,7 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
                   break;
                 } catch (e: any) {
                   retries--;
-                  console.warn(`[Bot] Failed to download/upload ${item.fileId}, retries left: ${retries}. Error: ${e.message}`);
+                  console.warn(`[Bot] Failed to download/upload ${item.fileId}, retries left: ${retries}. Error: ${e.message}`, e.cause);
                   if (retries === 0) throw e;
                   await new Promise(res => setTimeout(res, 1000));
                 }
@@ -283,7 +293,7 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
       break;
     } catch (e: any) {
       retries--;
-      console.warn(`[Bot] Failed to download/upload ${fileId}, retries left: ${retries}. Error: ${e.message}`);
+      console.warn(`[Bot] Failed to download/upload ${fileId}, retries left: ${retries}. Error: ${e.message}`, e.cause);
       if (retries === 0) {
         await ctx.reply('❌ Gagal mengunduh media dari Telegram. Silakan coba lagi.');
         return;
