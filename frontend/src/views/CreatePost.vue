@@ -10,7 +10,8 @@ const connectionStore = useConnectionStore()
 
 const tabItems = [
   { label: 'AI Generated', slot: 'ai', icon: 'i-lucide-sparkles' },
-  { label: 'Manual Queue', slot: 'manual', icon: 'i-lucide-pen-tool' }
+  { label: 'Manual Queue', slot: 'manual', icon: 'i-lucide-pen-tool' },
+  { label: 'Batch Reels', slot: 'batch', icon: 'i-lucide-file-spreadsheet' }
 ]
 const activeTab = ref('ai')
 
@@ -30,6 +31,124 @@ const manualMediaUrls = ref<string[]>([])
 const manualSubmitting = ref(false)
 const manualError = ref('')
 const manualUploaderRef = ref<InstanceType<typeof ImageUploader> | null>(null)
+
+// Batch Reels State
+const batchFile = ref<File | null>(null)
+const batchSubmitting = ref(false)
+const batchError = ref('')
+const batchFileInput = ref<HTMLInputElement | null>(null)
+
+function parseCSV(str: string): string[][] {
+  const result: string[][] = []
+  let row: string[] = []
+  let inQuotes = false
+  let val = ''
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i]
+    const nextChar = str[i + 1]
+    if (char === '"' && inQuotes && nextChar === '"') {
+      val += '"'
+      i++
+    } else if (char === '"') {
+      inQuotes = !inQuotes
+    } else if (char === ',' && !inQuotes) {
+      row.push(val)
+      val = ''
+    } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
+      if (char === '\r') i++
+      row.push(val)
+      result.push(row)
+      row = []
+      val = ''
+    } else {
+      val += char
+    }
+  }
+  row.push(val)
+  if (row.length > 0 && row.some(c => c.trim())) {
+    result.push(row)
+  }
+  return result
+}
+
+const handleBatchFileSelect = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  if (target.files && target.files.length > 0) {
+    batchFile.value = target.files[0]
+  }
+}
+
+const submitBatch = async () => {
+  if (!batchFile.value) {
+    batchError.value = 'Please select a CSV file.'
+    return
+  }
+  if (!connectionStore.activeConnectionId) {
+    batchError.value = 'Please select a connection first.'
+    return
+  }
+
+  batchError.value = ''
+  batchSubmitting.value = true
+
+  try {
+    const text = await batchFile.value.text()
+    const rows = parseCSV(text)
+    
+    // Assumes header: video_url,caption
+    if (rows.length < 2) {
+      throw new Error('CSV must contain a header and at least one row of data.')
+    }
+
+    const items = []
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i]
+      if (row.length < 2) continue
+      
+      const videoUrl = row[0].trim()
+      const caption = row.slice(1).join(',').trim() // In case caption is unquoted and has commas, though our parser handles quoted commas correctly
+
+      if (!videoUrl || !caption) continue
+
+      items.push({
+        text: caption,
+        media: [{ type: 'video', url: videoUrl }],
+        type: 'reel'
+      })
+    }
+
+    if (items.length === 0) {
+      throw new Error('No valid items found in the CSV.')
+    }
+
+    const res = await fetch('/api/queue/batch', {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        connectionId: connectionStore.activeConnectionId,
+        items
+      })
+    })
+
+    if (res.status === 401) {
+      toast.add({ title: 'Unauthorized', color: 'error' })
+      return
+    }
+
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to add batch to queue')
+
+    toast.add({ title: 'Batch Added to Queue!', description: `Successfully queued ${items.length} reels.`, color: 'success' })
+    
+    // Reset form
+    batchFile.value = null
+    if (batchFileInput.value) batchFileInput.value.value = ''
+  } catch (err: any) {
+    batchError.value = err.message
+  } finally {
+    batchSubmitting.value = false
+  }
+}
 
 const handlePaste = (e: ClipboardEvent) => {
   const items = e.clipboardData?.items
@@ -306,6 +425,44 @@ const submitManual = async () => {
               >
                 <Loader2 v-if="manualSubmitting" class="w-5 h-5 mr-2 animate-spin" />
                 {{ manualSubmitting ? 'Queueing...' : 'Add to Queue' }}
+              </button>
+              </div>
+          </template>
+
+          <!-- Batch Reels Tab -->
+          <template #batch>
+            <div class="mt-6 space-y-6">
+              <p class="text-sm text-muted mb-6">
+                Batch import reels directly to your queue via a CSV file. The file should have a header row with <code>video_url,caption</code>.
+              </p>
+              
+              <div>
+                <label class="block text-sm font-medium text-default mb-2">CSV File *</label>
+                <input 
+                  type="file" 
+                  accept=".csv"
+                  ref="batchFileInput"
+                  @change="handleBatchFileSelect"
+                  class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-base bg-default text-default file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-inverted hover:file:bg-primary/90"
+                />
+              </div>
+
+              <div class="bg-muted p-4 rounded-md border border-default">
+                <p class="text-sm font-medium text-default mb-2">Example format:</p>
+                <pre class="text-xs text-muted overflow-x-auto">video_url,caption
+https://example.com/video1.mp4,"This is my awesome reel #fun"
+https://example.com/video2.mp4,"Another reel, this time with a comma!"</pre>
+              </div>
+
+              <UAlert v-if="batchError" color="error" variant="soft" :description="batchError" />
+
+              <button 
+                @click="submitBatch" 
+                :disabled="batchSubmitting || !batchFile"
+                class="w-full flex justify-center items-center px-4 py-3 border border-transparent shadow-sm text-base font-medium rounded-md text-inverted bg-primary hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
+              >
+                <Loader2 v-if="batchSubmitting" class="w-5 h-5 mr-2 animate-spin" />
+                {{ batchSubmitting ? 'Importing...' : 'Batch Import Reels' }}
               </button>
             </div>
           </template>

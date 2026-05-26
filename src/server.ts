@@ -503,6 +503,51 @@ app.post('/api/queue', requireDashboardAuth, async (req, res) => {
   }
 });
 
+app.post('/api/queue/batch', requireDashboardAuth, async (req, res) => {
+  try {
+    const { connectionId, items } = req.body;
+    if (!connectionId) return res.status(400).json({ error: 'connectionId is required' });
+    if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'items array is required' });
+
+    const connection = await db.select().from(settingsTable).where(eq(settingsTable.id, connectionId));
+    if (connection.length === 0) return res.status(404).json({ error: 'Connection not found' });
+    
+    const channelNetwork = connection[0].bufferChannelNetwork || 'instagram';
+
+    const maxSortResult = await db.select({ maxSort: sql`MAX(sort_order)` })
+      .from(queueTable)
+      .where(sql`connection_id = ${connectionId} AND status = 'pending'`);
+    let currentSortOrder = (maxSortResult[0]?.maxSort as number) || 0;
+
+    const valuesToInsert = items.map(item => {
+      currentSortOrder += 10;
+      
+      const publishMetadata = {
+        [channelNetwork]: {
+          type: item.type === 'reel' ? 'reel' : 'post',
+          shouldShareToFeed: true
+        }
+      };
+
+      return {
+        connectionId,
+        text: item.text,
+        media: item.media,
+        templateId: 'manual',
+        status: 'pending',
+        sortOrder: currentSortOrder,
+        publishMetadata
+      };
+    });
+
+    const result = await db.insert(queueTable).values(valuesToInsert).returning();
+
+    res.json({ message: `Added ${result.length} items to queue successfully`, items: result });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/queue', requireDashboardAuth, async (req, res) => {
   try {
     const status = req.query.status as string || 'pending';
