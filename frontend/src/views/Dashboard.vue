@@ -455,7 +455,7 @@ const timeAgo = (dateObj: Date | string | null) => {
                               }"
                             >
                               <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
-                              <div v-else class="w-full h-full flex items-center justify-center bg-gray-800 text-white text-xs">Video</div>
+                              <video v-else :src="m.url" class="w-full h-full object-cover pointer-events-none" muted autoplay loop></video>
                               
                               <div v-if="i === 3 && qItem.media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
                                 <span class="text-white font-medium text-xl">+{{ qItem.media.length - 4 }}</span>
@@ -532,7 +532,7 @@ const timeAgo = (dateObj: Date | string | null) => {
                               }"
                             >
                               <img v-if="m.type === 'image'" :src="m.url" class="w-full h-full object-cover" />
-                              <div v-else class="w-full h-full flex items-center justify-center bg-gray-800 text-white text-xs">Video</div>
+                              <video v-else :src="m.url" class="w-full h-full object-cover pointer-events-none" muted autoplay loop></video>
                               
                               <div v-if="i === 3 && qItem.media.length > 4" class="absolute inset-0 bg-black/60 flex items-center justify-center">
                                 <span class="text-white font-medium text-xl">+{{ qItem.media.length - 4 }}</span>
