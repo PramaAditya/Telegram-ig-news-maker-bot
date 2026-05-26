@@ -124,7 +124,7 @@ const navItems = computed<NavigationMenuItem[]>(() => [
           <UDropdownMenu
             :items="connectionItems"
             :content="{ align: 'start', collisionPadding: 12 }"
-            :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-48' }"
+            :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-48 bg-elevated' }"
           >
             <UButton
               :label="activeConnectionLabel"
