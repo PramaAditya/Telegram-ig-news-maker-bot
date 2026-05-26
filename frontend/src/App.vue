@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from "vue";
 import { useColorMode } from "@vueuse/core";
 import { useConnectionStore } from "./store";
 import { getAuthHeaders } from "./auth";
-import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui';
+import type { NavigationMenuItem } from '@nuxt/ui';
 
 const colorMode = useColorMode();
 const toggleColorMode = () => {
@@ -65,14 +65,15 @@ const createNewConnection = async () => {
   }
 };
 
-const connectionItems = computed<DropdownMenuItem[][]>(() => {
+const sidebarNavItems = computed<NavigationMenuItem[]>(() => {
   if (loading.value) {
-    return [[{ label: 'Loading...', disabled: true }]];
+    return [{ label: 'Loading...', disabled: true, icon: 'i-lucide-loader-2' }];
   }
   
   const connItems = connections.value.map(conn => ({
     label: conn.name || 'Unnamed',
     icon: 'i-lucide-link',
+    active: connectionStore.activeConnectionId === conn.id,
     onSelect(e: Event) {
       e.preventDefault();
       connectionStore.setActiveConnection(conn.id);
@@ -80,30 +81,23 @@ const connectionItems = computed<DropdownMenuItem[][]>(() => {
   }));
 
   return [
-    connItems,
-    [{
+    ...connItems,
+    {
       label: 'Create connection',
       icon: 'i-lucide-circle-plus',
       onSelect(e: Event) {
         e.preventDefault();
         createNewConnection();
       }
-    }]
+    }
   ];
 });
 
-const activeConnectionLabel = computed(() => {
-  if (loading.value) return 'Loading...';
-  const active = connections.value.find(c => c.id === connectionStore.activeConnectionId);
-  return active ? (active.name || 'Unnamed') : 'Select Connection';
-});
-
-const navItems = computed<NavigationMenuItem[]>(() => [
+const topNavItems = computed<NavigationMenuItem[]>(() => [
   { label: 'Queue', icon: 'i-lucide-list', to: '/' },
   { label: 'Ideas', icon: 'i-lucide-lightbulb', to: '/ideas' },
   { label: 'Jobs', icon: 'i-lucide-briefcase', to: '/jobs' },
   { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
-  { label: 'Global Settings', icon: 'i-lucide-globe', to: '/global-settings' },
 ]);
 </script>
 
@@ -120,50 +114,48 @@ const navItems = computed<NavigationMenuItem[]>(() => [
           body: 'py-0'
         }"
       >
-        <template #header>
-          <UDropdownMenu
-            :items="connectionItems"
-            :content="{ align: 'start', collisionPadding: 12 }"
-            :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-48 bg-elevated' }"
-          >
-            <UButton
-              :label="activeConnectionLabel"
-              icon="i-lucide-link"
-              trailing-icon="i-lucide-chevrons-up-down"
-              color="neutral"
-              variant="ghost"
-              square
-              class="w-full data-[state=open]:bg-elevated overflow-hidden"
-              :ui="{
-                trailingIcon: 'text-dimmed ms-auto'
-              }"
-            />
-          </UDropdownMenu>
+        <template #header="{ state }">
+          <div class="font-semibold text-sm px-2 py-1 text-muted uppercase tracking-wider" v-if="state === 'expanded'">
+            Connections
+          </div>
+          <div v-else class="flex justify-center py-2">
+            <UIcon name="i-lucide-plug" class="text-muted w-5 h-5" />
+          </div>
         </template>
 
         <template #default="{ state }">
           <UNavigationMenu
             :key="state"
-            :items="navItems"
+            :items="sidebarNavItems"
             orientation="vertical"
             :ui="{ link: 'p-1.5 overflow-hidden' }"
           />
         </template>
 
         <template #footer>
-          <UButton
-            :icon="colorMode === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon'"
-            color="neutral"
-            variant="ghost"
-            class="w-full justify-start overflow-hidden"
-            :label="'Toggle Theme'"
-            @click="toggleColorMode"
-          />
+          <div class="flex flex-col gap-1 w-full">
+            <UButton
+              label="Global Settings"
+              icon="i-lucide-globe"
+              color="neutral"
+              variant="ghost"
+              class="w-full justify-start overflow-hidden"
+              to="/global-settings"
+            />
+            <UButton
+              :icon="colorMode === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon'"
+              color="neutral"
+              variant="ghost"
+              class="w-full justify-start overflow-hidden"
+              label="Toggle Theme"
+              @click="toggleColorMode"
+            />
+          </div>
         </template>
       </USidebar>
 
       <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div class="h-(--ui-header-height) shrink-0 flex items-center px-4 border-b border-default bg-default z-10">
+        <div class="h-(--ui-header-height) shrink-0 flex items-center px-4 border-b border-default bg-default z-10 gap-2">
           <UButton
             icon="i-lucide-panel-left"
             color="neutral"
@@ -171,7 +163,13 @@ const navItems = computed<NavigationMenuItem[]>(() => [
             aria-label="Toggle sidebar"
             @click="sidebarOpen = !sidebarOpen"
           />
-          <h1 class="ml-4 text-lg font-semibold truncate">IG News Maker</h1>
+          <h1 class="text-lg font-semibold truncate shrink-0 mr-4">IG News Maker</h1>
+          
+          <UNavigationMenu
+            :items="topNavItems"
+            orientation="horizontal"
+            class="flex-1 min-w-0 overflow-x-auto"
+          />
         </div>
 
         <div class="flex-1 overflow-y-auto p-4 sm:p-8">
