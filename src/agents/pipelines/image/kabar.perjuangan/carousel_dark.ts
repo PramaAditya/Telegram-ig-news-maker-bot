@@ -231,7 +231,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
     const highlightText = async (text: string) => {
       try {
         const { text: boldedText } = await generateText({
-          model: googleAI('gemini-3.1-flash-lite-preview'),
+          model: googleAI('gemini-3.1-flash-lite'),
           system: `You are an editor for an news based social media. Your task is to add bold markdown (using **text**) to the most important or shocking words, phrases, or clauses in the provided text. 
 This helps readers scan the text and prevents it from being monotonous.
 RULES:
