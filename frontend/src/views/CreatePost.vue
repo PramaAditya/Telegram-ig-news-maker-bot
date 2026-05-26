@@ -126,11 +126,13 @@ const isVideo = (url: string) => {
 }
 
 const submitManual = async () => {
+  const urls = Array.isArray(manualMediaUrls.value) ? manualMediaUrls.value : (manualMediaUrls.value ? [manualMediaUrls.value] : [])
+
   if (!manualText.value.trim()) {
     manualError.value = 'Caption text is required.'
     return
   }
-  if (!manualMediaUrls.value || manualMediaUrls.value.length === 0) {
+  if (urls.length === 0) {
     manualError.value = 'At least one media file is required.'
     return
   }
@@ -142,16 +144,16 @@ const submitManual = async () => {
   manualError.value = ''
 
   if (manualType.value === 'reel') {
-    if (manualMediaUrls.value.length > 1) {
+    if (urls.length > 1) {
       manualError.value = 'Reels can only have one video.'
       return
     }
-    if (!isVideo(manualMediaUrls.value[0])) {
+    if (!isVideo(urls[0])) {
       manualError.value = 'Reels must be a video file.'
       return
     }
   } else if (manualType.value === 'post') {
-    for (const url of manualMediaUrls.value) {
+    for (const url of urls) {
       if (isVideo(url)) {
         manualError.value = 'Posts must be image only. No video files allowed.'
         return
@@ -162,7 +164,7 @@ const submitManual = async () => {
   manualSubmitting.value = true
   
   try {
-    const formattedMedia = manualMediaUrls.value.map(url => ({
+    const formattedMedia = urls.map(url => ({
       url,
       type: isVideo(url) ? 'video' : 'image'
     }))
@@ -210,7 +212,7 @@ const submitManual = async () => {
       </div>
 
       <div v-else>
-        <UTabs :items="tabItems" class="w-full" @change="(index: number) => activeTab = tabItems[index].slot">
+        <UTabs :items="tabItems" class="w-full" @change="(index: number) => { if (typeof index === 'number') activeTab = tabItems[index].slot }">
           <!-- AI Generated Tab -->
           <template #ai>
             <div class="mt-6 space-y-6">
