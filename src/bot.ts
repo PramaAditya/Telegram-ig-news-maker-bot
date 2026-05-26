@@ -10,7 +10,6 @@ import { eq } from 'drizzle-orm';
 import dns from 'dns';
 import { uploadToS3 } from './s3.js';
 import fs from 'fs/promises';
-import { fileURLToPath } from 'url';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -41,7 +40,8 @@ async function uploadTelegramMediaToS3(url: string, mimeType?: string): Promise<
   let buffer: Buffer;
 
   if (url.startsWith('file://')) {
-    const filePath = fileURLToPath(url);
+    const parsedUrl = new URL(url);
+    const filePath = decodeURIComponent(parsedUrl.pathname);
     buffer = await fs.readFile(filePath);
   } else {
     const response = await fetch(url);
