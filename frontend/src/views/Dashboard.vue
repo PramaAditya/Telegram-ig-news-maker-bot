@@ -743,7 +743,7 @@ const timeAgo = (dateObj: Date | string | null) => {
       </template>
     </UTabs>
     
-    <UModal v-model="isScheduleModalOpen" title="Set Custom Schedule">
+    <UModal v-model:open="isScheduleModalOpen" title="Set Custom Schedule">
        <template #body>
          <div class="space-y-4">
             <p class="text-sm text-muted">
