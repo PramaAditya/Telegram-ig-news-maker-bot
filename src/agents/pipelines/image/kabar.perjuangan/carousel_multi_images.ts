@@ -102,7 +102,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
   if (!baseImageBuffer && scrapedImageUrl) {
     console.log(`[Phase 3] Using scraped image URL as base: ${scrapedImageUrl}`);
       try {
-        const response = await fetch(scrapedImageUrl);
+        const response = await fetch(scrapedImageUrl, { signal: AbortSignal.timeout(10000) });
         if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
         const arrayBuffer = await response.arrayBuffer();
         baseImageBuffer = Buffer.from(arrayBuffer);
@@ -131,7 +131,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
 
       if (foundImageUrl) {
          console.log(`[Phase 3] Found image URL via web search: ${foundImageUrl}`);
-           const response = await fetch(foundImageUrl);
+           const response = await fetch(foundImageUrl, { signal: AbortSignal.timeout(10000) });
            if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
            const arrayBuffer = await response.arrayBuffer();
            baseImageBuffer = Buffer.from(arrayBuffer);
@@ -213,7 +213,10 @@ Your task is to parse the gathered facts into final components for an Instagram 
          console.log(`[Phase 3.5] Downloading curated image for slide ${i+1}: ${curated[0].originalUrl}`);
          const res = await fetch(curated[0].originalUrl, { signal: AbortSignal.timeout(10000) });
          if (res.ok) {
-           const mimeType = res.headers.get('content-type') || 'image/jpeg';
+           let mimeType = res.headers.get('content-type') || 'image/jpeg';
+           if (!mimeType.startsWith('image/')) {
+             mimeType = 'image/jpeg';
+           }
            const ext = mimeType === 'image/png' ? '.png' : '.jpg';
            const arrayBuffer = await res.arrayBuffer();
            slide_image = await uploadToS3(Buffer.from(arrayBuffer), mimeType, ext) || '';

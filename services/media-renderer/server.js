@@ -176,9 +176,9 @@ app.post('/render/:mediaType/:brand/:templateName', async (req, res) => {
     // Process Markdown dynamic import
     const { marked } = await import('marked');
 
-    if (templateName === 'carousel_dark') {
+    if (templateName === 'carousel_dark' || templateName === 'carousel_multi_images') {
       // ---------------------------------------------------------
-      // carousel_dark logic (Multiple Slides)
+      // carousel logic (Multiple Slides)
       // ---------------------------------------------------------
       const { logo, cover_image, title, slides, input_images } = req.body;
 
@@ -191,12 +191,20 @@ app.post('/render/:mediaType/:brand/:templateName', async (req, res) => {
 
       const coverTemplate = compileTemplate(`${templateBasePath}/cover`);
       const slideTemplate = compileTemplate(`${templateBasePath}/slide`);
-      const imageTemplate = compileTemplate(`${templateBasePath}/image`);
+      
+      let imageTemplate = null;
+      try {
+        imageTemplate = compileTemplate(`${templateBasePath}/image`);
+      } catch (e) {
+        // Image template is optional, ignore if it doesn't exist for the specific template type
+      }
 
       const parsedTitle = marked.parseInline(title);
 
       // 1. Render Cover
-      const coverHtml = coverTemplate({ logo: logo || 'interval', cover_image, title: parsedTitle });
+      const coverHtml = coverTemplate({ logo: logo || 'interval', cover_image, title: parsedTitle })
+        .replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/textfit\/2\.4\.0\/textFit\.min\.js/g, `http://localhost:${port}/textFit.min.js`);
+      
       const coverBuffer = await renderHtmlToBuffer(coverHtml, viewport.width, viewport.height);
       const coverFilename = `${brand}-${templateName}-cover-${uuidv4()}.png`;
       const coverUrl = await uploadToS3(coverBuffer, coverFilename);
@@ -222,7 +230,17 @@ app.post('/render/:mediaType/:brand/:templateName', async (req, res) => {
         const romanNumber = toRoman(i + 1);
         const parsedText = marked.parse(slide.text);
 
-        const slideHtml = slideTemplate({ roman_number: romanNumber, text: parsedText, cover_image });
+        // Include slide_image if present, otherwise just cover_image
+        const slideContext = { 
+          roman_number: romanNumber, 
+          text: parsedText, 
+          cover_image,
+          ...(slide.slide_image && { slide_image: slide.slide_image }) 
+        };
+
+        const slideHtml = slideTemplate(slideContext)
+          .replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/textfit\/2\.4\.0\/textFit\.min\.js/g, `http://localhost:${port}/textFit.min.js`);
+          
         const slideBuffer = await renderHtmlToBuffer(slideHtml, viewport.width, viewport.height);
         const slideFilename = `${brand}-${templateName}-slide-${i+1}-${uuidv4()}.png`;
         const slideUrl = await uploadToS3(slideBuffer, slideFilename);
@@ -230,7 +248,7 @@ app.post('/render/:mediaType/:brand/:templateName', async (req, res) => {
       }
 
       // 3. Render Additional Images
-      if (input_images && Array.isArray(input_images)) {
+      if (input_images && Array.isArray(input_images) && imageTemplate) {
         for (let i = 0; i < input_images.length; i++) {
           const inputImage = input_images[i];
           const html = imageTemplate({ logo: logo || 'interval', image_url: inputImage });
