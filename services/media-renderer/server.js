@@ -96,7 +96,7 @@ app.post('/render', async (req, res) => {
       console.warn('Pending requests:', Array.from(pendingRequests));
     }
 
-    const imageBuffer = await page.screenshot({ type: 'png' });
+    const imageBuffer = await page.screenshot({ type: 'png', omitBackground: true });
 
     res.setHeader('Content-Type', 'image/png');
     res.send(Buffer.from(imageBuffer));
@@ -149,7 +149,7 @@ async function renderHtmlToBuffer(htmlContent, width, height) {
       console.warn('Timeout waiting for networkidle0, proceeding with screenshot anyway.');
     }
 
-    const imageBuffer = await page.screenshot({ type: 'png' });
+    const imageBuffer = await page.screenshot({ type: 'png', omitBackground: true });
     return imageBuffer;
   } finally {
     await browser.close();

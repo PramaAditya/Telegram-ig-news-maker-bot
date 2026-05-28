@@ -7,6 +7,64 @@ import { PipelineContext, ResearchResult, googleAI, withRetry } from '../utils.j
 
 
 
+export async function processMediaOnly(context: PipelineContext): Promise<ResearchResult> {
+  const { uploadedMedia } = context;
+  const processedMedia = [...(uploadedMedia || [])];
+
+  if (processedMedia.length > 0) {
+    for (const media of processedMedia) {
+      console.log(`[Phase 1 Skip] Downloading media: ${media.url}`);
+      try {
+        let response;
+        let retries = 3;
+        while (retries > 0) {
+          try {
+            if (media.url.startsWith('file://')) {
+              const parsedUrl = new URL(media.url);
+              const filePath = decodeURIComponent(parsedUrl.pathname);
+              const fileBuffer = await fs.readFile(filePath);
+              response = { data: fileBuffer };
+            } else {
+              const fetchRes = await fetch(media.url);
+              if (!fetchRes.ok) throw new Error(`Fetch failed: ${fetchRes.statusText}`);
+              const arrayBuffer = await fetchRes.arrayBuffer();
+              response = { data: Buffer.from(arrayBuffer) };
+            }
+            break;
+          } catch (e: any) {
+            retries--;
+            console.warn(`[Phase 1 Skip] Download failed, retries left: ${retries}. Error: ${e.message}`);
+            if (retries === 0) throw e;
+            await new Promise(res => setTimeout(res, 2000));
+          }
+        }
+        
+        let buffer = Buffer.from(response!.data);
+        media.buffer = buffer;
+        
+        if (media.type === 'video') {
+          console.log(`[Phase 1 Skip] Uploading video to S3...`);
+          const s3Url = await uploadToS3(buffer, media.mimeType || 'video/mp4', '.mp4');
+          media.s3Url = s3Url;
+          console.log(`[Phase 1 Skip] S3 URL: ${s3Url}`);
+        } else {
+          console.log(`[Phase 1 Skip] Uploading image to S3...`);
+          media.s3Url = await uploadToS3(buffer, 'image/jpeg', '.jpg');
+        }
+      } catch (err: any) {
+        console.error(`[Phase 1 Skip] Failed to process media:`, err.message);
+      }
+    }
+  }
+
+  return {
+    researchText: '',
+    scrapedImageUrl: null,
+    scrapedImageUrls: [],
+    processedMedia
+  };
+}
+
 export async function runResearchPhase(context: PipelineContext): Promise<ResearchResult> {
   const { userInput, uploadedMedia, currentYear, baseSystemPrompt, telegram, statusMsg } = context;
   

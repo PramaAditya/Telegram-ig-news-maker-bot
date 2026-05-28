@@ -36,7 +36,14 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
     };
 
     // Phase 1: Research
-    const researchResult = await runResearchPhase(pipelineContext);
+    let researchResult: import('./utils.js').ResearchResult;
+    
+    if (template.skipResearch) {
+      console.log(`[Pipeline] Skipping research phase for template ${templateId}`);
+      researchResult = await import('./agents/research.js').then(m => m.processMediaOnly(pipelineContext));
+    } else {
+      researchResult = await runResearchPhase(pipelineContext);
+    }
 
     // Phase 2-5: Template-specific Pipeline
     await template.runPipeline(pipelineContext, researchResult);
