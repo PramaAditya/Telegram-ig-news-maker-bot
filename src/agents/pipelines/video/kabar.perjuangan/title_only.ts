@@ -27,28 +27,6 @@ const schema = z.object({
 });
 
 export async function generateTitleOnlyMedia(templateData: any, settings: any): Promise<{ type: 'image' | 'video', url: string }[]> {
-  const pages: any[] = [];
-  
-  pages.push({
-    file: 'cover',
-    context: {
-      title: marked.parseInline(templateData.title || '')
-    }
-  });
-
-  const renderPayload = {
-    viewport: { width: 1080, height: 1920 },
-    pages
-  };
-
-  console.log(`[Video Generator] Requesting title overlay PNG from media-renderer...`);
-  const renderedUrls = await generateMedia('/render/video/kabar.perjuangan/title_only', renderPayload);
-
-  if (!renderedUrls || renderedUrls.length === 0) {
-    throw new Error('Failed to render title overlay PNG.');
-  }
-
-  const titlePngUrl = renderedUrls[0];
   const inputVideoUrl = templateData.inputVideoUrl;
 
   if (!inputVideoUrl) {
@@ -68,11 +46,6 @@ export async function generateTitleOnlyMedia(templateData: any, settings: any): 
     if (!videoRes.ok) throw new Error('Failed to fetch input video');
     await fs.writeFile(videoPath, Buffer.from(await videoRes.arrayBuffer()));
 
-    console.log(`[Video Generator] Downloading PNG from ${titlePngUrl}`);
-    const pngRes = await fetch(titlePngUrl);
-    if (!pngRes.ok) throw new Error('Failed to fetch title PNG');
-    await fs.writeFile(pngPath, Buffer.from(await pngRes.arrayBuffer()));
-
     console.log(`[Video Generator] Probing video dimensions...`);
     const metadata = await new Promise<ffmpeg.FfprobeData>((resolve, reject) => {
       ffmpeg.ffprobe(videoPath, (err, data) => {
@@ -85,30 +58,73 @@ export async function generateTitleOnlyMedia(templateData: any, settings: any): 
     const width = videoStream?.width || 0;
     const height = videoStream?.height || 0;
 
-    // Check if the video is already 9:16 (e.g. 1080x1920 or 720x1280)
-    const isAlready9x16 = width > 0 && height > 0 && Math.abs((width / height) - (9 / 16)) < 0.01;
-    
+    const isPortraitOrSquare = width <= height; // aspect ratio <= 1.0
+
     let complexFilter: string[];
-    if (width === 1080 && height === 1920) {
-      console.log(`[Video Generator] Video is exactly 1080x1920. Applying direct overlay.`);
-      complexFilter = [
-        "[0:v][1:v]overlay=0:0:enable='between(t,0,5)'[outv]"
-      ];
-    } else if (isAlready9x16) {
-      console.log(`[Video Generator] Video is 9:16 (${width}x${height}). Scaling to 1080x1920 without blur.`);
-      complexFilter = [
-        '[0:v]scale=1080:1920[scaled]',
-        "[scaled][1:v]overlay=0:0:enable='between(t,0,5)'[outv]"
-      ];
+    let renderPayload: any;
+    
+    if (isPortraitOrSquare) {
+      console.log(`[Video Generator] Portrait/Square format detected (${width}x${height}). Using cover_portrait.`);
+      renderPayload = {
+        viewport: { width: 1080, height: 1920 },
+        pages: [{ file: 'cover_portrait', context: { title: marked.parseInline(templateData.title || '') } }]
+      };
+
+      const isAlready9x16 = width > 0 && height > 0 && Math.abs((width / height) - (9 / 16)) < 0.01;
+      
+      if (width === 1080 && height === 1920) {
+        console.log(`[Video Generator] Video is exactly 1080x1920. Applying direct overlay.`);
+        complexFilter = [
+          "[0:v][1:v]overlay=0:0:enable='between(t,0,5)'[outv]"
+        ];
+      } else if (isAlready9x16) {
+        console.log(`[Video Generator] Video is 9:16 (${width}x${height}). Scaling to 1080x1920 without blur.`);
+        complexFilter = [
+          '[0:v]scale=1080:1920[scaled]',
+          "[scaled][1:v]overlay=0:0:enable='between(t,0,5)'[outv]"
+        ];
+      } else {
+        console.log(`[Video Generator] Video is ${width}x${height}. Applying 9:16 normalization with blurred background.`);
+        complexFilter = [
+          '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:20[bg]',
+          '[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg]',
+          '[bg][fg]overlay=(W-w)/2:(H-h)/2[merged]',
+          "[merged][1:v]overlay=0:0:enable='between(t,0,5)'[outv]"
+        ];
+      }
     } else {
-      console.log(`[Video Generator] Video is ${width}x${height}. Applying 9:16 normalization with blurred background.`);
+      console.log(`[Video Generator] Landscape format detected (${width}x${height}). Using cover_landscape.`);
+      let scaledHeight = Math.floor((1080 * height) / width);
+      // Ensure it's an even number (required by some encoders)
+      if (scaledHeight % 2 !== 0) scaledHeight += 1;
+      const remainingHeight = 1350 - scaledHeight;
+      
+      renderPayload = {
+        viewport: { width: 1080, height: remainingHeight },
+        pages: [{ file: 'cover_landscape', context: { title: marked.parseInline(templateData.title || '') } }]
+      };
+
+      console.log(`[Video Generator] Safe zone logic: scaled height is ${scaledHeight}, title overlay height is ${remainingHeight}`);
       complexFilter = [
         '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:20[bg]',
-        '[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg]',
-        '[bg][fg]overlay=(W-w)/2:(H-h)/2[merged]',
-        "[merged][1:v]overlay=0:0:enable='between(t,0,5)'[outv]"
+        `[0:v]scale=1080:${scaledHeight}[fg]`,
+        '[bg][fg]overlay=0:285[merged]',
+        `[merged][1:v]overlay=0:${285 + scaledHeight}[outv]`
       ];
     }
+
+    console.log(`[Video Generator] Requesting title overlay PNG from media-renderer...`);
+    const renderedUrls = await generateMedia('/render/video/kabar.perjuangan/title_only', renderPayload);
+
+    if (!renderedUrls || renderedUrls.length === 0) {
+      throw new Error('Failed to render title overlay PNG.');
+    }
+
+    const titlePngUrl = renderedUrls[0];
+    console.log(`[Video Generator] Downloading PNG from ${titlePngUrl}`);
+    const pngRes = await fetch(titlePngUrl);
+    if (!pngRes.ok) throw new Error('Failed to fetch title PNG');
+    await fs.writeFile(pngPath, Buffer.from(await pngRes.arrayBuffer()));
 
     console.log(`[Video Generator] Running FFmpeg composition...`);
     
