@@ -1,4 +1,5 @@
-import { generateObject, generateText } from 'ai';
+import { generateObject, generateText, generateImage } from 'ai';
+import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import { PipelineContext, ResearchResult, googleAI, withRetry } from '../../../../utils.js';
 import { censorText } from '../../../../sanitize.js';
@@ -211,36 +212,42 @@ Your task is to parse the gathered facts into final components for an Instagram 
     imageGenerationPrompt = `${contentParams.image_prompt}. ${promptSuffix}`;
   }
 
-  const imageGenMessageContent: any[] = [];
-  if (baseImageBuffer) {
-    imageGenMessageContent.push({ type: 'image', image: baseImageBuffer });
-  }
-  imageGenMessageContent.push({ type: 'text', text: imageGenerationPrompt });
-
-  const { files } = await generateText({
-    model: googleAI('gemini-3.1-flash-image-preview'),
-    messages: [{ role: 'user', content: imageGenMessageContent as any }],
-    providerOptions: {
-      google: {
-        imageConfig: {
-          aspectRatio: '1:1'
-        }
-      }
-    }
-  });
-  
   let generatedFileBuffer: Buffer | null = null;
-  if (files) {
-    for (const file of files) {
-      if (file.mediaType.startsWith('image/')) {
-        generatedFileBuffer = Buffer.from(file.uint8Array);
-        break;
+  const maxRetries = 3;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[Phase 3] AI Image generation attempt ${attempt}...`);
+      const { image } = await generateImage({
+        model: google.image('gemini-3.1-flash-image-preview'),
+        prompt: {
+          text: imageGenerationPrompt,
+          images: baseImageBuffer ? [baseImageBuffer] : [],
+        },
+        aspectRatio: '1:1'
+      });
+      
+      if (image && image.base64) {
+        generatedFileBuffer = Buffer.from(image.base64, 'base64');
+        break; // Success, exit retry loop
+      }
+    } catch (error) {
+      console.warn(`[Phase 3] AI Image generation failed on attempt ${attempt}:`, error);
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(res => setTimeout(res, delay));
       }
     }
   }
 
   if (!generatedFileBuffer) {
-    throw new Error('Gagal menghasilkan atau memproses gambar dari AI.');
+    console.warn(`[Phase 3] Failed to generate AI image after ${maxRetries} attempts. Falling back to base image or empty.`);
+    if (baseImageBuffer) {
+      generatedFileBuffer = baseImageBuffer;
+    } else {
+      // Create a 1x1 black transparent PNG as a safe fallback if absolutely no image exists
+      generatedFileBuffer = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+    }
   }
 
   console.log(`[Phase 3] Uploading generated/enhanced image to S3...`);

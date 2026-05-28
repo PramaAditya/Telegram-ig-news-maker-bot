@@ -97,56 +97,92 @@ export async function runResearchPhase(context: PipelineContext): Promise<Resear
     }
   };
 
-  const { text: researchText } = await generateText({
-    model: googleAI(process.env.CONTENT_RESEARCHER_MODEL || 'gemini-3.1-pro-preview'),
-    system: researchSystemPrompt,
-    messages: [
-      {
-        role: 'user',
-        content: messageContent
-      }
-    ],
-    tools: {
-      searchWeb: tool({
-        description: 'Search the web for latest news or facts about a topic.',
-        inputSchema: z.object({ query: z.string() }),
-        execute: async ({ query }: { query: string }) => {
-          console.log(`[Tool: searchWeb] Searching for: "${query}"`);
-          const res = await firecrawlService.search(query, { limit: 3, scrapeOptions: { formats: ['markdown'] } });
-          
-          if (res && (res as any).data) {
-            (res as any).data.forEach((item: any) => {
-              if (item.metadata && (item.metadata.ogImage || item.metadata.image)) {
-                const img = item.metadata.ogImage || item.metadata.image;
-                if (img && img.startsWith('http')) scrapedImageUrls.push(img);
+  let researchText = '';
+  let attempt = 0;
+  const maxRetries = 3;
+  let fallbackMarkdown = '';
+
+  while (attempt < maxRetries) {
+    try {
+      attempt++;
+      console.log(`[Phase 1] Research AI generation attempt ${attempt}...`);
+      const response = await generateText({
+        model: googleAI(process.env.CONTENT_RESEARCHER_MODEL || 'gemini-3.1-pro-preview'),
+        system: researchSystemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: messageContent
+          }
+        ],
+        tools: {
+          searchWeb: tool({
+            description: 'Search the web for latest news or facts about a topic.',
+            inputSchema: z.object({ query: z.string() }),
+            execute: async ({ query }: { query: string }) => {
+              console.log(`[Tool: searchWeb] Searching for: "${query}"`);
+              const res = await firecrawlService.search(query, { limit: 3, scrapeOptions: { formats: ['markdown'] } });
+              
+              if (res && (res as any).data) {
+                (res as any).data.forEach((item: any) => {
+                  if (item.metadata && (item.metadata.ogImage || item.metadata.image)) {
+                    const img = item.metadata.ogImage || item.metadata.image;
+                    if (img && img.startsWith('http')) scrapedImageUrls.push(img);
+                  }
+                });
               }
-            });
-          }
-          return JSON.stringify(res);
+              return JSON.stringify(res);
+            },
+          }),
+          scrapeUrl: tool({
+            description: 'Read the full content of a specific URL.',
+            inputSchema: z.object({ url: z.string() }),
+            execute: async ({ url }: { url: string }) => {
+              console.log(`[Tool: scrapeUrl] Scraping URL: ${url}`);
+              const res = await firecrawlService.scrape(url, { formats: ['markdown'] });
+              const metadata = (res as any).metadata;
+              const markdown = (res as any).markdown;
+              
+              if (metadata && (metadata.ogImage || metadata.image)) {
+                 scrapedImageUrl = metadata.ogImage || metadata.image;
+                 if (scrapedImageUrl && scrapedImageUrl.startsWith('http')) {
+                   scrapedImageUrls.push(scrapedImageUrl);
+                 }
+                 console.log(`[Tool: scrapeUrl] Found image URL in metadata: ${scrapedImageUrl}`);
+              }
+              
+              if (markdown) {
+                fallbackMarkdown += `\n\n--- Content from ${url} ---\n${markdown}`;
+              }
+              
+              return markdown || JSON.stringify(res);
+            },
+          }),
         },
-      }),
-      scrapeUrl: tool({
-        description: 'Read the full content of a specific URL.',
-        inputSchema: z.object({ url: z.string() }),
-        execute: async ({ url }: { url: string }) => {
-          console.log(`[Tool: scrapeUrl] Scraping URL: ${url}`);
-          const res = await firecrawlService.scrape(url, { formats: ['markdown'] });
-          const metadata = (res as any).metadata;
-          const markdown = (res as any).markdown;
-          
-          if (metadata && (metadata.ogImage || metadata.image)) {
-             scrapedImageUrl = metadata.ogImage || metadata.image;
-             if (scrapedImageUrl && scrapedImageUrl.startsWith('http')) {
-               scrapedImageUrls.push(scrapedImageUrl);
-             }
-             console.log(`[Tool: scrapeUrl] Found image URL in metadata: ${scrapedImageUrl}`);
-          }
-          return markdown || JSON.stringify(res);
-        },
-      }),
-    },
-    stopWhen: stepCountIs(3),
-  });
+        stopWhen: stepCountIs(3),
+      });
+
+      researchText = response.text;
+
+      if (researchText && researchText.trim().length > 0) {
+        break; // Success, non-empty output
+      } else {
+        console.warn(`[Phase 1] Research AI returned empty output on attempt ${attempt}.`);
+      }
+    } catch (error) {
+      console.warn(`[Phase 1] Research AI generation failed on attempt ${attempt}:`, error);
+    }
+
+    if (attempt < maxRetries) {
+      const delay = Math.pow(2, attempt) * 1000;
+      await new Promise(res => setTimeout(res, delay));
+    }
+  }
+
+  if (!researchText || researchText.trim().length === 0) {
+    console.warn(`[Phase 1] Failed to generate research text after ${maxRetries} attempts. Using fallback content.`);
+    researchText = `Raw Input:\n${userInput}\n\n${fallbackMarkdown}`;
+  }
 
   console.log(`[Phase 1] Research Complete. Text length: ${researchText.length}`);
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✍️ Menyusun konten...'));
