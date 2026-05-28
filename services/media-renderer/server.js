@@ -4,14 +4,19 @@ const fs = require('fs');
 const path = require('path');
 const Handlebars = require('handlebars');
 const moment = require('moment-timezone');
-const { marked } = require('marked');
 
-Handlebars.registerHelper('markdown', function (options) {
-  return new Handlebars.SafeString(marked.parse(options.fn(this)));
+let marked;
+import('marked').then(module => {
+  marked = module.marked;
+  
+  Handlebars.registerHelper('markdown', function (options) {
+    return new Handlebars.SafeString(marked.parse(options.fn(this)));
+  });
+  Handlebars.registerHelper('markdownInline', function (options) {
+    return new Handlebars.SafeString(marked.parseInline(options.fn(this)));
+  });
 });
-Handlebars.registerHelper('markdownInline', function (options) {
-  return new Handlebars.SafeString(marked.parseInline(options.fn(this)));
-});
+
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { randomUUID: uuidv4 } = require('crypto');
 require('dotenv').config();
