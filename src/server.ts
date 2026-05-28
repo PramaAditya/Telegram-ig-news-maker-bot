@@ -161,7 +161,8 @@ app.get('/api/templates', requireDashboardAuth, (req, res) => {
   const templatesList = Object.values(TEMPLATES).map(t => ({
     id: t.id,
     name: t.name,
-    description: t.description
+    description: t.description,
+    uiSchema: t.uiSchema
   }));
   res.json(templatesList);
 });

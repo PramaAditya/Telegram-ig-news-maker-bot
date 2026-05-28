@@ -4,6 +4,14 @@ const fs = require('fs');
 const path = require('path');
 const Handlebars = require('handlebars');
 const moment = require('moment-timezone');
+const { marked } = require('marked');
+
+Handlebars.registerHelper('markdown', function (options) {
+  return new Handlebars.SafeString(marked.parse(options.fn(this)));
+});
+Handlebars.registerHelper('markdownInline', function (options) {
+  return new Handlebars.SafeString(marked.parseInline(options.fn(this)));
+});
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { randomUUID: uuidv4 } = require('crypto');
 require('dotenv').config();
@@ -173,136 +181,34 @@ app.post('/render/:mediaType/:brand/:templateName', async (req, res) => {
   const templateBasePath = `${mediaType}/${brand}/${templateName}`;
 
   try {
-    // Process Markdown dynamic import
-    const { marked } = await import('marked');
+    const { pages, viewport } = req.body;
 
-    if (templateName === 'carousel_dark' || templateName === 'carousel_multi_images') {
-      // ---------------------------------------------------------
-      // carousel logic (Multiple Slides)
-      // ---------------------------------------------------------
-      const { logo, cover_image, title, slides, input_images } = req.body;
-
-      if (!title || !slides || !Array.isArray(slides)) {
-        return res.status(400).json({ error: 'title and slides array are required' });
-      }
-
-      const viewport = { width: 1080, height: 1350 };
-      const imageUrls = [];
-
-      const coverTemplate = compileTemplate(`${templateBasePath}/cover`);
-      const slideTemplate = compileTemplate(`${templateBasePath}/slide`);
-      
-      let imageTemplate = null;
-      try {
-        imageTemplate = compileTemplate(`${templateBasePath}/image`);
-      } catch (e) {
-        // Image template is optional, ignore if it doesn't exist for the specific template type
-      }
-
-      const parsedTitle = marked.parseInline(title);
-
-      // 1. Render Cover
-      const coverHtml = coverTemplate({ logo: logo || 'interval', cover_image, title: parsedTitle })
-        .replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/textfit\/2\.4\.0\/textFit\.min\.js/g, `http://localhost:${port}/textFit.min.js`);
-      
-      const coverBuffer = await renderHtmlToBuffer(coverHtml, viewport.width, viewport.height);
-      const coverFilename = `${brand}-${templateName}-cover-${uuidv4()}.png`;
-      const coverUrl = await uploadToS3(coverBuffer, coverFilename);
-      imageUrls.push(coverUrl);
-
-      // Helper for Roman numerals
-      const toRoman = (num) => {
-        const roman = {
-          M: 1000, CM: 900, D: 500, CD: 400, C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1
-        };
-        let str = '';
-        for (let i of Object.keys(roman)) {
-          let q = Math.floor(num / roman[i]);
-          num -= q * roman[i];
-          str += i.repeat(q);
-        }
-        return str;
-      };
-
-      // 2. Render Slides
-      for (let i = 0; i < slides.length; i++) {
-        const slide = slides[i];
-        const romanNumber = toRoman(i + 1);
-        const parsedText = marked.parse(slide.text);
-
-        // Include slide_image if present, otherwise just cover_image
-        const slideContext = { 
-          roman_number: romanNumber, 
-          text: parsedText, 
-          cover_image,
-          ...(slide.slide_image && { slide_image: slide.slide_image }) 
-        };
-
-        const slideHtml = slideTemplate(slideContext)
-          .replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/textfit\/2\.4\.0\/textFit\.min\.js/g, `http://localhost:${port}/textFit.min.js`);
-          
-        const slideBuffer = await renderHtmlToBuffer(slideHtml, viewport.width, viewport.height);
-        const slideFilename = `${brand}-${templateName}-slide-${i+1}-${uuidv4()}.png`;
-        const slideUrl = await uploadToS3(slideBuffer, slideFilename);
-        imageUrls.push(slideUrl);
-      }
-
-      // 3. Render Additional Images
-      if (input_images && Array.isArray(input_images) && imageTemplate) {
-        for (let i = 0; i < input_images.length; i++) {
-          const inputImage = input_images[i];
-          const html = imageTemplate({ logo: logo || 'interval', image_url: inputImage });
-          const buffer = await renderHtmlToBuffer(html, viewport.width, viewport.height);
-          const url = await uploadToS3(buffer, `${brand}-${templateName}-image-${i+1}-${uuidv4()}.png`);
-          imageUrls.push(url);
-        }
-      }
-
-      return res.json({ urls: imageUrls });
-
-    } else if (templateName.startsWith('breakingnews')) {
-      // ---------------------------------------------------------
-      // breakingnews logic (Single Cover)
-      // ---------------------------------------------------------
-      const { image_url, title, subtitle, source, my_handle, date } = req.body;
-      
-      if (!image_url || !title) {
-        return res.status(400).json({ error: 'The "image_url" and "title" fields are required' });
-      }
-
-      const templateParams = { image_url, title, subtitle, source, my_handle, date };
-      
-      if (templateParams.title) {
-        templateParams.title = marked.parseInline(templateParams.title);
-      }
-      if (templateParams.subtitle) {
-        templateParams.subtitle = marked.parseInline(templateParams.subtitle);
-      }
-
-      if (!templateParams.date) {
-        moment.locale('id');
-        templateParams.date = moment().tz('Asia/Jakarta').format('dddd, DD/MM/YYYY');
-      }
-
-      if (!templateParams.my_handle) {
-        templateParams.my_handle = '@poros.perjuangan';
-      }
-
-      const compiledTemplate = compileTemplate(`${templateBasePath}/cover`);
-      const htmlContent = compiledTemplate(templateParams)
-        .replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/textfit\/2\.4\.0\/textFit\.min\.js/g, `http://localhost:${port}/textFit.min.js`);
-
-      const viewport = { width: 1080, height: 1350 };
-      const imageBuffer = await renderHtmlToBuffer(htmlContent, viewport.width, viewport.height);
-      
-      const filename = `${brand}-${templateName}-${uuidv4()}.png`;
-      const url = await uploadToS3(imageBuffer, filename);
-
-      return res.json({ urls: [url] });
-
-    } else {
-      return res.status(404).json({ error: `Template logic not implemented for: ${templateName}` });
+    if (!pages || !Array.isArray(pages)) {
+      return res.status(400).json({ error: 'The "pages" array is required' });
     }
+
+    const width = parseInt(viewport?.width, 10) || 1080;
+    const height = parseInt(viewport?.height, 10) || 1350;
+
+    const imageUrls = [];
+
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const templateFile = page.file;
+      const context = page.context || {};
+
+      const compiledTemplate = compileTemplate(`${templateBasePath}/${templateFile}`);
+      const htmlContent = compiledTemplate(context)
+        .replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/textfit\/2\.4\.0\/textFit\.min\.js/g, `http://localhost:${port}/textFit.min.js`);
+
+      const imageBuffer = await renderHtmlToBuffer(htmlContent, width, height);
+      
+      const filename = `${brand}-${templateName}-${templateFile}-${i+1}-${uuidv4()}.png`;
+      const url = await uploadToS3(imageBuffer, filename);
+      imageUrls.push(url);
+    }
+
+    return res.json({ urls: imageUrls });
 
   } catch (error) {
     console.error(`Render Template error for ${templateBasePath}:`, error);

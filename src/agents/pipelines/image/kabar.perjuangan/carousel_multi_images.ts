@@ -6,20 +6,77 @@ import { uploadToS3 } from '../../../../s3.js';
 import { generateMedia } from '../../../../media.js';
 import { insertQueueItem } from '../../../../db/queue.js';
 import { curateImages } from '../../../image-curator/index.js';
+import { marked } from 'marked';
+
+// Helper for Roman numerals
+const toRoman = (num: number) => {
+  const roman: Record<string, number> = {
+    M: 1000, CM: 900, D: 500, CD: 400, C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1
+  };
+  let str = '';
+  for (let i of Object.keys(roman)) {
+    let q = Math.floor(num / roman[i]);
+    num -= q * roman[i];
+    str += i.repeat(q);
+  }
+  return str;
+};
 
 export const carouselMultiImagesTemplateConfig = {
   id: 'image:kabar.perjuangan:carousel_multi_images',
   name: 'Carousel Multi Images (kabar.perjuangan)',
   description: 'A 4-slide breaking news carousel with a cover image and 3 content slides each with its own curated image.',
+  uiSchema: [
+    { name: 'title', type: 'text', label: 'Title (supports **bold**)', aiContext: 'This is the title of a sensational news post. It should be scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style targeted at Gen Z Indonesians.' },
+    { name: 'coverImageUrl', type: 'image', label: 'Cover Image' },
+    { name: 'slides', type: 'array', label: 'Slides', itemType: 'object', itemSchema: [
+      { name: 'text', type: 'text', label: 'Slide Text (supports **bold**)', aiContext: 'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.' },
+      { name: 'slide_image', type: 'image', label: 'Slide Background Image' }
+    ]}
+  ] as any[]
 };
 
 export async function generateCarouselMultiImagesMedia(templateData: any, settings: any): Promise<{ type: 'image' | 'video', url: string }[]> {
+  const pages: any[] = [];
+  
+  pages.push({
+    file: 'cover',
+    context: {
+      logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+      cover_image: templateData.coverImageUrl,
+      title: marked.parseInline(templateData.title || '')
+    }
+  });
+
+  if (templateData.slides) {
+    templateData.slides.forEach((slide: any, i: number) => {
+      pages.push({
+        file: 'slide',
+        context: {
+          cover_image: templateData.coverImageUrl,
+          slide_image: slide.slide_image,
+          text: marked.parse(slide.text || ''),
+          roman_number: toRoman(i + 1)
+        }
+      });
+    });
+  }
+
+  if (templateData.inputImages) {
+    templateData.inputImages.forEach((url: string) => {
+      pages.push({
+        file: 'image',
+        context: {
+          logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+          image_url: url
+        }
+      });
+    });
+  }
+
   const renderPayload = {
-    logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
-    cover_image: templateData.coverImageUrl,
-    title: templateData.title,
-    slides: templateData.slides, // already in { text, slide_image } format
-    input_images: templateData.inputImages || []
+    viewport: { width: 1080, height: 1350 },
+    pages
   };
 
   const renderedUrls = await generateMedia('/render/image/kabar.perjuangan/carousel_multi_images', renderPayload);
@@ -282,12 +339,34 @@ RULES:
 
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
 
+  const pages: any[] = [];
+  
+  pages.push({
+    file: 'cover',
+    context: {
+      logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+      cover_image: coverImageUrl,
+      title: marked.parseInline(templateData.title || '')
+    }
+  });
+
+  if (templateData.slides) {
+    templateData.slides.forEach((slide: any, i: number) => {
+      pages.push({
+        file: 'slide',
+        context: {
+          cover_image: coverImageUrl,
+          slide_image: slide.slide_image,
+          text: marked.parse(slide.text || ''),
+          roman_number: toRoman(i + 1)
+        }
+      });
+    });
+  }
+
   const renderPayload = {
-    logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
-    cover_image: coverImageUrl,
-    title: templateData.title,
-    slides: templateData.slides, // passing array of objects containing text and slide_image
-    input_images: []
+    viewport: { width: 1080, height: 1350 },
+    pages
   };
 
   const renderedUrls = await generateMedia('/render/image/kabar.perjuangan/carousel_multi_images', renderPayload);

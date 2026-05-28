@@ -2,10 +2,20 @@ import { PipelineContext, ResearchResult } from './utils.js';
 import { runCarouselDarkPipeline, carouselDarkTemplateConfig, generateCarouselDarkMedia } from './agents/pipelines/image/kabar.perjuangan/carousel_dark.js';
 import { runCarouselMultiImagesPipeline, carouselMultiImagesTemplateConfig, generateCarouselMultiImagesMedia } from './agents/pipelines/image/kabar.perjuangan/carousel_multi_images.js';
 
+export interface TemplateField {
+  name: string;
+  type: 'text' | 'image' | 'array';
+  label: string;
+  aiContext?: string;
+  itemType?: 'text' | 'object';
+  itemSchema?: TemplateField[];
+}
+
 export interface TemplateConfig {
   id: string;
   name: string;
   description: string;
+  uiSchema?: TemplateField[];
   runPipeline: (context: PipelineContext, research: ResearchResult) => Promise<void>;
   regenerateMedia: (templateData: any, settings: any) => Promise<{ type: 'image' | 'video', url: string }[]>;
 }

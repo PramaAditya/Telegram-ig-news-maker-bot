@@ -37,6 +37,19 @@ const batchFile = ref<File | null>(null)
 const batchSubmitting = ref(false)
 const batchError = ref('')
 const batchFileInput = ref<HTMLInputElement | null>(null)
+const availableTemplates = ref<any[]>([])
+
+const fetchTemplates = async () => {
+  try {
+    const res = await fetch('/api/templates', { headers: getAuthHeaders() })
+    if (res.ok) {
+      availableTemplates.value = await res.json()
+      if (availableTemplates.value.length > 0) {
+        templateId.value = availableTemplates.value[0].id
+      }
+    }
+  } catch (e) {}
+}
 
 function parseCSV(str: string): string[][] {
   const result: string[][] = []
@@ -187,6 +200,7 @@ watch(() => connectionStore.activeConnectionId, () => {
 }, { immediate: true });
 
 onMounted(() => {
+  fetchTemplates()
   intervalId = setInterval(fetchActiveJobs, 5000)
   window.addEventListener('paste', handlePaste)
 })
@@ -345,9 +359,9 @@ const submitManual = async () => {
                   v-model="templateId"
                   class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-base bg-default text-default"
                 >
-                  <option value="image:kabar.perjuangan:carousel_dark">Carousel Dark (kabar.perjuangan)</option>
-                  <option value="image:kabar.perjuangan:carousel_multi_images">Carousel Multi Images (kabar.perjuangan)</option>
-                  <!-- Add more templates here in the future -->
+                  <option v-for="t in availableTemplates" :key="t.id" :value="t.id">
+                    {{ t.name }}
+                  </option>
                 </select>
               </div>
 

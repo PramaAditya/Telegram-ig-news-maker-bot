@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowLeft, Save, RefreshCw } from 'lucide-vue-next'
 import { getAuthHeaders, setPassword } from '../auth'
@@ -17,6 +17,16 @@ const loading = ref(true)
 const saving = ref(false)
 const generating = ref(false)
 const error = ref('')
+const availableTemplates = ref<any[]>([])
+
+const fetchTemplates = async () => {
+  try {
+    const res = await fetch('/api/templates', { headers: getAuthHeaders() })
+    if (res.ok) {
+      availableTemplates.value = await res.json()
+    }
+  } catch (e) {}
+}
 
 const openLightbox = (mediaArray: any[], index: number) => {
   const items = mediaArray.map(m => ({
@@ -46,11 +56,14 @@ const fetchPost = async () => {
     // Ensure templateData exists
     if (!post.value.templateData) post.value.templateData = {}
 
-    // Specific logic for interval template
-    if (post.value.templateId === 'image:kabar.perjuangan:carousel_dark') {
-      if (!post.value.templateData.slides) post.value.templateData.slides = ['', '']
-    } else if (post.value.templateId === 'image:kabar.perjuangan:carousel_multi_images') {
-      if (!post.value.templateData.slides) post.value.templateData.slides = [{ text: '', slide_image: '' }, { text: '', slide_image: '' }, { text: '', slide_image: '' }]
+    const templateConfig = availableTemplates.value.find(t => t.id === post.value.templateId)
+    if (templateConfig && templateConfig.uiSchema) {
+      // Initialize arrays based on schema if they don't exist
+      templateConfig.uiSchema.forEach((field: any) => {
+        if (field.type === 'array' && !post.value.templateData[field.name]) {
+          post.value.templateData[field.name] = []
+        }
+      })
     }
     
     error.value = ''
@@ -61,7 +74,10 @@ const fetchPost = async () => {
   }
 }
 
-onMounted(fetchPost)
+onMounted(async () => {
+  await fetchTemplates()
+  await fetchPost()
+})
 
 const saveChanges = async () => {
   saving.value = true
@@ -87,31 +103,34 @@ const saveChanges = async () => {
   }
 }
 
-const removeSlide = (index: number) => {
-  if (post.value.templateData.slides.length > 1) {
-    post.value.templateData.slides.splice(index, 1)
+const removeSlide = (fieldName: string, index: number) => {
+  if (post.value.templateData[fieldName] && post.value.templateData[fieldName].length > 1) {
+    post.value.templateData[fieldName].splice(index, 1)
   }
 }
 
-const addSlide = () => {
-  if (!post.value.templateData.slides) {
-    post.value.templateData.slides = []
+const addSlide = (field: any) => {
+  if (!post.value.templateData[field.name]) {
+    post.value.templateData[field.name] = []
   }
-  if (post.value.templateId === 'image:kabar.perjuangan:carousel_multi_images') {
-    post.value.templateData.slides.push({ text: '', slide_image: '' })
+  
+  if (field.itemType === 'object' && field.itemSchema) {
+    const newItem: any = {}
+    field.itemSchema.forEach((schemaField: any) => {
+      newItem[schemaField.name] = schemaField.type === 'array' ? [] : ''
+    })
+    post.value.templateData[field.name].push(newItem)
   } else {
-    post.value.templateData.slides.push('')
+    post.value.templateData[field.name].push('')
   }
 }
+
+const currentTemplateConfig = computed(() => {
+  return availableTemplates.value.find(t => t.id === post.value?.templateId)
+})
 
 const regenerateMedia = async () => {
-  // Hardcoded validation for interval template
-  if (post.value.templateId === 'image:kabar.perjuangan:carousel_dark' || post.value.templateId === 'image:kabar.perjuangan:carousel_multi_images') {
-    if (!post.value.templateData.title || !post.value.templateData.coverImageUrl || !post.value.templateData.slides || post.value.templateData.slides.length === 0) {
-      toast.add({ title: 'Title, Cover Image URL, and at least 1 Slide cannot be empty to regenerate.', color: 'error' })
-      return
-    }
-  }
+  // We can skip hardcoded validation for now, or just ensure arrays are not empty
   
   // First save the current draft so backend uses the latest text
   await saveChanges()
@@ -176,60 +195,78 @@ const regenerateMedia = async () => {
       <div class="bg-default shadow rounded-lg p-6">
         <h2 class="text-lg font-bold mb-4 text-default">Media Data (Template: {{ post.templateId }})</h2>
         
-        <div v-if="post.templateId === 'image:kabar.perjuangan:carousel_dark' || post.templateId === 'image:kabar.perjuangan:carousel_multi_images'">
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-default mb-2">Title (supports **bold**)</label>
-            <AiTextarea 
-              v-model="post.templateData.title" 
-              :rows="3"
-              guidancePlaceholder="e.g., make it more sensational, fix typo"
-              :aiContext="'This is the title of a sensational news post. It should be scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style targeted at Gen Z Indonesians.' + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
-            />
-          </div>
-
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-default mb-2">Cover Image</label>
-            <ImageUploader v-model="post.templateData.coverImageUrl" />
-          </div>
-
-          <div v-for="(_, i) in post.templateData.slides" :key="i" class="mb-6 relative bg-muted p-4 border border-default rounded-md">
-            <div class="flex justify-between items-center mb-2">
-              <label class="block text-sm font-medium text-default">Slide {{ Number(i) + 1 }} Text (supports **bold**)</label>
-              <button 
-                @click="removeSlide(Number(i))" 
-                class="text-error hover:text-error text-xs font-medium"
-                v-if="post.templateData.slides.length > 1"
-              >
-                Remove Slide
-              </button>
-            </div>
-            <AiTextarea 
-              v-if="post.templateId === 'image:kabar.perjuangan:carousel_multi_images'"
-              v-model="post.templateData.slides[i].text" 
-              :rows="4" 
-              guidancePlaceholder="e.g., summarize this better, fix typo"
-              :aiContext="'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.' + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
-            />
-            <AiTextarea 
-              v-else
-              v-model="post.templateData.slides[i]" 
-              :rows="4" 
-              guidancePlaceholder="e.g., summarize this better, fix typo"
-              :aiContext="'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.' + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
-            />
+        <div v-if="currentTemplateConfig && currentTemplateConfig.uiSchema">
+          <div v-for="field in currentTemplateConfig.uiSchema" :key="field.name" class="mb-6">
             
-            <div v-if="post.templateId === 'image:kabar.perjuangan:carousel_multi_images'" class="mt-4">
-              <label class="block text-sm font-medium text-default mb-2">Slide {{ Number(i) + 1 }} Background Image</label>
-              <ImageUploader v-model="post.templateData.slides[i].slide_image" />
-            </div>
-          </div>
+            <template v-if="field.type === 'text'">
+              <label class="block text-sm font-medium text-default mb-2">{{ field.label }}</label>
+              <AiTextarea 
+                v-model="post.templateData[field.name]" 
+                :rows="3"
+                guidancePlaceholder="e.g., make it more sensational, fix typo"
+                :aiContext="field.aiContext + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+              />
+            </template>
 
-          <button 
-            @click="addSlide" 
-            class="w-full mb-6 flex justify-center items-center px-4 py-2 border border-dashed border-default shadow-sm text-sm font-medium rounded-md text-muted bg-default hover:bg-muted focus:outline-none"
-          >
-            + Add Slide
-          </button>
+            <template v-else-if="field.type === 'image'">
+              <label class="block text-sm font-medium text-default mb-2">{{ field.label }}</label>
+              <ImageUploader v-model="post.templateData[field.name]" />
+            </template>
+
+            <template v-else-if="field.type === 'array'">
+              <label class="block text-sm font-medium text-default mb-4">{{ field.label }}</label>
+              
+              <div v-for="(_, i) in post.templateData[field.name]" :key="i" class="mb-6 relative bg-muted p-4 border border-default rounded-md">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-sm font-medium text-default">Item {{ Number(i) + 1 }}</span>
+                  <button 
+                    @click="removeSlide(field.name, Number(i))" 
+                    class="text-error hover:text-error text-xs font-medium"
+                    v-if="post.templateData[field.name].length > 1"
+                  >
+                    Remove Item
+                  </button>
+                </div>
+
+                <!-- Array Item is a primitive (e.g. string) -->
+                <template v-if="field.itemType === 'text'">
+                  <label v-if="field.itemSchema && field.itemSchema[0]" class="block text-sm font-medium text-default mb-2">{{ field.itemSchema[0].label }}</label>
+                  <AiTextarea 
+                    v-model="post.templateData[field.name][i]" 
+                    :rows="4" 
+                    guidancePlaceholder="e.g., summarize this better, fix typo"
+                    :aiContext="(field.itemSchema && field.itemSchema[0] ? field.itemSchema[0].aiContext : '') + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+                  />
+                </template>
+
+                <!-- Array Item is an object -->
+                <template v-else-if="field.itemType === 'object' && field.itemSchema">
+                  <div v-for="subField in field.itemSchema" :key="subField.name" class="mt-4">
+                    <template v-if="subField.type === 'text'">
+                      <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
+                      <AiTextarea 
+                        v-model="post.templateData[field.name][i][subField.name]" 
+                        :rows="4" 
+                        guidancePlaceholder="e.g., summarize this better, fix typo"
+                        :aiContext="subField.aiContext + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+                      />
+                    </template>
+                    <template v-else-if="subField.type === 'image'">
+                      <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
+                      <ImageUploader v-model="post.templateData[field.name][i][subField.name]" />
+                    </template>
+                  </div>
+                </template>
+              </div>
+
+              <button 
+                @click="addSlide(field)" 
+                class="w-full flex justify-center items-center px-4 py-2 border border-dashed border-default shadow-sm text-sm font-medium rounded-md text-muted bg-default hover:bg-muted focus:outline-none"
+              >
+                + Add {{ field.label }} Item
+              </button>
+            </template>
+          </div>
         </div>
 
         <div v-else class="mb-6">
