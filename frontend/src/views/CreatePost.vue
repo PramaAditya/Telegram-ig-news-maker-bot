@@ -17,7 +17,7 @@ const activeTab = ref('ai')
 
 const textInput = ref('')
 const mediaUrls = ref<string[]>([])
-const templateId = ref('image:kabar.perjuangan:carousel_dark')
+const templateId = ref('image:kabar.perjuangan:carousel_multi_images')
 const submitting = ref(false)
 const error = ref('')
 const activeJobs = ref<any[]>([])
@@ -346,6 +346,7 @@ const submitManual = async () => {
                   class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-base bg-default text-default"
                 >
                   <option value="image:kabar.perjuangan:carousel_dark">Carousel Dark (kabar.perjuangan)</option>
+                  <option value="image:kabar.perjuangan:carousel_multi_images">Carousel Multi Images (kabar.perjuangan)</option>
                   <!-- Add more templates here in the future -->
                 </select>
               </div>

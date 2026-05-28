@@ -63,7 +63,7 @@ onMounted(async () => {
 });
 
 const convertIdea = async (ideaId: number) => {
-  const templateId = selectedTemplates.value[ideaId] || 'image:kabar.perjuangan:carousel_dark';
+  const templateId = selectedTemplates.value[ideaId] || 'image:kabar.perjuangan:carousel_multi_images';
   try {
     await apiFetch(`/api/ideas/${ideaId}/convert`, {
       method: 'POST',

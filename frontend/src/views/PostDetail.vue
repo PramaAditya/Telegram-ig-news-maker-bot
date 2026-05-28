@@ -49,6 +49,8 @@ const fetchPost = async () => {
     // Specific logic for interval template
     if (post.value.templateId === 'image:kabar.perjuangan:carousel_dark') {
       if (!post.value.templateData.slides) post.value.templateData.slides = ['', '']
+    } else if (post.value.templateId === 'image:kabar.perjuangan:carousel_multi_images') {
+      if (!post.value.templateData.slides) post.value.templateData.slides = [{ text: '', slide_image: '' }, { text: '', slide_image: '' }, { text: '', slide_image: '' }]
     }
     
     error.value = ''
@@ -95,12 +97,16 @@ const addSlide = () => {
   if (!post.value.templateData.slides) {
     post.value.templateData.slides = []
   }
-  post.value.templateData.slides.push('')
+  if (post.value.templateId === 'image:kabar.perjuangan:carousel_multi_images') {
+    post.value.templateData.slides.push({ text: '', slide_image: '' })
+  } else {
+    post.value.templateData.slides.push('')
+  }
 }
 
 const regenerateMedia = async () => {
   // Hardcoded validation for interval template
-  if (post.value.templateId === 'image:kabar.perjuangan:carousel_dark') {
+  if (post.value.templateId === 'image:kabar.perjuangan:carousel_dark' || post.value.templateId === 'image:kabar.perjuangan:carousel_multi_images') {
     if (!post.value.templateData.title || !post.value.templateData.coverImageUrl || !post.value.templateData.slides || post.value.templateData.slides.length === 0) {
       toast.add({ title: 'Title, Cover Image URL, and at least 1 Slide cannot be empty to regenerate.', color: 'error' })
       return
@@ -170,7 +176,7 @@ const regenerateMedia = async () => {
       <div class="bg-default shadow rounded-lg p-6">
         <h2 class="text-lg font-bold mb-4 text-default">Media Data (Template: {{ post.templateId }})</h2>
         
-        <div v-if="post.templateId === 'image:kabar.perjuangan:carousel_dark'">
+        <div v-if="post.templateId === 'image:kabar.perjuangan:carousel_dark' || post.templateId === 'image:kabar.perjuangan:carousel_multi_images'">
           <div class="mb-6">
             <label class="block text-sm font-medium text-default mb-2">Title (supports **bold**)</label>
             <AiTextarea 
@@ -198,11 +204,24 @@ const regenerateMedia = async () => {
               </button>
             </div>
             <AiTextarea 
+              v-if="post.templateId === 'image:kabar.perjuangan:carousel_multi_images'"
+              v-model="post.templateData.slides[i].text" 
+              :rows="4" 
+              guidancePlaceholder="e.g., summarize this better, fix typo"
+              :aiContext="'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.' + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+            />
+            <AiTextarea 
+              v-else
               v-model="post.templateData.slides[i]" 
               :rows="4" 
               guidancePlaceholder="e.g., summarize this better, fix typo"
               :aiContext="'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.' + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
             />
+            
+            <div v-if="post.templateId === 'image:kabar.perjuangan:carousel_multi_images'" class="mt-4">
+              <label class="block text-sm font-medium text-default mb-2">Slide {{ Number(i) + 1 }} Background Image</label>
+              <ImageUploader v-model="post.templateData.slides[i].slide_image" />
+            </div>
           </div>
 
           <button 
