@@ -113,7 +113,7 @@ export async function runCarouselDarkPipeline(context: PipelineContext, research
   const bannedWords = settings.bannedWords || [];
   
   const bannedWordsPrompt = bannedWords.length > 0 
-    ? `\n\nCRITICAL MODERATION RULE:\nYou MUST NOT use the following words in your output: ${bannedWords.map((w: any) => w.word).join(', ')}. Use safe synonyms instead, or if you absolutely must convey the exact concept, use the provided safe replacements: ${bannedWords.map((w: any) => `${w.word}->${w.replacement}`).join(', ')}.`
+    ? `\n\nCRITICAL MODERATION RULE:\nYou are allowed to discuss sensitive topics, but you MUST replace specific words with their safe alternatives for spelling. Whenever you would normally write one of the following words, you MUST use its exact replacement instead:\n${bannedWords.map((w: any) => `- Replace "${w.word}" with "${w.replacement}"`).join('\n')}`
     : '';
 
   const imageMediaItems = processedMedia ? processedMedia.filter(m => m.type === 'image' && m.buffer) : [];

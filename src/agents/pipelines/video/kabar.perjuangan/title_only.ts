@@ -73,18 +73,50 @@ export async function generateTitleOnlyMedia(templateData: any, settings: any): 
     if (!pngRes.ok) throw new Error('Failed to fetch title PNG');
     await fs.writeFile(pngPath, Buffer.from(await pngRes.arrayBuffer()));
 
+    console.log(`[Video Generator] Probing video dimensions...`);
+    const metadata = await new Promise<ffmpeg.FfprobeData>((resolve, reject) => {
+      ffmpeg.ffprobe(videoPath, (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+
+    const videoStream = metadata.streams.find(s => s.codec_type === 'video');
+    const width = videoStream?.width || 0;
+    const height = videoStream?.height || 0;
+
+    // Check if the video is already 9:16 (e.g. 1080x1920 or 720x1280)
+    const isAlready9x16 = width > 0 && height > 0 && Math.abs((width / height) - (9 / 16)) < 0.01;
+    
+    let complexFilter: string[];
+    if (width === 1080 && height === 1920) {
+      console.log(`[Video Generator] Video is exactly 1080x1920. Applying direct overlay.`);
+      complexFilter = [
+        "[0:v][1:v]overlay=0:0:enable='between(t,0,5)'[outv]"
+      ];
+    } else if (isAlready9x16) {
+      console.log(`[Video Generator] Video is 9:16 (${width}x${height}). Scaling to 1080x1920 without blur.`);
+      complexFilter = [
+        '[0:v]scale=1080:1920[scaled]',
+        "[scaled][1:v]overlay=0:0:enable='between(t,0,5)'[outv]"
+      ];
+    } else {
+      console.log(`[Video Generator] Video is ${width}x${height}. Applying 9:16 normalization with blurred background.`);
+      complexFilter = [
+        '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:20[bg]',
+        '[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg]',
+        '[bg][fg]overlay=(W-w)/2:(H-h)/2[merged]',
+        "[merged][1:v]overlay=0:0:enable='between(t,0,5)'[outv]"
+      ];
+    }
+
     console.log(`[Video Generator] Running FFmpeg composition...`);
     
     await new Promise<void>((resolve, reject) => {
       ffmpeg()
         .input(videoPath)
         .input(pngPath)
-        .complexFilter([
-          '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:20[bg]',
-          '[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg]',
-          '[bg][fg]overlay=(W-w)/2:(H-h)/2[merged]',
-          "[merged][1:v]overlay=0:0:enable='between(t,0,5)'[outv]"
-        ])
+        .complexFilter(complexFilter)
         .outputOptions([
           '-map [outv]',
           '-map 0:a?', // map audio if present
@@ -93,7 +125,8 @@ export async function generateTitleOnlyMedia(templateData: any, settings: any): 
           '-crf 23',
           '-c:a aac',
           '-b:a 128k',
-          '-movflags +faststart'
+          '-movflags +faststart',
+          '-threads 0'
         ])
         .output(outPath)
         .on('end', () => resolve())
@@ -131,7 +164,7 @@ export async function runTitleOnlyPipeline(context: PipelineContext, research: R
   const bannedWords = settings.bannedWords || [];
   
   const bannedWordsPrompt = bannedWords.length > 0 
-    ? `\n\nCRITICAL MODERATION RULE:\nYou MUST NOT use the following words in your output: ${bannedWords.map((w: any) => w.word).join(', ')}.`
+    ? `\n\nCRITICAL MODERATION RULE:\nYou are allowed to discuss sensitive topics, but you MUST replace specific words with their safe alternatives for spelling. Whenever you would normally write one of the following words, you MUST use its exact replacement instead:\n${bannedWords.map((w: any) => `- Replace "${w.word}" with "${w.replacement}"`).join('\n')}`
     : '';
 
   console.log(`[Phase 2] Generating title and caption with Gemini for video`);
