@@ -290,6 +290,45 @@ Your task is to parse the gathered facts into final components for an Instagram 
       console.warn(`[Phase 3.5] Failed to curate or upload image for slide ${i+1}:`, e.message);
     }
     
+    if (!slide_image) {
+      console.log(`[Phase 3.5] No image found for slide ${i + 1}. Falling back to AI image generation...`);
+      let generatedFileBuffer: Buffer | null = null;
+      const maxRetries = 3;
+      const slidePromptSuffix = "masterpiece professional photography, realistic, photorealistic, documentary style, highly detailed, sharp focus, 4k resolution. NO cartoon, NO drawing, NO illustration, NO text.";
+      const imageGenerationPrompt = `${slide.image_search_query}, ${slidePromptSuffix}`;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`[Phase 3.5] Slide ${i + 1} AI Image generation attempt ${attempt}...`);
+          const { image } = await generateImage({
+            model: google.image('gemini-3.1-flash-image-preview'),
+            prompt: imageGenerationPrompt,
+            aspectRatio: '1:1'
+          });
+          
+          if (image && image.base64) {
+            generatedFileBuffer = Buffer.from(image.base64, 'base64');
+            break;
+          }
+        } catch (error: any) {
+          console.warn(`[Phase 3.5] Slide ${i + 1} AI Image generation failed on attempt ${attempt}:`, error.message);
+          if (attempt < maxRetries) {
+            const delay = Math.pow(2, attempt) * 1000;
+            await new Promise(res => setTimeout(res, delay));
+          }
+        }
+      }
+
+      if (generatedFileBuffer) {
+        console.log(`[Phase 3.5] Uploading generated image for slide ${i + 1}...`);
+        try {
+          slide_image = await uploadToS3(generatedFileBuffer, 'image/jpeg', '.jpg') || '';
+        } catch (uploadError: any) {
+          console.warn(`[Phase 3.5] Failed to upload generated image for slide ${i + 1}:`, uploadError.message);
+        }
+      }
+    }
+
     curatedSlides.push({
       text: slide.text,
       slide_image
