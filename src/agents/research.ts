@@ -89,13 +89,10 @@ export async function runResearchPhase(
     telegram,
     statusMsg,
   } = context;
-
-  console.log(`[Phase 1] Researching: ${userInput}`);
-
   // Research prompt: strictly neutral 5W1H
   const researchSystemPrompt =
     baseSystemPrompt +
-    `\n\nRESEARCH GUIDELINES:\nMaintain a strictly neutral, objective, and highly informative investigative journalistic tone. Focus on gathering factual news, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How). Do not apply any political bias, emotive language, or specific framing during the research phase.\n\nYour task is to gather facts on the user's input. If the user input contains an http/https URL, you MUST prioritize using the \`scrapeUrl\` tool on that specific URL to read its content. If it's just a topic or keywords, use the \`searchWeb\` tool. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.\n\nIMPORTANT IMAGE CURATION:\nIf you find highly relevant news photographs or editorial images within the scraped markdown content, list them at the end of your summary under a "### Relevant Images" section using markdown image syntax: ![description](url). Do NOT include logos, icons, avatars, promotional banners, or irrelevant UI elements.`;
+    `\n\nRESEARCH GUIDELINES:\nMaintain a strictly neutral, objective, and highly informative investigative journalistic tone. Focus on gathering factual news, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How). Do not apply any political bias, emotive language, or specific framing during the research phase.\n\nYour task is to gather facts on the user's input. If the user input contains an http/https URL, you MUST prioritize using the \`scrapeUrl\` tool on that specific URL to read its content. If it's just a topic or keywords, use the \`searchWeb\` tool. If there are media attachments, analyze them to gather context. Return a comprehensive summary of all relevant facts. Ensure your web searches specify the current date (especially the year ${currentYear}) to get the latest news.\n\nIMPORTANT: Limit your tool usage to a maximum of 3 times. Once you have enough context, immediately output your final summary text.\n\nIMPORTANT IMAGE CURATION:\nIf you find highly relevant news photographs or editorial images within the scraped markdown content, list them at the end of your summary under a "### Relevant Images" section using markdown image syntax: ![description](url). Do NOT include logos, icons, avatars, promotional banners, or irrelevant UI elements.`;
 
   const messageContent: any[] = [
     { type: "text", text: `User Input: ${userInput}` },
@@ -350,7 +347,7 @@ export async function runResearchPhase(
             },
           }),
         },
-        stopWhen: stepCountIs(3),
+        stopWhen: stepCountIs(5),
       });
 
       researchText = response.text;
