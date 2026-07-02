@@ -1,137 +1,142 @@
-# Instagram News Maker Bot
+<p align="center">
+  <samp>Instagram News Maker Bot</samp>
+</p>
 
-An automated news curation and publishing system built on Node.js. It acts as both a Telegram bot (for quick submissions on-the-go) and a full web-based CMS for generating, reviewing, editing, and publishing news carousels to Instagram via Buffer.
+<p align="center">
+  <img src="https://img.shields.io/badge/Node.js-v20+-blue?style=flat-square&logo=node.js" alt="Node Version">
+  <img src="https://img.shields.io/badge/Gemini-3.5_Pro-orange?style=flat-square&logo=google" alt="Gemini Model">
+  <img src="https://img.shields.io/badge/Vue.js-v3.5-4fc08d?style=flat-square&logo=vuedotjs" alt="Vue Version">
+  <img src="https://img.shields.io/badge/Drizzle_ORM-v0.45-green?style=flat-square" alt="Drizzle ORM">
+  <img src="https://img.shields.io/badge/Docker-Supported-blue?style=flat-square&logo=docker" alt="Docker">
+  <img src="https://img.shields.io/badge/License-ISC-red?style=flat-square" alt="License">
+</p>
 
-Powered by AI (Gemini), it researches topics, writes Gen-Z targeted news slides, and dynamically renders image carousels.
+<h1 align="center">ig-news-maker-bot</h1>
 
----
-
-## 🌟 Core Features
-
-- **Multi-channel Ingestion:** Submit topics, raw text, or news URLs via the Telegram Bot or through the built-in Web Dashboard.
-- **AI-Powered Pipeline (Agent):** Uses Firecrawl to read URLs, and Gemini to summarize facts, write punchy Indonesian captions, and determine important highlight words.
-- **Image Generation:** Upload reference cover images, generate enhancements via AI, and render complete Instagram carousel sequences.
-- **Full Web CMS (Vue SPA):** 
-  - Manage the **Publishing Queue** (Reorder, Delete, Publish Now).
-  - Edit draft posts via the **Post Detail** view (Change title, slides text, and upload new cover images).
-  - Regenerate images instantly from the CMS after editing slide text.
-  - Image copying & pasting support.
-  - Interactive media lightbox powered by Fancybox.
-- **Dynamic Database Settings:** Control cron intervals, API tokens, and watermarks directly from the UI without restarting your `.env` configuration.
-- **Smart Background Worker:** A robust Node.js worker handles API generation asynchronously and strictly follows database-defined publish intervals (e.g., publish every 60 minutes between 06:00 and 23:00).
-
----
-
-## 🛠 Tech Stack
-
-### Backend
-- **Node.js + Express** (API Server & File Serving)
-- **Telegraf** (Telegram Bot interaction)
-- **Drizzle ORM + PostgreSQL** (Database queue, jobs, and settings management)
-- **node-cron** (Background worker automation)
-- **Vercel AI SDK** (Integration with Gemini models)
-- **Multer** (File uploads & S3 Integration)
-
-### Frontend (SPA CMS)
-- **Vue 3 + Vite**
-- **Tailwind CSS v4** (Styling)
-- **Vue Router** (Client-side routing)
-- **Lucide Vue Next** (Icons)
-- **@fancyapps/ui** (Media Lightbox)
+<p align="center">
+  <b>An automated news curation, research, and carousel generation pipeline.</b>
+  <br>
+  Submit topics or web links via Telegram or the Web CMS, let AI conduct deep research,
+  and automatically publish rendered news slides directly to Instagram.
+</p>
 
 ---
 
-## ⚙️ Setup & Installation
+### 💻 Hero Demo
+
+```text
+$ npm run start:worker
+
+[Worker] Starting background worker (Concurrency: 3)...
+[Worker] Auto-publish worker started (Checking every minute against DB settings).
+[Worker] Picked up job ID 108 (pending: 0)
+[Phase 1] Researching URL: https://news.example.com/indonesia-tech-boom
+[Research] Extracted core 5W1H facts via Firecrawl & Gemini-3.1-Pro-Preview
+[Phase 2] Generating slide copy & visual prompts for 'Carousel Dark' template
+[Media] Triggering Puppeteer rendering engine for 'kabar.perjuangan/carousel_dark'
+[S3] Uploaded 3 rendered PNGs to S3 bucket (S3_BUCKET/posts/108/cover.jpg)
+[Queue] Sensationally crafted slide sequence pushed to DB publish queue (sort_order: 1)
+[Cron] Slot matched (Monday 14:00) for Connection: Kabar Perjuangan
+[Cron] Auto-publishing post ID 108 to Buffer GraphQL API
+✓ [Buffer] Successfully scheduled Instagram post with 3 slides!
+```
+
+---
+
+## 🛠 Why ig-news-maker-bot?
+
+Bypass manual design, research, formatting, and publishing entirely. Transition from raw news links or ideas to beautiful, styled, multi-slide Instagram posts in seconds.
+
+| Feature | ig-news-maker-bot | Traditional Workflow |
+| :--- | :--- | :--- |
+| **Research & Draft** | ✅ Automated via Exa/Firecrawl + Gemini | Manual googling + doc drafting |
+| **Visual Design** | ✅ Dynamic HTML/CSS Puppeteer Renderer | Manual Photoshop/Figma template |
+| **Ingestion** | ✅ Telegram Bot & Web CMS | Disjointed note-taking apps |
+| **Publishing** | ✅ Automated scheduling via Buffer API | Manual phone upload & captioning |
+
+---
+
+## 📖 Minimum Viable Knowledge
+
+Before you deploy or customize, keep these architectural pillars in mind:
+
+* **Telegram is Ingestion, Web is CMS:** Submit raw thoughts or news URLs on-the-go via the Telegram bot; use the dashboard to review, edit, and reorder.
+* **Strict Censorship / Moderation:** Define banned terms & replacements in the database settings. The AI automatically scrubs these to prevent Instagram shadowbans.
+* **Schedules Drive the Cron:** The worker polls the DB every minute. Posts publish only when a custom schedule or a dynamic connection slot matches the local Jakarta clock.
+* **Media Re-generation is Instant:** Adjust slide copy in the Post Detail page, click "Regenerate Media", and the Puppeteer worker re-renders identical visuals with new text in seconds.
+
+---
+
+## ⚙️ Quick Start
 
 ### 1. Prerequisites
-- Docker & Docker Compose (Recommended)
-- PostgreSQL Database
-- Telegram Bot Token
-- Buffer API Token
-- Gemini API Key
-- S3 Compatible Storage (for image hosting)
+Ensure you have the following ready:
+* Node.js v20+ & PostgreSQL database
+* S3-compatible object storage
+* Gemini API Key & Telegram Bot Token
+* Buffer API Token & Channel ID
 
-### 2. Local Setup (Without Docker)
-1. Clone the repo and run `npm install`.
-2. Copy `.env.example` to `.env` and fill the variables.
-3. Push the database schema:
-   ```bash
-   npx drizzle-kit push
-   ```
-4. Build the Frontend SPA:
-   ```bash
-   cd frontend
-   npm install
-   npm run build
-   ```
-   *(This bundles the Vue app into the backend's `/public` folder).*
-5. Start the bot, API server, and worker:
-   ```bash
-   npm run start
-   ```
+### 2. Environment Configuration
+Create a `.env` file in the root directory:
+```env
+POSTGRES_URL=postgresql://user:pass@host:5432/db
+GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_key
+LIGHT_MODEL=gemini-2.5-flash
+DASHBOARD_PASSWORD=secure_admin_pass
+TRIGGER_API_KEY=auth_token_for_trigger
+S3_ENDPOINT=https://your-s3-endpoint
+S3_ACCESS_KEY_ID=access_key
+S3_SECRET_ACCESS_KEY=secret_key
+S3_BUCKET=ig-news-bot
+S3_PUBLIC_URL_BASE=https://cdn.example.com
+```
 
-### 3. Production Deployment (Docker / Dokploy)
-The repository includes a multi-stage `Dockerfile` that automatically:
-1. Builds the Vue frontend using Vite.
-2. Sets up the Node.js backend (including `ffmpeg` for media handling).
-3. Serves both the backend API and frontend SPA on port `3000`.
+### 3. Local Installation & Run
+Configure and launch the application in three commands:
+```bash
+# Install backend/frontend dependencies & push DB schema
+npm install && cd frontend && npm install && npm run build && cd ..
+npx drizzle-kit push
+npm run start
+```
 
-To deploy:
+### 4. Docker Deployment (Compose)
+To spin up the entire multi-container stack (Bot, API, Web, Puppeteer, Subtitles):
 ```bash
 docker-compose up --build -d
 ```
 
 ---
 
-## 🗄️ Project Architecture
+## 🗄️ Project Landscape
 
+```text
+                  ┌─────────────────┐
+                  │  Telegram Bot   │ ◄─── (Ingestion on-the-go)
+                  └────────┬────────┘
+                           │
+                           ▼
+  ┌──────────────┐   ┌──────────────┐   ┌─────────────────┐
+  │  Web App SPA │──►│Jobs & Queue  │──►│  Agent Worker   │──► [Firecrawl / Exa]
+  │  (Vue3 CMS)  │   │  (Postgres)  │   │(Gemini + S3/DB) │──► [Gemini Research]
+  └──────────────┘   └──────────────┘   └────────┬────────┘
+                                                 │
+                                                 ▼
+  ┌──────────────┐   ┌──────────────┐   ┌────────┴────────┐
+  │ Instagram via│◄──│ Cron Trigger │◄──│Puppeteer Render │
+  │  Buffer API  │   │ (Posting)    │   │ (Media Service) │
+  └──────────────┘   └──────────────┘   └─────────────────┘
 ```
-ig-news-maker-bot/
-├── docker-compose.yml
-├── Dockerfile
-├── drizzle.config.ts
-├── frontend/               # Vue 3 SPA
-│   ├── src/
-│   │   ├── auth.ts         # Secure localStorage token handling
-│   │   ├── components/     # Reusable UI (ImageUploader, PasswordInput)
-│   │   ├── views/          # Pages (Dashboard, CreatePost, Settings, PostDetail)
-│   │   └── main.ts         # Vue Router config
-├── src/                    # Node.js Backend
-│   ├── agent.ts            # AI Pipeline (Firecrawl + Gemini)
-│   ├── bot.ts              # Telegraf Telegram Bot Listener
-│   ├── buffer.ts           # Buffer GraphQL API integration
-│   ├── image.ts            # External Image Render Engine caller
-│   ├── s3.ts               # AWS S3 Uploads
-│   ├── server.ts           # Express API endpoints & Static File server
-│   ├── worker.ts           # Background Cron Job processor
-│   └── db/
-│       ├── index.ts        # Postgres connection
-│       ├── schema.ts       # Drizzle Tables (queue, jobs, settings)
-│       └── settings.ts     # Global Settings helper with .env fallback
-```
+
+The codebase is organized into several lightweight modules:
+* `src/bot.ts` — Receives text/image inputs via Telegram, saves them as Ideas, and registers jobs.
+* `src/server.ts` — Exposes Express API endpoints for the Vue 3 Web CMS and custom publish triggers.
+* `src/worker.ts` — Orchestrates background news generation, Puppeteer renders, and cron-scheduled posts.
+* `src/db/schema.ts` — Drizzle definitions of global settings, user accounts, publish queues, and jobs.
+* `services/` — Independent microservices for HTML media-rendering (`puppeteer`) and subtitle generation.
 
 ---
 
-## 💻 Web Dashboard Usage
-
-Access the dashboard by navigating to the server's URL (e.g., `http://localhost:3000`).
-The frontend is protected by a password mechanism. Upon loading, the browser will prompt you for the `DASHBOARD_PASSWORD` (which corresponds to your database settings or `.env`).
-
-### Available Pages:
-1. **Queue (`/`)**: View pending carousels, reorder them, force-publish, or delete them. Includes a media lightbox for previewing slides.
-2. **Create New (`/create`)**: Manually trigger the AI agent by pasting a topic/URL and an optional reference image. The job will appear in the realtime Processing Jobs monitor.
-3. **Settings (`/settings`)**: Dynamically update global settings (Telegram Token, Buffer Keys, Cron Intervals) without restarting the container.
-4. **Post Detail (`/post/:id`)**: The Editor CMS.
-   - Adjust the AI-generated Title and Cover Image.
-   - Add, edit, or remove slides dynamically.
-   - Click **Regenerate Media Grid** to re-render the images with your new text/titles without changing the core content.
-
----
-
-## 🔄 How the Automation Loop Works
-
-1. **Ingestion**: A user sends a message to the Telegram bot or submits the `CreatePost` form.
-2. **Jobs Table**: The request is logged into the `jobs` table with a `pending` status.
-3. **Agent Worker**: `src/worker.ts` constantly listens for pending jobs. When found, it claims the job and runs `agent.ts`.
-4. **AI Generation**: `agent.ts` researches the topic, generates the text, renders the images, uploads them to S3, and saves the final result to the `queue` table.
-5. **Publish Cron**: Every minute, `worker.ts` checks the `settings` table. If the current time is within the allowed operating hours, and enough time has passed since the last post, it takes the top item from the `queue` table and publishes it to Instagram via Buffer.
+<p align="center">
+  <sub>Licensed under the ISC License. Made by Prama Aditya.</sub>
+</p>
