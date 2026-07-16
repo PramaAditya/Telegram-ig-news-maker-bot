@@ -225,7 +225,7 @@ export async function runTitleOnlyPipeline(context: PipelineContext, research: R
   // Telegram limits video size, just send message with link
   await withRetry(() => telegram.sendMessage(chatId, finalCaption + `\n\nPreview Video: ${finalVideoUrl}`, { reply_to_message_id: messageId }));
 
-  await insertQueueItem({
+  const [inserted] = await insertQueueItem({
     connectionId: settings.id,
     templateId: titleOnlyTemplateConfig.id,
     templateData: templateData,
@@ -235,6 +235,18 @@ export async function runTitleOnlyPipeline(context: PipelineContext, research: R
     researchResult: 'Video auto-generated.'
   });
 
-  await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Video berhasil dibuat dan masuk Queue untuk di-publish!'));
+  await withRetry(() => telegram.editMessageText(
+    statusMsg.chat.id,
+    statusMsg.message_id,
+    undefined,
+    '✅ Video berhasil dibuat dan masuk Queue untuk di-publish!',
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🔗 Lihat Post', url: `${process.env.APP_URL}/post/${inserted.id}` }]
+        ]
+      }
+    }
+  ));
   console.log(`[Done] Video Pipeline finished successfully.`);
 }

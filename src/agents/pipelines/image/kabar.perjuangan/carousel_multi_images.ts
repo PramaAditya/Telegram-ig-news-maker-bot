@@ -460,7 +460,7 @@ RULES:
   templateData.coverImageUrl = coverImageUrl; 
   templateData.inputImages = [];
   
-  await insertQueueItem({
+  const [inserted] = await insertQueueItem({
     connectionId: settings.id,
     templateId: carouselMultiImagesTemplateConfig.id,
     templateData: templateData,
@@ -470,6 +470,18 @@ RULES:
     researchResult: researchText
   });
 
-  await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✅ Berhasil diselesaikan dan masuk Queue untuk di-publish!'));
+  await withRetry(() => telegram.editMessageText(
+    statusMsg.chat.id,
+    statusMsg.message_id,
+    undefined,
+    '✅ Berhasil diselesaikan dan masuk Queue untuk di-publish!',
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🔗 Lihat Post', url: `${process.env.APP_URL}/post/${inserted.id}` }]
+        ]
+      }
+    }
+  ));
   console.log(`[Done] Pipeline finished successfully.`);
 }
