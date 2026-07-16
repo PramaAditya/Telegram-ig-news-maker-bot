@@ -7,6 +7,7 @@ import { jobsTable, ideasTable } from './db/schema.js';
 import { getGlobalSettings, getConnections } from './db/settings.js';
 import { TEMPLATES } from './templates.js';
 import { eq } from 'drizzle-orm';
+import { InteractiveMenu } from './utils/interactiveMenu.js';
 import dns from 'dns';
 import { uploadToS3 } from './s3.js';
 import fs from 'fs/promises';
@@ -82,15 +83,10 @@ async function promptConnectionSelection(ctx: any, ideaId: number) {
   if (connections.length === 0) {
     return ctx.reply('No connections configured. Please set up a connection in the dashboard first.');
   }
-
   const buttons = connections.map(conn => [{ text: conn.name, callback_data: `select_conn_${ideaId}_${conn.id}` }]);
   buttons.push([{ text: '❌ Cancel', callback_data: `cancel_idea_${ideaId}` }]);
 
-  await ctx.reply('Which account should I queue this idea for?', {
-    reply_markup: {
-      inline_keyboard: buttons
-    }
-  });
+  await InteractiveMenu.send(ctx, 'Which account should I queue this idea for?', buttons);
 }
 
 async function askForTemplate(ctx: any, ideaId: number) {
@@ -103,17 +99,9 @@ async function askForTemplate(ctx: any, ideaId: number) {
   const messageText = 'Pilih template yang ingin digunakan:';
   
   if (ctx.callbackQuery) {
-    await ctx.editMessageText(messageText, {
-      reply_markup: {
-        inline_keyboard: templateButtons
-      }
-    });
+    await InteractiveMenu.update(ctx, messageText, templateButtons);
   } else {
-    await ctx.reply(messageText, {
-      reply_markup: {
-        inline_keyboard: templateButtons
-      }
-    });
+    await InteractiveMenu.send(ctx, messageText, templateButtons);
   }
 }
 
@@ -149,14 +137,10 @@ bot.on(message('text'), async (ctx) => {
     }).returning();
     
     if (defaultConnectionId) {
-       await ctx.reply('Ide tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
-            [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
-          ]
-        }
-      });
+       await InteractiveMenu.send(ctx, 'Ide tersimpan. Apakah Anda ingin membuat konten dari ide ini?', [
+         [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
+         [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
+       ]);
     } else {
       await promptConnectionSelection(ctx, idea.id);
     }
@@ -249,15 +233,10 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
             }).returning();
             
             if (defaultConnectionId) {
-              await ctx.reply('Ide (album) tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
-                reply_to_message_id: groupData.items[0].msgId,
-                reply_markup: {
-                  inline_keyboard: [
-                    [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
-                    [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
-                  ]
-                }
-              });
+              await InteractiveMenu.send(ctx, 'Ide (album) tersimpan. Apakah Anda ingin membuat konten dari ide ini?', [
+                [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
+                [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
+              ], 'Markdown', { reply_to_message_id: groupData.items[0].msgId });
             } else {
               await promptConnectionSelection(ctx, idea.id);
             }
@@ -319,15 +298,10 @@ async function handleMediaMessage(ctx: any, isVideo: boolean) {
     }).returning();
     
     if (defaultConnectionId) {
-      await ctx.reply('Ide media tersimpan. Apakah Anda ingin membuat konten dari ide ini?', {
-        reply_to_message_id: ctx.message.message_id,
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
-            [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
-          ]
-        }
-      });
+      await InteractiveMenu.send(ctx, 'Ide media tersimpan. Apakah Anda ingin membuat konten dari ide ini?', [
+        [{ text: '✅ Ya, Buat Konten', callback_data: `make_post_${idea.id}` }],
+        [{ text: '❌ Batal', callback_data: `cancel_idea_${idea.id}` }]
+      ], 'Markdown', { reply_to_message_id: ctx.message.message_id });
     } else {
        await promptConnectionSelection(ctx, idea.id);
     }
@@ -397,14 +371,12 @@ bot.on('callback_query', async (ctx: any) => {
 
       await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, ideaId));
 
-      await ctx.editMessageText('✅ Masuk antrean sistem');
-      await ctx.answerCbQuery('Ide akan diproses.');
+      await InteractiveMenu.finalize(ctx, '✅ Masuk antrean sistem');
       
     } else if (callbackData.startsWith('cancel_idea_')) {
       const ideaId = parseInt(callbackData.replace('cancel_idea_', ''), 10);
       
-      await ctx.editMessageText('⏸️ Ide disimpan. Bisa diproses nanti di dashboard.');
-      await ctx.answerCbQuery('Disimpan ke dashboard.');
+      await InteractiveMenu.finalize(ctx, '⏸️ Ide disimpan. Bisa diproses nanti di dashboard.');
     }
   } catch (error) {
     console.error('[Bot] Error in callback_query:', error);
