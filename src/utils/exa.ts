@@ -1,4 +1,5 @@
-import Exa, {
+import {
+  Exa,
   type RegularSearchOptions,
   type FindSimilarOptions,
   type AnswerOptions,

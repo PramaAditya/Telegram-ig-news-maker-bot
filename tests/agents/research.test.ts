@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { runResearchPhase } from '../../src/agents/research';
-import { exaService } from '../../src/utils/exa';
-import { firecrawlService } from '../../src/utils/firecrawl';
-import * as s3 from '../../src/s3';
+import { runResearchPhase } from '../../src/agents/research.js';
+import { exaService } from '../../src/utils/exa.js';
+import { firecrawlService } from '../../src/utils/firecrawl.js';
+import * as s3 from '../../src/s3.js';
 import { generateText } from 'ai';
 
 // We mock the AI generation, Exa, and Firecrawl APIs to test the orchestration.
