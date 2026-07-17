@@ -21,7 +21,7 @@ export async function fetchBufferChannelDetails(bufferToken: string, channelId: 
     variables: { channelId }
   };
 
-  const url = 'https://api.buffer.com/1/graphql';
+  const url = 'https://api.buffer.com';
 
   try {
     const response = await axios.post(url, payload, {
@@ -129,7 +129,7 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
   `;
 
   const payload = { query };
-  const url = 'https://api.buffer.com/1/graphql';
+  const url = 'https://api.buffer.com';
 
   try {
     const response = await axios.post(url, payload, {
