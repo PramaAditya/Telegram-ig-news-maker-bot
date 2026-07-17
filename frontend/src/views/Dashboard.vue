@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { Edit, Send, GripVertical, RotateCcw, MoreVertical } from "lucide-vue-next";
+import { Edit, Send, GripVertical, RotateCcw, MoreVertical, Copy, Loader2 } from "lucide-vue-next";
 import { getAuthHeaders, setPassword } from "../auth";
 import { Fancybox } from "@fancyapps/ui";
 import draggable from "vuedraggable";
@@ -295,6 +295,32 @@ const deleteItem = async (id: number) => {
     fetchQueue();
   } catch (err) {
     toast.add({ title: "Failed to delete", color: "error" });
+  }
+};
+
+const duplicating = ref<Record<number, boolean>>({});
+
+const duplicateToQueue = async (id: number) => {
+  if (!confirm("Are you sure you want to duplicate this published post back to the queue?")) return;
+  duplicating.value[id] = true;
+  try {
+    const res = await fetch(`/api/queue/${id}/duplicate`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    if (res.status === 401) {
+      toast.add({ title: "Unauthorized", color: "error" });
+      return;
+    }
+    const data = await res.json() as { error?: string; message?: string };
+    if (!res.ok) throw new Error(data.error || "Failed to duplicate post");
+    toast.add({ title: "Post duplicated to queue successfully!", color: "success" });
+    fetchQueue();
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    toast.add({ title: errorMessage, color: "error" });
+  } finally {
+    duplicating.value[id] = false;
   }
 };
 
@@ -726,6 +752,13 @@ const timeAgo = (dateObj: Date | string | null) => {
                           <UButton v-if="activeTab === 'error'" color="white" variant="solid" @click="retryError((qItem as any).id)">
                             <template #leading><RotateCcw class="w-4 h-4" /></template>
                             Retry
+                          </UButton>
+                          <UButton v-if="activeTab === 'published'" color="white" variant="solid" :disabled="duplicating[(qItem as any).id]" @click="duplicateToQueue((qItem as any).id)">
+                            <template #leading>
+                              <Loader2 v-if="duplicating[(qItem as any).id]" class="w-4 h-4 animate-spin" />
+                              <Copy v-else class="w-4 h-4" />
+                            </template>
+                            Duplicate to Queue
                           </UButton>
                           <UDropdownMenu :items="[[{ label: 'Delete', onSelect: () => deleteItem((qItem as any).id), color: 'error' }]]" :content="{ align: 'end' }">
                             <UButton color="white" variant="solid" :padded="false" class="p-2">

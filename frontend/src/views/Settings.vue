@@ -35,6 +35,61 @@ const newBannedWord = ref({ word: '', replacement: '', type: 'partial' as 'exact
 
 const editingWordIndex = ref<number | null>(null)
 
+const allConnections = ref<any[]>([])
+const sourceConnectionId = ref<number | null>(null)
+
+const otherConnections = computed(() => {
+  return allConnections.value.filter((c: any) => c.id !== settings.value.id)
+})
+
+const copyBannedWords = (mode: 'overwrite' | 'merge') => {
+  if (!sourceConnectionId.value) return
+  
+  const sourceConn = allConnections.value.find((c: any) => c.id === sourceConnectionId.value)
+  if (!sourceConn) {
+    toast.add({ title: 'Source connection not found.', color: 'error' })
+    return
+  }
+
+  const sourceWords = sourceConn.bannedWords || []
+  if (sourceWords.length === 0) {
+    toast.add({ title: `Connection "${sourceConn.name}" has no banned words to copy.`, color: 'warning' })
+    return
+  }
+
+  if (!settings.value.bannedWords) {
+    settings.value.bannedWords = []
+  }
+
+  if (mode === 'overwrite') {
+    if (settings.value.bannedWords.length > 0 && !confirm(`Are you sure you want to overwrite your current ${settings.value.bannedWords.length} rules with ${sourceWords.length} rules from "${sourceConn.name}"?`)) {
+      return
+    }
+    settings.value.bannedWords = JSON.parse(JSON.stringify(sourceWords))
+    toast.add({ title: `Successfully copied ${sourceWords.length} rules from "${sourceConn.name}"! Remember to save settings.`, color: 'success' })
+  } else {
+    // Merge mode
+    const currentWordsLower = settings.value.bannedWords.map((w: any) => w.word.toLowerCase())
+    let addedCount = 0
+    
+    sourceWords.forEach((item: any) => {
+      if (!currentWordsLower.includes(item.word.toLowerCase())) {
+        settings.value.bannedWords.push(JSON.parse(JSON.stringify(item)))
+        addedCount++
+      }
+    })
+    
+    if (addedCount === 0) {
+      toast.add({ title: 'All rules from the source connection already exist in this connection.', color: 'info' })
+    } else {
+      toast.add({ title: `Successfully merged ${addedCount} new rules from "${sourceConn.name}"! Remember to save settings.`, color: 'success' })
+    }
+  }
+  
+  // Reset selection
+  sourceConnectionId.value = null
+}
+
 const addBannedWord = () => {
   if (!newBannedWord.value.word.trim()) return
   
@@ -184,6 +239,7 @@ const fetchSettings = async () => {
     if (res.status === 401) throw new Error('Unauthorized')
     if (!res.ok) throw new Error('Failed to load settings')
     const connections = await res.json()
+    allConnections.value = connections
     const activeSettings = connections.find((c: any) => c.id === connectionStore.activeConnectionId)
     
     if (activeSettings) {
@@ -414,6 +470,44 @@ const deleteConnection = async () => {
                 variant="subtle"
                 description="The AI Writer will be explicitly instructed to avoid these words and use the replacements instead. As a final fallback, the text will be hard-censored just before rendering/publishing."
               />
+
+              <!-- Copy from Another Connection -->
+              <div v-if="otherConnections.length > 0" class="bg-muted rounded-lg p-4 border border-default space-y-4">
+                <h3 class="text-sm font-semibold text-default flex items-center">
+                  <Sparkles class="w-4 h-4 mr-2 text-primary" />
+                  Copy Rules from Another Connection
+                </h3>
+                <div class="flex flex-col sm:flex-row gap-4 items-end">
+                  <div class="flex-1 w-full">
+                    <label class="block text-xs font-medium text-muted mb-1">Source Connection</label>
+                    <select 
+                      v-model="sourceConnectionId"
+                      class="w-full px-3 py-2 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default"
+                    >
+                      <option :value="null" disabled>Select connection...</option>
+                      <option v-for="conn in otherConnections" :key="conn.id" :value="conn.id">
+                        {{ conn.name }} ({{ conn.bannedWords?.length || 0 }} rules)
+                      </option>
+                    </select>
+                  </div>
+                  <div class="w-full sm:w-auto flex gap-2">
+                    <button 
+                      @click="copyBannedWords('merge')"
+                      :disabled="!sourceConnectionId"
+                      class="flex-1 sm:flex-initial inline-flex items-center justify-center px-4 py-2 border border-default shadow-sm text-sm font-medium rounded-md text-default bg-default hover:bg-muted focus:outline-none disabled:opacity-50 cursor-pointer"
+                    >
+                      Merge / Append
+                    </button>
+                    <button 
+                      @click="copyBannedWords('overwrite')"
+                      :disabled="!sourceConnectionId"
+                      class="flex-1 sm:flex-initial inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-inverted bg-primary hover:bg-primary/95 focus:outline-none disabled:opacity-50 cursor-pointer"
+                    >
+                      Overwrite
+                    </button>
+                  </div>
+                </div>
+              </div>
 
               <div class="bg-muted rounded-lg p-4 border border-default flex flex-col md:flex-row gap-4 items-end">
                 <div class="flex-1 w-full">

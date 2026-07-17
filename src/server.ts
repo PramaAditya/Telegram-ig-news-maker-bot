@@ -778,6 +778,45 @@ app.post('/api/queue/:id/move', requireDashboardAuth, async (req, res) => {
   }
 });
 
+app.post('/api/queue/:id/duplicate', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const rows = await db.select().from(queueTable).where(eq(queueTable.id, id));
+    if (rows.length === 0) return res.status(404).json({ error: 'Post not found' });
+    
+    const originalItem = rows[0];
+    const connectionId = originalItem.connectionId;
+
+    const maxSortResult = await db.select({ maxSort: sql`MAX(sort_order)` })
+      .from(queueTable)
+      .where(sql`connection_id = ${connectionId} AND status = 'pending'`);
+    const maxSort = (maxSortResult[0]?.maxSort as number) || 0;
+    const newSortOrder = maxSort + 10;
+
+    const result = await db.insert(queueTable).values({
+      connectionId: originalItem.connectionId,
+      text: originalItem.text,
+      media: originalItem.media,
+      templateId: originalItem.templateId,
+      templateData: originalItem.templateData,
+      publishMetadata: originalItem.publishMetadata,
+      researchResult: originalItem.researchResult,
+      status: 'pending',
+      sortOrder: newSortOrder,
+      scheduledAt: null,
+      publishedAt: null,
+      errorLog: null
+    }).returning();
+
+    res.json({ message: 'Post duplicated to queue successfully', item: result[0] });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: errorMessage });
+  }
+});
+
 app.delete('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
