@@ -1,6 +1,7 @@
 import { PipelineContext, ResearchResult } from './utils.js';
 import { runCarouselDarkPipeline, carouselDarkTemplateConfig, generateCarouselDarkMedia } from './agents/pipelines/image/kabar.perjuangan/carousel_dark.js';
 import { runCarouselMultiImagesPipeline, carouselMultiImagesTemplateConfig, generateCarouselMultiImagesMedia } from './agents/pipelines/image/kabar.perjuangan/carousel_multi_images.js';
+import { runSinglePagePipeline, singlePageTemplateConfig, generateSinglePageMedia } from './agents/pipelines/image/kabar.perjuangan/single_page.js';
 import { runTitleOnlyPipeline, titleOnlyTemplateConfig, generateTitleOnlyMedia } from './agents/pipelines/video/kabar.perjuangan/title_only.js';
 
 export interface TemplateField {
@@ -32,6 +33,11 @@ export const TEMPLATES: Record<string, TemplateConfig> = {
     ...carouselMultiImagesTemplateConfig,
     runPipeline: runCarouselMultiImagesPipeline,
     regenerateMedia: generateCarouselMultiImagesMedia
+  },
+  [singlePageTemplateConfig.id]: {
+    ...singlePageTemplateConfig,
+    runPipeline: runSinglePagePipeline,
+    regenerateMedia: generateSinglePageMedia
   },
   [titleOnlyTemplateConfig.id]: {
     ...titleOnlyTemplateConfig,

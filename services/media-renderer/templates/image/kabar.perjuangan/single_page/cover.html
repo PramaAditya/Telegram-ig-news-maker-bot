@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Single Page Post</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Montserrat:wght@400;700&display=swap');
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 1080px;
+            height: 1350px;
+            font-family: 'Inter', sans-serif;
+            background-color: #000000;
+            color: #FFFFFF;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .background {
+            position: absolute;
+            width: 1080px;
+            height: 1350px;
+            left: 0;
+            top: 0;
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.726) 72.6%, #000000 100%), url('{{{cover_image}}}');
+            background-size: cover;
+            background-position: center;
+            z-index: 1;
+        }
+
+        .logo-container {
+            position: absolute;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            top: 132px;
+            z-index: 2;
+        }
+
+        .logo {
+            width: 250px;
+            height: 77px;
+            object-fit: contain;
+        }
+
+        .frame-5 {
+            position: absolute;
+            width: 888px;
+            left: 111px;
+            top: 500px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 30px;
+            z-index: 2;
+        }
+
+        .title {
+            width: 888px;
+            font-family: 'Inter', sans-serif;
+            font-style: normal;
+            font-weight: 400;
+            font-size: 54px;
+            line-height: 68px;
+            letter-spacing: -0.4px;
+            color: #FFFFFF;
+            margin: 0;
+        }
+
+        .title strong, .title b {
+            font-weight: 700;
+        }
+
+        .description {
+            width: 888px;
+            font-family: 'Inter', sans-serif;
+            font-style: normal;
+            font-weight: 400;
+            font-size: 29px;
+            line-height: 42px;
+            letter-spacing: -0.4px;
+            color: #FFFFFF;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        .description p {
+            margin: 0;
+        }
+
+        .description strong, .description b {
+            font-weight: 700;
+        }
+
+        /* Footer elements */
+        .footer {
+            position: absolute;
+            width: 888px;
+            left: 111px;
+            top: 1219px;
+            display: flex;
+            align-items: center;
+            z-index: 2;
+        }
+
+        .arrow-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 35px;
+            height: 35px;
+            background: #FFFFFF;
+            border-radius: 50%;
+            margin-right: 14px;
+        }
+
+        .arrow-svg {
+            width: 20px;
+            height: 20px;
+            fill: #000000;
+        }
+
+        .read-caption {
+            font-family: 'Montserrat', sans-serif;
+            font-style: normal;
+            font-weight: 400;
+            font-size: 22px;
+            line-height: 58px;
+            letter-spacing: -0.4px;
+            color: #FFFFFF;
+            margin-right: 23px;
+            white-space: nowrap;
+        }
+
+        .line-4 {
+            flex-grow: 1;
+            height: 0px;
+            border: 2px solid #FFFFFF;
+        }
+    </style>
+</head>
+<body>
+    <div class="background"></div>
+    
+    <div class="logo-container">
+        <img src="{{logo}}" class="logo" alt="Logo">
+    </div>
+
+    <div class="frame-5">
+        <div class="title">{{{title}}}</div>
+        <div class="description">
+            {{{description}}}
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="arrow-container">
+            <svg class="arrow-svg" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 10V7h-2v5H8l4 4 4-4h-3z"/>
+            </svg>
+        </div>
+        <div class="read-caption">READ CAPTION</div>
+        <div class="line-4"></div>
+    </div>
+</body>
+</html>
