@@ -79,6 +79,7 @@ const clearSchedule = async (id: number) => {
 
 const tabItems = [
   { label: 'Pending', icon: 'i-lucide-clock', slot: 'content', value: 'pending' },
+  { label: 'Draft', icon: 'i-lucide-file-text', slot: 'content', value: 'draft' },
   { label: 'Published', icon: 'i-lucide-check-circle', slot: 'content', value: 'published' },
   { label: 'Error', icon: 'i-lucide-alert-circle', slot: 'content', value: 'error' }
 ];
@@ -295,6 +296,26 @@ const deleteItem = async (id: number) => {
     fetchQueue();
   } catch (err) {
     toast.add({ title: "Failed to delete", color: "error" });
+  }
+};
+
+const updatePostStatus = async (id: number, status: 'pending' | 'draft') => {
+  try {
+    const res = await fetch(`/api/queue/${id}`, {
+      method: "PUT",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.status === 401) {
+      toast.add({ title: "Unauthorized", color: "error" });
+      return;
+    }
+    if (!res.ok) throw new Error("Failed to update status");
+    
+    toast.add({ title: `Moved to ${status === 'draft' ? 'Drafts' : 'Pending Queue'}`, color: "success" });
+    fetchQueue();
+  } catch (err: any) {
+    toast.add({ title: err.message, color: "error" });
   }
 };
 
@@ -565,6 +586,7 @@ const timeAgo = (dateObj: Date | string | null) => {
                           </UButton>
                           <UDropdownMenu :items="[[
                              { label: 'Clear Schedule', onSelect: () => clearSchedule((qItem as any).id as number), icon: 'i-lucide-calendar-off' },
+                             { label: 'Move to Draft', onSelect: () => updatePostStatus((qItem as any).id as number, 'draft'), icon: 'i-lucide-file-text' },
                              { label: 'Delete', onSelect: () => deleteItem((qItem as any).id as number), color: 'error' }
                           ]]" :content="{ align: 'end' }">
                             <UButton color="white" variant="solid" :padded="false" class="p-2">
@@ -678,6 +700,7 @@ const timeAgo = (dateObj: Date | string | null) => {
                           </UButton>
                           <UDropdownMenu :items="[[
                             { label: 'Set Custom Schedule', onSelect: () => openScheduleModal(qItem), icon: 'i-lucide-calendar-clock' },
+                            { label: 'Move to Draft', onSelect: () => updatePostStatus(qItem.id, 'draft'), icon: 'i-lucide-file-text' },
                             { label: 'Delete', onSelect: () => deleteItem(qItem.id), color: 'error' }
                           ]]" :content="{ align: 'end' }">
                             <UButton color="white" variant="solid" :padded="false" class="p-2">
@@ -699,7 +722,7 @@ const timeAgo = (dateObj: Date | string | null) => {
                 
                 <!-- Tab specific column -->
                 <div class="w-16 sm:w-20 flex-shrink-0 pt-5 flex flex-col items-end gap-2">
-                   <UBadge :color="activeTab === 'published' ? 'success' : 'error'" class="justify-center uppercase text-[10px]">
+                   <UBadge :color="activeTab === 'published' ? 'success' : activeTab === 'draft' ? 'warning' : 'error'" class="justify-center uppercase text-[10px]">
                      {{ activeTab }}
                    </UBadge>
                    <span class="text-xs font-medium text-default text-right">
@@ -749,6 +772,13 @@ const timeAgo = (dateObj: Date | string | null) => {
                           Created {{ timeAgo((qItem as any).createdAt) }}
                         </div>
                         <div class="flex items-center gap-2">
+                          <UButton v-if="activeTab === 'draft'" color="white" variant="solid" @click="updatePostStatus((qItem as any).id, 'pending')">
+                            <template #leading><RotateCcw class="w-4 h-4" /></template>
+                            Move to Pending
+                          </UButton>
+                          <UButton v-if="activeTab === 'draft'" color="white" variant="solid" @click="$router.push('/post/' + (qItem as any).id)" :padded="false" class="p-2">
+                            <Edit class="w-4 h-4 text-muted" />
+                          </UButton>
                           <UButton v-if="activeTab === 'error'" color="white" variant="solid" @click="retryError((qItem as any).id)">
                             <template #leading><RotateCcw class="w-4 h-4" /></template>
                             Retry

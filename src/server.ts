@@ -588,7 +588,7 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
 app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { text, templateData, scheduledAt } = req.body;
+    const { text, templateData, scheduledAt, status } = req.body;
     
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
 
@@ -597,6 +597,12 @@ app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
     if (templateData !== undefined) updateData.templateData = templateData;
     if (scheduledAt !== undefined) {
       updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
+    }
+    if (status !== undefined) {
+      if (!['pending', 'draft', 'published', 'error', 'processing'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
+      updateData.status = status;
     }
 
     if (Object.keys(updateData).length > 0) {
