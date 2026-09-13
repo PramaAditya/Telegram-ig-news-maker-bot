@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const titleOnlyTemplateConfig = {
   id: 'video:kabar.perjuangan:title_only',
-  name: 'Title Only Video (kabar.perjuangan)',
+  name: 'Title Only Video',
   description: 'A 9:16 video overlay template. Normalizes video, adds blurred background if needed, and overlays a 5-second contextual title.',
   skipResearch: true,
   uiSchema: [
@@ -222,9 +222,6 @@ export async function runTitleOnlyPipeline(context: PipelineContext, research: R
 
   const finalVideoUrl = renderedMedia[0].url;
 
-  // Telegram limits video size, just send message with link
-  await withRetry(() => telegram.sendMessage(chatId, finalCaption + `\n\nPreview Video: ${finalVideoUrl}`, { reply_to_message_id: messageId }));
-
   const [inserted] = await insertQueueItem({
     connectionId: settings.id,
     templateId: titleOnlyTemplateConfig.id,
@@ -235,18 +232,26 @@ export async function runTitleOnlyPipeline(context: PipelineContext, research: R
     researchResult: 'Video auto-generated.'
   });
 
+  const postButton = {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🔗 Lihat Post', url: `${process.env.APP_URL}/post/${inserted.id}` }]
+      ]
+    }
+  };
+
+  // Telegram limits video size, send message with preview link and inline post button
+  await withRetry(() => telegram.sendMessage(
+    chatId,
+    finalCaption + `\n\nPreview Video: ${finalVideoUrl}`,
+    { reply_to_message_id: messageId, ...postButton }
+  ));
+
   await withRetry(() => telegram.editMessageText(
     statusMsg.chat.id,
     statusMsg.message_id,
     undefined,
-    '✅ Video berhasil dibuat dan masuk Queue untuk di-publish!',
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '🔗 Lihat Post', url: `${process.env.APP_URL}/post/${inserted.id}` }]
-        ]
-      }
-    }
+    '✅ Video berhasil dibuat dan masuk Queue untuk di-publish!'
   ));
   console.log(`[Done] Video Pipeline finished successfully.`);
 }

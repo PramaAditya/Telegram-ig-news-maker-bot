@@ -202,6 +202,12 @@ app.post('/api/ideas/:id/convert', requireDashboardAuth, async (req, res) => {
     }
 
     const { templateId } = req.body;
+    let chosenTemplateId = templateId;
+    if (!chosenTemplateId) {
+      const media = idea.media || [];
+      const isSingleVideo = media.length === 1 && media[0]?.type === 'video';
+      chosenTemplateId = isSingleVideo ? 'video:kabar.perjuangan:title_only' : 'image:kabar.perjuangan:carousel_dark';
+    }
 
     await db.insert(jobsTable).values({
       connectionId: idea.connectionId,
@@ -209,15 +215,16 @@ app.post('/api/ideas/:id/convert', requireDashboardAuth, async (req, res) => {
       messageId: idea.messageId,
       text: idea.text,
       media: idea.media,
-      templateId: templateId || 'image:kabar.perjuangan:carousel_dark',
+      templateId: chosenTemplateId,
       status: 'pending'
     });
 
     await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, id));
     
     res.json({ message: 'Idea converted to job successfully' });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
   }
 });
 
@@ -455,10 +462,18 @@ app.put('/api/connections/:id', requireDashboardAuth, async (req, res) => {
 app.delete('/api/connections/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid connection ID' });
+
+    // Delete related child records first to satisfy foreign key constraints
+    await db.delete(queueTable).where(eq(queueTable.connectionId, id));
+    await db.delete(ideasTable).where(eq(ideasTable.connectionId, id));
+    await db.delete(jobsTable).where(eq(jobsTable.connectionId, id));
+
     await db.delete(settingsTable).where(eq(settingsTable.id, id));
-    res.json({ message: 'Connection deleted successfully' });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.json({ message: 'Connection and all associated data deleted successfully' });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
   }
 });
 

@@ -24,7 +24,7 @@ export const settingsTable = pgTable('settings', {
 
 export const queueTable = pgTable('queue', {
   id: serial('id').primaryKey(),
-  connectionId: integer('connection_id').references(() => settingsTable.id),
+  connectionId: integer('connection_id').references(() => settingsTable.id, { onDelete: 'cascade' }),
   sortOrder: serial('sort_order'),
   templateId: text('template_id').notNull().default('image:kabar.perjuangan:carousel_dark'),
   templateData: jsonb('template_data').$type<any>().notNull().default({}),
@@ -41,7 +41,7 @@ export const queueTable = pgTable('queue', {
 
 export const ideasTable = pgTable('ideas', {
   id: serial('id').primaryKey(),
-  connectionId: integer('connection_id').references(() => settingsTable.id),
+  connectionId: integer('connection_id').references(() => settingsTable.id, { onDelete: 'cascade' }),
   chatId: text('chat_id').notNull(),
   messageId: bigint('message_id', { mode: 'number' }).notNull(),
   text: text('text').notNull(),
@@ -52,7 +52,7 @@ export const ideasTable = pgTable('ideas', {
 
 export const jobsTable = pgTable('jobs', {
   id: serial('id').primaryKey(),
-  connectionId: integer('connection_id').references(() => settingsTable.id),
+  connectionId: integer('connection_id').references(() => settingsTable.id, { onDelete: 'cascade' }),
   chatId: text('chat_id').notNull(),
   messageId: bigint('message_id', { mode: 'number' }).notNull(),
   templateId: text('template_id').notNull().default('image:kabar.perjuangan:carousel_dark'),

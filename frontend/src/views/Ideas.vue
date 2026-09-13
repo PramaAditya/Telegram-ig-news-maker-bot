@@ -43,8 +43,15 @@ const fetchIdeas = async () => {
     ideas.value = data || [];
     
     ideas.value.forEach(idea => {
-      if (!selectedTemplates.value[idea.id] && templates.value.length > 0) {
-        selectedTemplates.value[idea.id] = templates.value[0].id;
+      const available = getAvailableTemplatesForIdea(idea);
+      const isSingleVideo = idea.media?.length === 1 && idea.media[0]?.type === 'video';
+      if (!selectedTemplates.value[idea.id] && available.length > 0) {
+        if (isSingleVideo) {
+          const videoT = available.find(t => t.id.startsWith('video:'));
+          selectedTemplates.value[idea.id] = videoT ? videoT.id : available[0].id;
+        } else {
+          selectedTemplates.value[idea.id] = available[0].id;
+        }
       }
     });
   } catch (error) {
@@ -62,9 +69,26 @@ onMounted(async () => {
   await fetchTemplates();
 });
 
+const getAvailableTemplatesForIdea = (idea: any) => {
+  const media = idea?.media || [];
+  const hasVideo = media.some((m: any) => m.type === 'video');
+  return templates.value.filter(t => {
+    if (t.id.startsWith('video:')) {
+      return hasVideo;
+    }
+    return true;
+  });
+};
+
 const convertIdea = async (ideaId: number) => {
-  const templateId = selectedTemplates.value[ideaId] || 'image:kabar.perjuangan:carousel_multi_images';
-  try {
+  const idea = ideas.value.find(i => i.id === ideaId);
+  const available = idea ? getAvailableTemplatesForIdea(idea) : templates.value;
+  const isSingleVideo = idea?.media?.length === 1 && idea.media[0]?.type === 'video';
+  const defaultFallback = isSingleVideo 
+    ? (available.find(t => t.id.startsWith('video:'))?.id || 'video:kabar.perjuangan:title_only')
+    : (available[0]?.id || 'image:kabar.perjuangan:carousel_dark');
+
+  const templateId = selectedTemplates.value[ideaId] || defaultFallback;
     await apiFetch(`/api/ideas/${ideaId}/convert`, {
       method: 'POST',
       body: JSON.stringify({ templateId })
@@ -143,7 +167,7 @@ const formatDate = (dateStr: string) => {
               <div v-if="idea.status === 'pending' || idea.status === 'rejected'" class="flex flex-col gap-2">
                 <label class="block text-xs font-medium text-default">Template</label>
                 <select v-model="selectedTemplates[idea.id]" class="mt-1 block w-full pl-3 pr-10 py-2 text-sm border-default bg-default text-default focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md">
-                  <option v-for="t in templates" :key="t.id" :value="t.id">{{ t.name }}</option>
+                  <option v-for="t in getAvailableTemplatesForIdea(idea)" :key="t.id" :value="t.id">{{ t.name }}</option>
                 </select>
               </div>
               <div class="flex gap-2">

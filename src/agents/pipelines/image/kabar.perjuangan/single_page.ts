@@ -12,7 +12,7 @@ import { marked } from 'marked';
 
 export const singlePageTemplateConfig = {
   id: 'image:kabar.perjuangan:single_page',
-  name: 'Single Page Post (kabar.perjuangan)',
+  name: 'Single Page Post',
   description: 'A 1-page high-impact news post with a title and a 2-paragraph description.',
   uiSchema: [
     { name: 'title', type: 'text', label: 'Provocative Title' },
@@ -281,32 +281,8 @@ RULES:
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🚀 Mempublikasikan ke Queue...'));
 
   // Phase 5: Publishing via Queue
-  console.log(`[Phase 5] Sending rendered photo to user and preparing Buffer URLs`);
+  console.log(`[Phase 5] Saving to Queue and preparing Buffer URLs`);
   
-  let previewBuffer: Buffer | undefined;
-  try {
-    const response = await fetch(renderedUrls[0]);
-    if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
-    const arrayBuffer = await response.arrayBuffer();
-    previewBuffer = Buffer.from(arrayBuffer);
-  } catch (e) {
-    console.warn('Failed to fetch preview cover image:', e);
-  }
-
-  if (previewBuffer) {
-    if (finalCaption.length > 1024) {
-      await withRetry(() => telegram.sendPhoto(chatId, { source: previewBuffer }, { reply_to_message_id: messageId }));
-      await withRetry(() => telegram.sendMessage(chatId, finalCaption, { reply_to_message_id: messageId }));
-    } else {
-      await withRetry(() => telegram.sendPhoto(chatId, 
-        { source: previewBuffer },
-        { caption: finalCaption, reply_to_message_id: messageId }
-      ));
-    }
-  } else {
-    await withRetry(() => telegram.sendMessage(chatId, finalCaption + `\n\nCover URL: ${renderedUrls[0]}`, { reply_to_message_id: messageId }));
-  }
-
   let allPublishUrls: { type: 'image' | 'video', url: string }[] = renderedUrls.map(url => ({
     type: 'image',
     url
@@ -326,18 +302,44 @@ RULES:
     researchResult: researchText
   });
 
+  const postButton = {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🔗 Lihat Post', url: `${process.env.APP_URL}/post/${inserted.id}` }]
+      ]
+    }
+  };
+
+  console.log(`[Phase 5] Sending final output photo/message to user with post button`);
+  let previewBuffer: Buffer | undefined;
+  try {
+    const response = await fetch(renderedUrls[0]);
+    if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
+    const arrayBuffer = await response.arrayBuffer();
+    previewBuffer = Buffer.from(arrayBuffer);
+  } catch (e) {
+    console.warn('Failed to fetch preview cover image:', e);
+  }
+
+  if (previewBuffer) {
+    if (finalCaption.length > 1024) {
+      await withRetry(() => telegram.sendPhoto(chatId, { source: previewBuffer }, { reply_to_message_id: messageId }));
+      await withRetry(() => telegram.sendMessage(chatId, finalCaption, { reply_to_message_id: messageId, ...postButton }));
+    } else {
+      await withRetry(() => telegram.sendPhoto(chatId, 
+        { source: previewBuffer },
+        { caption: finalCaption, reply_to_message_id: messageId, ...postButton }
+      ));
+    }
+  } else {
+    await withRetry(() => telegram.sendMessage(chatId, finalCaption + `\n\nCover URL: ${renderedUrls[0]}`, { reply_to_message_id: messageId, ...postButton }));
+  }
+
   await withRetry(() => telegram.editMessageText(
     statusMsg.chat.id,
     statusMsg.message_id,
     undefined,
-    '✅ Berhasil diselesaikan dan masuk Queue untuk di-publish!',
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '🔗 Lihat Post', url: `${process.env.APP_URL}/post/${inserted.id}` }]
-        ]
-      }
-    }
+    '✅ Berhasil diselesaikan dan masuk Queue untuk di-publish!'
   ));
   console.log(`[Done] Pipeline finished successfully.`);
 }

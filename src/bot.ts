@@ -90,7 +90,57 @@ async function promptConnectionSelection(ctx: any, ideaId: number) {
 }
 
 async function askForTemplate(ctx: any, ideaId: number) {
-  const templateButtons = Object.values(TEMPLATES).map(t => {
+  const [idea] = await db.select().from(ideasTable).where(eq(ideasTable.id, ideaId));
+  if (!idea) {
+    if (ctx.callbackQuery) await ctx.answerCbQuery('Ide tidak ditemukan.');
+    return;
+  }
+
+  const media = idea.media || [];
+  const hasVideo = media.some(m => m.type === 'video');
+  const isSingleVideo = media.length === 1 && media[0].type === 'video';
+
+  // Kalo cuma 1 video input, langsung kepilih title video only
+  if (isSingleVideo) {
+    if (!idea.connectionId) {
+      await promptConnectionSelection(ctx, ideaId);
+      return;
+    }
+
+    const videoTemplate = Object.values(TEMPLATES).find(t => t.id.startsWith('video:'));
+    const templateId = videoTemplate ? videoTemplate.id : 'video:kabar.perjuangan:title_only';
+
+    await db.insert(jobsTable).values({
+      connectionId: idea.connectionId,
+      chatId: idea.chatId,
+      messageId: idea.messageId,
+      text: idea.text,
+      media: idea.media,
+      templateId: templateId,
+      status: 'pending'
+    });
+
+    await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, ideaId));
+
+    const successMsg = '✅ Masuk antrean sistem (Title Only Video)';
+    if (ctx.callbackQuery) {
+      await InteractiveMenu.finalize(ctx, successMsg);
+    } else {
+      await InteractiveMenu.send(ctx, successMsg, []);
+    }
+    return;
+  }
+
+  // Ga muncul kalo no media input atau cuma image(s) doang;
+  // Muncul kalo di media group input ada video di dalamnya
+  const availableTemplates = Object.values(TEMPLATES).filter(t => {
+    if (t.id.startsWith('video:')) {
+      return hasVideo;
+    }
+    return true;
+  });
+
+  const templateButtons = availableTemplates.map(t => {
     return [{ text: t.name, callback_data: `convert_${ideaId}_${t.id}` }];
   });
 
