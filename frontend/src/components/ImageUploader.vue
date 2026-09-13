@@ -6,9 +6,39 @@ import { getAuthHeaders } from '../auth'
 const props = withDefaults(defineProps<{
   modelValue: string | string[] | null | undefined
   multiple?: boolean
+  isActivePasteTarget?: boolean
 }>(), {
-  multiple: false
+  multiple: false,
+  isActivePasteTarget: false
 })
+const isDragging = ref(false)
+
+const handlePaste = async (e: ClipboardEvent) => {
+  const items = e.clipboardData?.items
+  if (!items) return
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.startsWith('image/')) {
+      const file = items[i].getAsFile()
+      if (file) {
+        e.preventDefault()
+        await uploadFile(file)
+        break
+      }
+    }
+  }
+}
+
+const handleDrop = async (e: DragEvent) => {
+  isDragging.value = false
+  const files = e.dataTransfer?.files
+  if (!files || files.length === 0) return
+  for (let i = 0; i < files.length; i++) {
+    if (files[i].type.startsWith('image/') || files[i].type.startsWith('video/')) {
+      await uploadFile(files[i])
+      if (!props.multiple) break
+    }
+  }
+}
 
 const emit = defineEmits(['update:modelValue'])
 
@@ -84,7 +114,23 @@ const isVideo = (url: string) => {
 </script>
 
 <template>
-  <div class="border-2 border-dashed border-default rounded-lg p-4 text-center relative overflow-hidden transition hover:border-muted bg-muted">
+  <div 
+    tabindex="0"
+    @paste="handlePaste"
+    @dragover.prevent="isDragging = true"
+    @dragleave.prevent="isDragging = false"
+    @drop.prevent="handleDrop"
+    class="border-2 border-dashed rounded-lg p-4 text-center relative overflow-hidden transition bg-muted outline-none"
+    :class="[
+      isDragging ? 'border-primary ring-2 ring-primary/40 bg-primary/5' : 
+      props.isActivePasteTarget ? 'border-primary ring-2 ring-primary/50 shadow-md bg-primary/5' : 
+      'border-default hover:border-muted'
+    ]"
+  >
+    <!-- Active Target Badge -->
+    <div v-if="props.isActivePasteTarget" class="absolute top-2 right-2 z-10 flex items-center gap-1 bg-primary/20 text-primary border border-primary/40 text-[11px] font-medium px-2.5 py-0.5 rounded-full animate-pulse pointer-events-none">
+      <span>📋 Active for Ctrl+V</span>
+    </div>
     <input 
       type="file" 
       ref="fileInput" 
@@ -113,7 +159,7 @@ const isVideo = (url: string) => {
 
     <div v-else class="py-6 cursor-pointer" @click="triggerUpload">
       <UploadCloud class="w-10 h-10 text-muted mx-auto mb-2" />
-      <p class="text-sm text-muted">Click to upload media</p>
+      <p class="text-sm text-muted">Click to upload media or press <kbd class="px-1.5 py-0.5 text-xs bg-default border border-default rounded shadow-xs font-mono">Ctrl+V</kbd> to paste</p>
       <p class="text-xs text-muted mt-1">Accepts {{ props.multiple ? 'multiple' : 'single' }} image(s) & video(s) (JPG, PNG, MP4)</p>
     </div>
 

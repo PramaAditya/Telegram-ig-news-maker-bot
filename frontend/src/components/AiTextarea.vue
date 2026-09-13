@@ -12,7 +12,23 @@ const props = defineProps<{
   aiContext?: string
 }>()
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'pasteImage', 'focus', 'blur'])
+
+const onPaste = (e: ClipboardEvent) => {
+  const items = e.clipboardData?.items
+  if (items) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile()
+        if (file) {
+          e.preventDefault()
+          emit('pasteImage', file)
+          return
+        }
+      }
+    }
+  }
+}
 
 const text = ref(props.modelValue)
 watch(() => props.modelValue, (val) => { text.value = val })
@@ -74,6 +90,9 @@ const undo = () => {
     <textarea
       v-model="text"
       @input="onInput"
+      @paste="onPaste"
+      @focus="emit('focus')"
+      @blur="emit('blur')"
       :rows="rows || 6"
       :placeholder="placeholder"
       class="w-full px-4 py-3 border border-default rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm bg-default text-default placeholder-muted pr-12"

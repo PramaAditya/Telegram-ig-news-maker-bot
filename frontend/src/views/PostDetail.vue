@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowLeft, Save, RefreshCw } from 'lucide-vue-next'
 import { getAuthHeaders, setPassword } from '../auth'
@@ -18,6 +18,83 @@ const saving = ref(false)
 const generating = ref(false)
 const error = ref('')
 const availableTemplates = ref<any[]>([])
+
+const activePasteTarget = ref<{ type: 'top' | 'slide', index?: number } | null>(null)
+
+const uploadImageFile = async (file: File): Promise<string> => {
+  const formData = new FormData()
+  formData.append('image', file)
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    headers: {
+      Authorization: getAuthHeaders().Authorization
+    },
+    body: formData
+  })
+  if (!res.ok) {
+    const data = await res.json()
+    throw new Error(data.error || 'Failed to upload image')
+  }
+  const { url } = await res.json()
+  return url
+}
+
+const handlePasteToTopImage = async (file: File) => {
+  try {
+    toast.add({ title: 'Uploading pasted image to Cover...', color: 'primary' })
+    const url = await uploadImageFile(file)
+    const topImageField = currentTemplateConfig.value?.uiSchema?.find((f: any) => f.type === 'image')
+    const fieldName = topImageField?.name || 'coverImageUrl'
+    post.value.templateData[fieldName] = url
+    toast.add({ title: 'Cover image updated from clipboard!', color: 'success' })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.add({ title: message, color: 'error' })
+  }
+}
+
+const handlePasteToSlideImage = async (arrayFieldName: string, slideIndex: number, file: File) => {
+  try {
+    toast.add({ title: `Uploading pasted image to Slide ${slideIndex + 1}...`, color: 'primary' })
+    const url = await uploadImageFile(file)
+    const arrayField = currentTemplateConfig.value?.uiSchema?.find((f: any) => f.name === arrayFieldName)
+    const imageSubField = arrayField?.itemSchema?.find((sf: any) => sf.type === 'image')
+    const subFieldName = imageSubField?.name || 'image'
+    
+    if (post.value.templateData[arrayFieldName] && post.value.templateData[arrayFieldName][slideIndex]) {
+      post.value.templateData[arrayFieldName][slideIndex][subFieldName] = url
+      toast.add({ title: `Slide ${slideIndex + 1} image updated from clipboard!`, color: 'success' })
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.add({ title: message, color: 'error' })
+  }
+}
+
+const onGlobalPaste = async (e: ClipboardEvent) => {
+  const items = e.clipboardData?.items
+  if (!items) return
+  let imageFile: File | null = null
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.startsWith('image/')) {
+      imageFile = items[i].getAsFile()
+      break
+    }
+  }
+  if (!imageFile) return
+
+  if (activePasteTarget.value) {
+    e.preventDefault()
+    if (activePasteTarget.value.type === 'top') {
+      await handlePasteToTopImage(imageFile)
+    } else if (activePasteTarget.value.type === 'slide' && activePasteTarget.value.index !== undefined) {
+      const arrayField = currentTemplateConfig.value?.uiSchema?.find((f: any) => f.type === 'array')
+      const fieldName = arrayField?.name || 'slides'
+      await handlePasteToSlideImage(fieldName, activePasteTarget.value.index, imageFile)
+    }
+  }
+}
+
 
 const fetchTemplates = async () => {
   try {
@@ -75,8 +152,13 @@ const fetchPost = async () => {
 }
 
 onMounted(async () => {
+  window.addEventListener('paste', onGlobalPaste)
   await fetchTemplates()
   await fetchPost()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('paste', onGlobalPaste)
 })
 
 const saveChanges = async () => {
@@ -204,15 +286,20 @@ const regenerateMedia = async () => {
                 v-model="post.templateData[field.name]" 
                 :rows="3"
                 guidancePlaceholder="e.g., make it more sensational, fix typo"
-                :aiContext="field.aiContext + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+                :aiContext="field.aiContext + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                @focus="activePasteTarget = { type: 'top' }"
+                @pasteImage="handlePasteToTopImage"
               />
             </template>
 
             <template v-else-if="field.type === 'image'">
               <label class="block text-sm font-medium text-default mb-2">{{ field.label }}</label>
-              <ImageUploader v-model="post.templateData[field.name]" />
+              <ImageUploader 
+                v-model="post.templateData[field.name]" 
+                :isActivePasteTarget="activePasteTarget?.type === 'top'"
+                @focusin="activePasteTarget = { type: 'top' }"
+              />
             </template>
-
             <template v-else-if="field.type === 'array'">
               <label class="block text-sm font-medium text-default mb-4">{{ field.label }}</label>
               
@@ -248,12 +335,18 @@ const regenerateMedia = async () => {
                         v-model="post.templateData[field.name][i][subField.name]" 
                         :rows="4" 
                         guidancePlaceholder="e.g., summarize this better, fix typo"
-                        :aiContext="subField.aiContext + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+                        :aiContext="subField.aiContext + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                        @focus="activePasteTarget = { type: 'slide', index: Number(i) }"
+                        @pasteImage="(file) => handlePasteToSlideImage(field.name, Number(i), file)"
                       />
                     </template>
                     <template v-else-if="subField.type === 'image'">
                       <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
-                      <ImageUploader v-model="post.templateData[field.name][i][subField.name]" />
+                      <ImageUploader 
+                        v-model="post.templateData[field.name][i][subField.name]" 
+                        :isActivePasteTarget="activePasteTarget?.type === 'slide' && activePasteTarget?.index === Number(i)"
+                        @focusin="activePasteTarget = { type: 'slide', index: Number(i) }"
+                      />
                     </template>
                   </div>
                 </template>
