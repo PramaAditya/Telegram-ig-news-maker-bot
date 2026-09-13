@@ -89,6 +89,7 @@ const convertIdea = async (ideaId: number) => {
     : (available[0]?.id || 'image:kabar.perjuangan:carousel_dark');
 
   const templateId = selectedTemplates.value[ideaId] || defaultFallback;
+  try {
     await apiFetch(`/api/ideas/${ideaId}/convert`, {
       method: 'POST',
       body: JSON.stringify({ templateId })
