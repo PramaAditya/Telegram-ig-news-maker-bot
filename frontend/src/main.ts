@@ -30,3 +30,19 @@ const router = createRouter({
 const pinia = createPinia()
 
 createApp(App).use(router).use(pinia).use(ui).mount('#app')
+
+// Prevent pinch-to-zoom and double-tap zoom on mobile devices (iOS Safari, Android Chrome)
+if (typeof document !== 'undefined') {
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  document.addEventListener('gesturechange', (e) => e.preventDefault());
+  document.addEventListener('gestureend', (e) => e.preventDefault());
+
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (event) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      event.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+}

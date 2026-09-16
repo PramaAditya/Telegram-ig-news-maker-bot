@@ -38,15 +38,21 @@
             pointer-events: none;
         }
 
-        .slide-number {
+        .top-bar {
             position: absolute;
             top: 60px;
             left: 60px;
-            font-family: 'Libre Baskerville', serif;
-            font-size: 60px;
-            font-weight: 700;
-            color: #9ca3af;
-            z-index: 1;
+            right: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 3;
+        }
+
+        .logo {
+            max-width: 250px;
+            max-height: 80px;
+            object-fit: contain;
         }
 
         .content {
@@ -83,10 +89,25 @@
     {{#if cover_image}}
     <img src="{{cover_image}}" class="cover-image" alt="Cover Image">
     {{/if}}
-    <div class="slide-number">{{roman_number}}</div>
+    <div class="top-bar">
+      <img src="{{logo}}" class="logo" alt="Logo" />
+    </div>
     
     <div class="content">
         {{{text}}}
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/textfit/2.4.0/textFit.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            textFit(document.querySelectorAll('.content'), {
+                multiLine: true,
+                maxFontSize: 42,
+                minFontSize: 24,
+                alignVert: true,
+                alignHoriz: false
+            });
+        });
+    </script>
 </body>
 </html>

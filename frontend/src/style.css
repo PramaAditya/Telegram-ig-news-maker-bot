@@ -2,6 +2,11 @@
 @import '@nuxt/ui';
 
 @layer base {
+  html,
+  body {
+    touch-action: pan-x pan-y;
+  }
+
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;

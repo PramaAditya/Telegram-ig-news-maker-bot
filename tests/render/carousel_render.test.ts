@@ -35,11 +35,11 @@ const toRoman = (num: number) => {
 export const TEST_FIXTURES = {
   heroImage: 'https://placehold.co/1080x1080/1a1a1a/ffffff.png?text=Hero+Cover',
   logo: 'https://placehold.co/250x80/transparent/ffffff.png?text=POROS',
-  title: 'Inovasi Fusi Nuklir <strong>Catat Sejarah Baru</strong> di 2026',
+  title: 'Terobosan Bersejarah Reaktor Fusi Nuklir <strong>Sukses Pertahankan Plasma 100 Juta Derajat</strong> Demi Masa Depan Energi Bersih Dunia',
   slides: [
-    'Reaktor fusi eksperimental berhasil mempertahankan reaksi stabil selama lebih dari **1.000 detik**, melampaui rekor dunia sebelumnya.',
-    'Pencapaian ini membuka babak baru bagi penyediaan energi bersih tanpa emisi karbon bagi **jutaan manusia** di masa depan.',
-    'Para ilmuwan kini beralih ke tahap pembangunan **pembangkit listrik komersial pertama** yang ditargetkan beroperasi sebelum 2035.'
+    'Reaktor fusi eksperimental Tokamak berhasil mencetak rekor dunia baru dengan mempertahankan plasma stabil pada suhu ekstrem melampaui **100 juta derajat Celsius** selama lebih dari **1.000 detik** berturut-turut tanpa henti.',
+    'Pencapaian revolusioner ini menjadi lompatan kuantum dalam upaya global menyediakan **energi bersih tanpa batas** dan bebas emisi karbon bagi miliaran manusia di seluruh belahan dunia pada masa depan.\n\nSistem penahan medan magnetik superkonduktor generasi terbaru berhasil meredam fluktuasi turbulensi termal secara konsisten, membuktikan bahwa reaktor fusi magnetik siap melangkah ke ranah industri komersial.',
+    'Konsorsium riset internasional terkemuka kini resmi memulai fase perancangan teknis **pembangkit listrik komersial pertama** yang ditargetkan mulai menyalurkan daya listrik bersih ke jaringan transmisi nasional sebelum tahun 2035.\n\nKeberhasilan ini membuktikan kemandirian teknologi masa depan dan mempercepat transisi peradaban menuju era energi hijau tanpa ketergantungan bahan bakar fosil.'
   ],
   slideImages: [
     'https://placehold.co/1080x1080/2a2a2a/ffffff.png?text=Slide+1+Image',
@@ -118,6 +118,7 @@ describe('Actual Carousel Media Renderer Integration Tests', () => {
 
       for (let i = 0; i < 2; i++) {
         const html = compileSlide({
+          logo: TEST_FIXTURES.logo,
           cover_image: TEST_FIXTURES.heroImage,
           text: marked.parse(TEST_FIXTURES.slides[i]),
           roman_number: toRoman(i + 1)
@@ -133,7 +134,7 @@ describe('Actual Carousel Media Renderer Integration Tests', () => {
         expect(meta.width).toBe(1080);
         expect(meta.height).toBe(1350);
       }
-    }, 30000);
+    }, 35000);
   });
 
   describe('Carousel Multi Images Renderer', () => {

@@ -175,5 +175,25 @@
         <div class="read-caption">READ CAPTION</div>
         <div class="line-4"></div>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/textfit/2.4.0/textFit.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const title = document.querySelector('.title');
+            const desc = document.querySelector('.description');
+            if (title && desc) {
+                const availableHeight = Math.max(200, 660 - title.offsetHeight - 30);
+                desc.style.height = availableHeight + 'px';
+                desc.style.boxSizing = 'border-box';
+                textFit(desc, {
+                    multiLine: true,
+                    maxFontSize: 29,
+                    minFontSize: 18,
+                    alignVert: false,
+                    alignHoriz: false
+                });
+            }
+        });
+    </script>
 </body>
 </html>

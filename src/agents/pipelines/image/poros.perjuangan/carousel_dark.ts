@@ -67,6 +67,7 @@ export async function generateCarouselDarkMedia(templateData: any, settings: any
       pages.push({
         file: 'slide',
         context: {
+          logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
           cover_image: templateData.coverImageUrl,
           text: marked.parse(text),
           roman_number: toRoman(i + 1)
@@ -243,6 +244,7 @@ RULES:
       pages.push({
         file: 'slide',
         context: {
+          logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
           cover_image: coverImageUrl,
           text: marked.parse(text),
           roman_number: toRoman(i + 1)
