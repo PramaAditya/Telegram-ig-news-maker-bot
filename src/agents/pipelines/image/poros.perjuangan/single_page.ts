@@ -216,7 +216,7 @@ RULES:
   const postButton = {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🔗 Lihat Post', url: `${process.env.APP_URL}/post/${inserted.id}` }]
+        [{ text: '✏️ Edit Queued Post', url: `${process.env.APP_URL}/post/${inserted.id}` }]
       ]
     }
   };
