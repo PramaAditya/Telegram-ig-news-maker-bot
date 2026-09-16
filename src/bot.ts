@@ -212,6 +212,49 @@ async function askForHeroStyle(ctx: any, ideaId: number, templateId: string) {
   }
 }
 
+// Configure Persistent Telegram Menu Button to open Mini App Dashboard
+if (process.env.APP_URL) {
+  bot.telegram.setChatMenuButton({
+    menuButton: {
+      type: 'web_app',
+      text: '📊 Dashboard',
+      web_app: { url: process.env.APP_URL }
+    }
+  }).then(() => {
+    console.log(`[Bot] Telegram Menu Button set to Web App: ${process.env.APP_URL}`);
+  }).catch((err: any) => {
+    console.warn('[Bot] Could not set chat menu button:', err.message);
+  });
+}
+
+// /start command with welcome message and inline Mini App button
+bot.command('start', async (ctx) => {
+  const welcomeText = `👋 <b>Selamat datang di Bot Poros Perjuangan!</b>\n\nKirimkan teks berita, link, atau foto/video untuk membuat konten Instagram carousel otomatis.\n\nAnda juga dapat membuka <b>Web Dashboard</b> langsung di Telegram melalui tombol di bawah atau tombol menu di kiri bawah:`;
+  const buttons = process.env.APP_URL ? [
+    [{ text: '📊 Buka Dashboard', web_app: { url: process.env.APP_URL } }]
+  ] : [];
+
+  await ctx.reply(welcomeText, {
+    parse_mode: 'HTML',
+    reply_markup: buttons.length > 0 ? { inline_keyboard: buttons } : undefined
+  });
+});
+
+// /dashboard command to open Mini App
+bot.command('dashboard', async (ctx) => {
+  if (!process.env.APP_URL) {
+    return ctx.reply('APP_URL belum dikonfigurasi di environment server.');
+  }
+
+  await ctx.reply('Klik tombol di bawah untuk membuka Web Dashboard:', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📊 Buka Dashboard', web_app: { url: process.env.APP_URL } }]
+      ]
+    }
+  });
+});
+
 bot.on(message('text'), async (ctx) => {
   const chatId = ctx.chat.id.toString();
   
