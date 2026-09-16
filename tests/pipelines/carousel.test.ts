@@ -88,6 +88,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
       editMessageText: vi.fn().mockResolvedValue(true),
       sendPhoto: vi.fn().mockResolvedValue(true),
       sendMessage: vi.fn().mockResolvedValue(true),
+      deleteMessage: vi.fn().mockResolvedValue(true),
     };
 
     mockStatusMsg = {
@@ -232,12 +233,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
 
       // Phase 5: Telegram notifications sent to user
       expect(mockTelegram.sendPhoto).toHaveBeenCalled();
-      expect(mockTelegram.editMessageText).toHaveBeenCalledWith(
-        999,
-        111,
-        undefined,
-        expect.stringContaining('Berhasil diselesaikan')
-      );
+      expect(mockTelegram.deleteMessage).toHaveBeenCalledWith(999, 111);
     });
   });
 

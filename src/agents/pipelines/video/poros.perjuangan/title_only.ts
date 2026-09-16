@@ -249,11 +249,6 @@ export async function runTitleOnlyPipeline(context: PipelineContext, research: R
     { reply_to_message_id: messageId, ...postButton }
   ));
 
-  await withRetry(() => telegram.editMessageText(
-    statusMsg.chat.id,
-    statusMsg.message_id,
-    undefined,
-    '✅ Video berhasil dibuat dan masuk Queue untuk di-publish!'
-  ));
+  await withRetry(() => telegram.deleteMessage(statusMsg.chat.id, statusMsg.message_id)).catch(() => {});
   console.log(`[Done] Video Pipeline finished successfully.`);
 }

@@ -334,11 +334,6 @@ RULES:
     await withRetry(() => telegram.sendMessage(chatId, finalCaption + `\n\nCover URL: ${renderedUrls[0]}`, { reply_to_message_id: messageId, ...postButton }));
   }
 
-  await withRetry(() => telegram.editMessageText(
-    statusMsg.chat.id,
-    statusMsg.message_id,
-    undefined,
-    '✅ Berhasil diselesaikan dan masuk Queue untuk di-publish!'
-  ));
+  await withRetry(() => telegram.deleteMessage(statusMsg.chat.id, statusMsg.message_id)).catch(() => {});
   console.log(`[Done] Pipeline finished successfully.`);
 }

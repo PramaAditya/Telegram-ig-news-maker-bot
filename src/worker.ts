@@ -91,6 +91,9 @@ async function processNextJob() {
           },
           sendPhoto: async (chatId: string, photo: any, opts: any) => {
             console.log(`[Dashboard Job] Sending photo preview to dashboard mock`);
+          },
+          deleteMessage: async (chatId: string, msgId: number) => {
+            console.log(`[Dashboard Job] Deleted status message ${msgId}`);
           }
         }
       : telegram;
