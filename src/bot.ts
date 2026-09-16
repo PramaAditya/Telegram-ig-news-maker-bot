@@ -4,8 +4,9 @@ import dotenv from 'dotenv';
 import { startServer } from './server.js';
 import { db } from './db/index.js';
 import { jobsTable, ideasTable } from './db/schema.js';
-import { getGlobalSettings, getConnections } from './db/settings.js';
+import { getGlobalSettings, getConnections, getConnection } from './db/settings.js';
 import { TEMPLATES } from './templates.js';
+import { formatQueueConfirmation } from './utils/formatters.js';
 
 const TEMPLATE_SHORT_CODES: Record<string, string> = {
   'carousel_dark': 'image:poros.perjuangan:carousel_dark',
@@ -148,11 +149,15 @@ async function askForTemplate(ctx: any, ideaId: number) {
 
     await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, ideaId));
 
-    const successMsg = '✅ Masuk antrean sistem (Title Only Video)';
+    const connection = idea.connectionId ? await getConnection(idea.connectionId) : null;
+    const successMsg = formatQueueConfirmation({
+      templateId,
+      accountName: connection?.name,
+    });
     if (ctx.callbackQuery) {
-      await InteractiveMenu.finalize(ctx, successMsg);
+      await InteractiveMenu.finalize(ctx, successMsg, 'HTML');
     } else {
-      await InteractiveMenu.send(ctx, successMsg, []);
+      await InteractiveMenu.send(ctx, successMsg, [], 'HTML');
     }
     return;
   }
@@ -475,7 +480,12 @@ bot.on('callback_query', async (ctx: any) => {
         });
 
         await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, ideaId));
-        await InteractiveMenu.finalize(ctx, '✅ Masuk antrean sistem (Title Only Video)', 'HTML');
+        const connection = idea.connectionId ? await getConnection(idea.connectionId) : null;
+        const successMsg = formatQueueConfirmation({
+          templateId,
+          accountName: connection?.name,
+        });
+        await InteractiveMenu.finalize(ctx, successMsg, 'HTML');
         return;
       }
 
@@ -519,8 +529,15 @@ bot.on('callback_query', async (ctx: any) => {
 
       await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, ideaId));
 
-      const styleLabel = heroStyle === 'Dark-Dramatize' ? '🌑 Dark Dramatize' : '🌟 4K Realistic';
-      await InteractiveMenu.finalize(ctx, `✅ Masuk antrean sistem (${styleLabel})`, 'HTML');
+      const connection = idea.connectionId ? await getConnection(idea.connectionId) : null;
+      const hasImage = idea.media && Array.isArray(idea.media) && idea.media.some((m: any) => m.type === 'image');
+      const successMsg = formatQueueConfirmation({
+        hasImage,
+        heroStyle,
+        accountName: connection?.name,
+        templateId,
+      });
+      await InteractiveMenu.finalize(ctx, successMsg, 'HTML');
       
     } else if (callbackData.startsWith('back_tmpl_') || callbackData.startsWith('back_template_')) {
       const ideaId = parseInt(callbackData.replace(/^back_(tmpl|template)_/, ''), 10);
