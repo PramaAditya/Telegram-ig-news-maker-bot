@@ -231,4 +231,57 @@ describe('Worker: pollBufferingPosts & Telegram Notification', () => {
       })
     );
   });
+  it('should send Telegram notification to adminChatId when post was triggered from DASHBOARD', async () => {
+    const dashboardPost = {
+      id: 105,
+      connectionId: 1,
+      chatId: 'DASHBOARD',
+      messageId: Date.now(),
+      text: 'Post created and published from Dashboard',
+      bufferPostId: 'buf_105',
+      status: 'buffering',
+    };
+
+    mockDb.where.mockResolvedValueOnce([dashboardPost]);
+
+    mockGetBufferPostStatus.mockResolvedValueOnce({
+      id: 'buf_105',
+      status: 'sent',
+      externalLink: 'https://www.instagram.com/p/C_dashboard/',
+      sentAt: '2026-09-16T11:00:00.000Z',
+    });
+
+    const updateSetMock = vi.fn().mockReturnThis();
+    const updateWhereMock = vi.fn().mockResolvedValueOnce([]);
+    mockDb.update.mockReturnValue({
+      set: updateSetMock.mockReturnValue({
+        where: updateWhereMock
+      })
+    });
+
+    await pollBufferingPosts({
+      db: mockDb,
+      telegram: mockTelegram,
+      getBufferPostStatus: mockGetBufferPostStatus,
+      getConnections: mockGetConnections,
+      adminChatId: 'admin_chat_999'
+    });
+
+    expect(mockTelegram.sendMessage).toHaveBeenCalledWith(
+      'admin_chat_999',
+      expect.stringContaining('via Dashboard'),
+      expect.objectContaining({
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: '🔗 Buka Postingan Instagram',
+                url: 'https://www.instagram.com/p/C_dashboard/'
+              }
+            ]
+          ]
+        }
+      })
+    );
+  });
 });

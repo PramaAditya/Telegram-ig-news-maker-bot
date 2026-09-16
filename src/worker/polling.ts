@@ -10,6 +10,7 @@ export interface PollBufferingOptions {
   getBufferPostStatus?: (bufferToken: string, bufferPostId: string) => Promise<any>;
   getConnections?: () => Promise<any[]>;
   maxRetries?: number;
+  adminChatId?: string;
 }
 
 export async function pollBufferingPosts(options: PollBufferingOptions = {}) {
@@ -18,6 +19,7 @@ export async function pollBufferingPosts(options: PollBufferingOptions = {}) {
   const getBufferPostStatus = options.getBufferPostStatus || defaultGetBufferPostStatus;
   const getConnections = options.getConnections || defaultGetConnections;
   const maxRetries = options.maxRetries ?? 3;
+  const adminChatId = options.adminChatId || process.env.TELEGRAM_ADMIN_CHAT_ID;
 
   try {
     const bufferingPosts = await db
@@ -53,17 +55,23 @@ export async function pollBufferingPosts(options: PollBufferingOptions = {}) {
             })
             .where(eq(queueTable.id, post.id));
 
-          if (telegram && post.chatId && post.chatId !== 'DASHBOARD') {
+          const targetChatId = (post.chatId && post.chatId !== 'DASHBOARD')
+            ? post.chatId
+            : adminChatId;
+
+          if (telegram && targetChatId) {
+            const isDirectReply = post.chatId && post.chatId !== 'DASHBOARD';
             const titleSnippet = post.text
               ? post.text.split('\n')[0].replace(/[*#_`]/g, '').slice(0, 100)
               : 'Postingan Baru';
 
             const timeStr = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-            const message = `🎉 <b>Postingan Berhasil Terbit di Instagram!</b>\n\n📌 <b>Konten:</b> ${titleSnippet}\n🕒 <b>Waktu:</b> ${timeStr} WIB`;
+            const sourceTag = isDirectReply ? '' : ' <i>(via Dashboard)</i>';
+            const message = `🎉 <b>Postingan Berhasil Terbit di Instagram!</b>${sourceTag}\n\n📌 <b>Konten:</b> ${titleSnippet}\n🕒 <b>Waktu:</b> ${timeStr} WIB`;
 
             try {
-              await telegram.sendMessage(post.chatId, message, {
-                reply_to_message_id: post.messageId ? Number(post.messageId) : undefined,
+              await telegram.sendMessage(targetChatId, message, {
+                reply_to_message_id: isDirectReply && post.messageId ? Number(post.messageId) : undefined,
                 parse_mode: 'HTML',
                 reply_markup: {
                   inline_keyboard: [
@@ -110,11 +118,16 @@ export async function pollBufferingPosts(options: PollBufferingOptions = {}) {
               })
               .where(eq(queueTable.id, post.id));
 
-            if (telegram && post.chatId && post.chatId !== 'DASHBOARD') {
+            const targetChatId = (post.chatId && post.chatId !== 'DASHBOARD')
+              ? post.chatId
+              : adminChatId;
+
+            if (telegram && targetChatId) {
+              const isDirectReply = post.chatId && post.chatId !== 'DASHBOARD';
               const errorMessage = `❌ <b>Postingan Gagal Terbit di Instagram</b>\n\nAlasan: ${statusResult.message || 'Persistent media upload failure'}`;
               try {
-                await telegram.sendMessage(post.chatId, errorMessage, {
-                  reply_to_message_id: post.messageId ? Number(post.messageId) : undefined,
+                await telegram.sendMessage(targetChatId, errorMessage, {
+                  reply_to_message_id: isDirectReply && post.messageId ? Number(post.messageId) : undefined,
                   parse_mode: 'HTML',
                 });
               } catch (teleErr) {
