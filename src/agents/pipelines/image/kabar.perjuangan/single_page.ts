@@ -1,14 +1,13 @@
-import { generateObject, generateText, generateImage } from 'ai';
-import { google } from '@ai-sdk/google';
+import { generateObject, generateText } from 'ai';
 import { z } from 'zod';
 import { googleAI, withRetry } from '../../../../utils.js';
 import type { PipelineContext, ResearchResult } from '../../../../utils.js';
-import { firecrawlService } from '../../../../utils/firecrawl.js';
 import { censorText } from '../../../../sanitize.js';
 import { uploadToS3 } from '../../../../s3.js';
 import { generateMedia } from '../../../../media.js';
 import { insertQueueItem } from '../../../../db/queue.js';
 import { marked } from 'marked';
+import { darkDramatize } from '../../../../utils/imageEditor/index.js';
 
 export const singlePageTemplateConfig = {
   id: 'image:kabar.perjuangan:single_page',
@@ -102,109 +101,17 @@ export async function runSinglePagePipeline(context: PipelineContext, research: 
 
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...'));
 
-  // Phase 3: Image Sourcing
-  let baseImageBuffer: Buffer | null = null;
+  // Phase 3: Image Sourcing & Dramatic Cover Generation
+  console.log(`[Phase 3] Generating dramatic cover image with imageEditor (Dark-Dramatize)...`);
+  const coverResult = await darkDramatize({
+    image: imageMediaItems.length > 0 ? imageMediaItems[0].buffer : null,
+    scrapedImageUrl,
+    searchQuery: contentParams.title,
+    prompt: contentParams.image_prompt,
+    uploadToS3: true,
+  });
 
-  if (imageMediaItems.length > 0) {
-    baseImageBuffer = imageMediaItems[0].buffer!;
-    console.log(`[Phase 3] Using uploaded cover image for enhancement`);
-  } 
-  
-  if (!baseImageBuffer && scrapedImageUrl) {
-    console.log(`[Phase 3] Using scraped image URL as base: ${scrapedImageUrl}`);
-      try {
-        const response = await fetch(scrapedImageUrl);
-        if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
-        const arrayBuffer = await response.arrayBuffer();
-        baseImageBuffer = Buffer.from(arrayBuffer);
-      } catch (err: any) {
-      console.warn(`[Phase 3] Failed to download scraped image: ${err.message}`);
-    }
-  }
-
-  // Fallback: search for an image using Firecrawl based on the topic
-  if (!baseImageBuffer) {
-    console.log(`[Phase 3] No image found so far. Searching the web for an image related to: ${contentParams.title}`);
-    try {
-      const searchRes = await firecrawlService.search(`${contentParams.title} image`, { limit: 1 });
-      
-      let foundImageUrl: string | null = null;
-      if ((searchRes as any).data && (searchRes as any).data.length > 0) {
-        for (const item of (searchRes as any).data) {
-          if (item.metadata && (item.metadata.ogImage || item.metadata.image)) {
-            foundImageUrl = item.metadata.ogImage || item.metadata.image;
-            break;
-          }
-        }
-      }
-
-      if (foundImageUrl) {
-         console.log(`[Phase 3] Found image URL via web search: ${foundImageUrl}`);
-           const response = await fetch(foundImageUrl);
-           if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
-           const arrayBuffer = await response.arrayBuffer();
-           baseImageBuffer = Buffer.from(arrayBuffer);
-      } else {
-         console.log(`[Phase 3] Web search didn't yield a usable image URL.`);
-      }
-    } catch (err: any) {
-      console.warn(`[Phase 3] Web search for image failed: ${err.message}`);
-    }
-  }
-
-  let imageGenerationPrompt = "";
-  const promptSuffix = "analyze input image, focus on main subject, masterpiece professional photography, dramatic backlighting, strong rim lighting from behind, intense edge light, front of subject in deep shadow, heavy chiaroscuro photohraphy, extreme low key, edges fading completely into pitch black void. 4K ultra HD. Render in extreme detail with high-end remastering, sharp focus, accurate textures. Ensure it is strictly in 1:1 aspect ratio. NO TEXT whatsoever. DO NOT INCLUDE: front lighting, direct lighting, top lighting, overhead light, painting, bright background, daylight, flat lighting, overexposed, visible room edges, cutout, text, logo, signature.";
-
-  if (baseImageBuffer) {
-    console.log(`[Phase 3] Enhancing cover image with Gemini...`);
-    imageGenerationPrompt = `Based on the provided image, ${promptSuffix}`;
-  } else {
-    console.log(`[Phase 3] Generating cover image with prompt: ${contentParams.image_prompt}`);
-    imageGenerationPrompt = `${contentParams.image_prompt}. ${promptSuffix}`;
-  }
-
-  let generatedFileBuffer: Buffer | null = null;
-  const maxRetries = 3;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`[Phase 3] AI Image generation attempt ${attempt}...`);
-      const { image } = await generateImage({
-        model: google.image('gemini-3.1-flash-image-preview'),
-        prompt: {
-          text: imageGenerationPrompt,
-          images: baseImageBuffer ? [baseImageBuffer] : [],
-        },
-        aspectRatio: '1:1'
-      });
-      
-      if (image && image.base64) {
-        generatedFileBuffer = Buffer.from(image.base64, 'base64');
-        break; // Success, exit retry loop
-      }
-    } catch (error) {
-      console.warn(`[Phase 3] AI Image generation failed on attempt ${attempt}:`, error);
-      if (attempt < maxRetries) {
-        const delay = Math.pow(2, attempt) * 1000;
-        const { promise, resolve } = (Promise as any).withResolvers();
-        setTimeout(resolve, delay);
-        await promise;
-      }
-    }
-  }
-
-  if (!generatedFileBuffer) {
-    console.warn(`[Phase 3] Failed to generate AI image after ${maxRetries} attempts. Falling back to base image or empty.`);
-    if (baseImageBuffer) {
-      generatedFileBuffer = baseImageBuffer;
-    } else {
-      generatedFileBuffer = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
-    }
-  }
-
-  console.log(`[Phase 3] Uploading generated/enhanced image to S3...`);
-  const coverImageUrl = await uploadToS3(generatedFileBuffer, 'image/jpeg', '.jpg');
-
+  const coverImageUrl = coverResult.url;
   if (!coverImageUrl) {
     throw new Error('Gagal mendapatkan URL gambar.');
   }
