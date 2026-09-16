@@ -229,6 +229,8 @@ export async function runTitleOnlyPipeline(context: PipelineContext, research: R
     text: finalCaption,
     media: renderedMedia,
     status: 'pending',
+    chatId: chatId,
+    messageId: messageId,
     researchResult: 'Video auto-generated.'
   });
 

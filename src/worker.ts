@@ -3,6 +3,7 @@ import { jobsTable, queueTable, settingsTable } from './db/schema.js';
 import { eq, sql, asc } from 'drizzle-orm';
 import { runAutomatedPipeline } from './agent.js';
 import { publishToBuffer } from './buffer.js';
+import { pollBufferingPosts } from './worker/polling.js';
 import { Telegraf } from 'telegraf';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
@@ -165,12 +166,16 @@ async function autoPublishQueue() {
             mediaToPublish.push({ type: 'image', url: ctaUrl });
           }
 
-          await publishToBuffer(mediaToPublish, post.text, post.publishMetadata, connection.id);
+          const bufferResult = await publishToBuffer(mediaToPublish, post.text, post.publishMetadata, connection.id);
           
           await db.update(queueTable)
-            .set({ status: 'published', publishedAt: new Date() })
+            .set({ 
+              status: 'buffering', 
+              bufferPostId: bufferResult?.id || null 
+            })
             .where(eq(queueTable.id, post.id));
 
+          console.log(`[Worker] Sent scheduled post ID ${post.id} to Buffer (bufferPostId: ${bufferResult?.id}). Status is now buffering.`);
           console.log(`[Worker] Successfully published scheduled post ID ${post.id}`);
         } catch (publishError: any) {
           console.error(`[Worker] Failed to publish scheduled post ID ${post.id}:`, publishError);
@@ -216,7 +221,7 @@ async function autoPublishQueue() {
       
       const pendingPosts = await db.select()
         .from(queueTable)
-        .where(sql`status = 'pending' AND scheduled_at IS NULL AND connection_id = ${settings.id}`)
+        .where(sql`status = 'pending' AND scheduled_at IS NULL AND connection_id = ${settings.id} AND (next_retry_at IS NULL OR next_retry_at <= NOW())`)
         .orderBy(asc(queueTable.sortOrder))
         .limit(1);
 
@@ -232,12 +237,18 @@ async function autoPublishQueue() {
           mediaToPublish.push({ type: 'image', url: ctaUrl });
         }
 
-        await publishToBuffer(mediaToPublish, post.text, post.publishMetadata, settings.id);
+        const bufferResult = await publishToBuffer(mediaToPublish, post.text, post.publishMetadata, settings.id);
         
         await db.update(queueTable)
-          .set({ status: 'published', publishedAt: new Date() })
+          .set({ 
+            status: 'buffering', 
+            bufferPostId: bufferResult?.id || null 
+          })
           .where(eq(queueTable.id, post.id));
 
+        await db.update(settingsTable).set({ lastAutoPublishAt: new Date() }).where(eq(settingsTable.id, settings.id));
+
+        console.log(`[Worker] Sent auto-published post ID ${post.id} to Buffer (bufferPostId: ${bufferResult?.id}). Status is now buffering.`);
         await db.update(settingsTable).set({ lastAutoPublishAt: new Date() }).where(eq(settingsTable.id, settings.id));
 
         console.log(`[Worker] Successfully auto-published post ID ${post.id}`);
@@ -258,6 +269,17 @@ console.log(`[Worker] Auto-publish worker started (Checking every minute against
 cron.schedule('* * * * *', autoPublishQueue, {
   timezone: "Asia/Jakarta"
 });
+
+// Polling worker for posts in 'buffering' state (checking Instagram publication status)
+console.log(`[Worker] Buffering poller started (Checking every 20 seconds for published status and permalinks).`);
+setInterval(async () => {
+  if (isShuttingDown) return;
+  try {
+    await pollBufferingPosts({ telegram });
+  } catch (pollErr: any) {
+    console.error('[Worker] Error during pollBufferingPosts:', pollErr.message || pollErr);
+  }
+}, 20000);
 
 const shutdown = () => {
   console.log('[Worker] Shutting down gracefully... waiting for active jobs to finish.');

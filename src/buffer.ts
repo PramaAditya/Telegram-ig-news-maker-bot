@@ -155,3 +155,57 @@ export async function publishToBuffer(media: BufferMediaItem[], text: string, pu
     throw new Error(error.response?.data?.errors?.[0]?.message || error.message || 'Failed to publish to Buffer');
   }
 }
+
+export interface BufferPostStatusResult {
+  id: string;
+  status: string;
+  externalLink?: string | null;
+  sentAt?: string | null;
+  message?: string;
+}
+
+export async function getBufferPostStatus(bufferToken: string, bufferPostId: string): Promise<BufferPostStatusResult> {
+  const query = `
+    query GetPost {
+      post(input: { id: ${JSON.stringify(bufferPostId)} }) {
+        id
+        status
+        externalLink
+        sentAt
+      }
+    }
+  `;
+
+  const payload = { query };
+
+  const url = 'https://api.buffer.com';
+
+  try {
+    const response = await axios.post(url, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${bufferToken}`
+      }
+    });
+
+    const data = response.data;
+    if (data.errors) {
+      throw new Error(data.errors[0].message);
+    }
+
+    const post = data.data?.post;
+    if (!post) {
+      throw new Error('Post not found in Buffer');
+    }
+
+    return {
+      id: post.id,
+      status: post.status,
+      externalLink: post.externalLink || null,
+      sentAt: post.sentAt || null,
+    };
+  } catch (error: any) {
+    console.error('Buffer getBufferPostStatus error:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.errors?.[0]?.message || error.message || 'Failed to fetch Buffer post status');
+  }
+}

@@ -80,11 +80,14 @@ app.post('/api/trigger-publish', requireTriggerAuth, async (req, res) => {
       const result = await publishToBuffer(mediaToPublish, post.text, post.publishMetadata, post.connectionId);
       
       await db.update(queueTable)
-        .set({ status: 'published', publishedAt: new Date() })
+        .set({ 
+          status: 'buffering', 
+          bufferPostId: result?.id || null 
+        })
         .where(eq(queueTable.id, post.id));
 
-      console.log(`[API] Successfully published post ID ${post.id}`);
-      return res.status(200).json({ message: 'Published successfully', postId: post.id, bufferResult: result });
+      console.log(`[API] Successfully submitted post ID ${post.id} to Buffer (bufferPostId: ${result?.id}). Status: buffering`);
+      return res.status(200).json({ message: 'Submitted to Buffer successfully', postId: post.id, bufferResult: result });
     } catch (publishError: any) {
       console.error(`[API] Failed to publish post ID ${post.id}:`, publishError);
       await db.update(queueTable)
@@ -690,12 +693,12 @@ app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
       
       await db.update(queueTable)
         .set({
-          status: 'published',
-          publishedAt: new Date()
+          status: 'buffering',
+          bufferPostId: result?.id || null,
         })
         .where(eq(queueTable.id, id));
         
-      res.json({ message: 'Published successfully', result });
+      res.json({ message: 'Submitted to Buffer successfully', result });
     } catch (publishError: any) {
       await db.update(queueTable)
         .set({
@@ -724,7 +727,12 @@ app.post('/api/queue/:id/retry-error', requireDashboardAuth, async (req, res) =>
     }
 
     await db.update(queueTable)
-      .set({ status: 'pending', errorLog: null })
+      .set({ 
+        status: 'pending', 
+        errorLog: null,
+        retryCount: 0,
+        nextRetryAt: null
+      })
       .where(eq(queueTable.id, id));
 
     res.json({ message: 'Post moved back to pending queue successfully' });

@@ -208,6 +208,8 @@ RULES:
     text: finalCaption,
     media: allPublishUrls,
     status: 'pending',
+    chatId: chatId,
+    messageId: messageId,
     researchResult: researchText
   });
 

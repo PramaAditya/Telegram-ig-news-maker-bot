@@ -31,7 +31,13 @@ export const queueTable = pgTable('queue', {
   text: text('text').notNull(),
   media: jsonb('media').$type<{ type: 'image' | 'video', url: string }[]>().notNull(),
   publishMetadata: jsonb('publish_metadata').$type<any>().notNull().default({}),
-  status: text('status').notNull().default('pending'), // pending, published, error
+  status: text('status').notNull().default('pending'), // pending, publishing, buffering, published, error
+  chatId: text('chat_id'),
+  messageId: bigint('message_id', { mode: 'number' }),
+  bufferPostId: text('buffer_post_id'),
+  postUrl: text('post_url'),
+  retryCount: integer('retry_count').default(0).notNull(),
+  nextRetryAt: timestamp('next_retry_at'),
   errorLog: text('error_log'),
   researchResult: text('research_result'),
   scheduledAt: timestamp('scheduled_at'),

@@ -8,7 +8,7 @@
     "start:bot": "tsx src/bot.ts",
     "start:worker": "tsx src/worker.ts",
     "db:push": "drizzle-kit push",
-    "test": "vitest run tests/agents tests/utils tests/pipelines",
+    "test": "vitest run tests/agents tests/utils tests/pipelines tests/worker",
     "test:render": "vitest run tests/render/carousel_render.test.ts",
     "test:all": "vitest run"
   },

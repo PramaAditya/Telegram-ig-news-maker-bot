@@ -10,7 +10,12 @@ export async function insertQueueItem(data: {
   media: { type: 'image' | 'video', url: string }[];
   publishMetadata?: any;
   researchResult?: string;
-  status?: string; // e.g., 'pending', 'draft', 'published', 'error'
+  status?: string; // e.g., 'pending', 'publishing', 'buffering', 'published', 'error'
+  chatId?: string;
+  messageId?: number;
+  bufferPostId?: string;
+  postUrl?: string;
+  retryCount?: number;
 }) {
   // Explicitly calculate the next sort order so it appears at the end of the queue
   const [maxRecord] = await db.select({ maxSort: sql<number>`MAX(${queueTable.sortOrder})` }).from(queueTable);
@@ -25,6 +30,11 @@ export async function insertQueueItem(data: {
     media: data.media,
     publishMetadata: data.publishMetadata || {},
     status: data.status || 'pending',
-    researchResult: data.researchResult
+    researchResult: data.researchResult,
+    chatId: data.chatId,
+    messageId: data.messageId,
+    bufferPostId: data.bufferPostId,
+    postUrl: data.postUrl,
+    retryCount: data.retryCount ?? 0,
   }).returning();
 }

@@ -295,7 +295,9 @@ RULES:
     templateData: templateData,
     text: finalCaption,
     media: allPublishUrls,
-    status: 'pending', // Allows passing 'draft' or other statuses in the future
+    status: 'pending',
+    chatId: chatId,
+    messageId: messageId,
     researchResult: researchText
   });
 
