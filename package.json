@@ -8,7 +8,7 @@
     "start:bot": "tsx src/bot.ts",
     "start:worker": "tsx src/worker.ts",
     "db:push": "drizzle-kit push",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
