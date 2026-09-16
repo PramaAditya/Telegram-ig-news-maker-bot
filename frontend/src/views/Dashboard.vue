@@ -345,17 +345,54 @@ const duplicateToQueue = async (id: number) => {
   }
 };
 
+const isPublishWarningModalOpen = ref(false);
+const publishingPostId = ref<number | null>(null);
+const upcomingSchedule = ref<{
+  hasUpcoming: boolean;
+  type?: 'scheduled_post' | 'auto_slot';
+  minutesRemaining?: number;
+  timeStr?: string;
+  upcomingPostId?: number | null;
+  upcomingPostTitle?: string | null;
+  upcomingSlotDay?: string;
+} | null>(null);
+const isPublishing = ref(false);
+
 const publishNow = async (id: number) => {
-  if (
-    !confirm(
-      "Are you sure you want to publish this post IMMEDIATELY to Buffer?",
-    )
-  )
-    return;
+  publishingPostId.value = id;
+  try {
+    const scheduleRes = await fetch(`/api/queue/${id}/upcoming-schedule`, {
+      headers: getAuthHeaders(),
+    });
+    if (scheduleRes.ok) {
+      const scheduleData = await scheduleRes.json();
+      if (scheduleData.hasUpcoming) {
+        upcomingSchedule.value = scheduleData;
+        isPublishWarningModalOpen.value = true;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to check upcoming schedule, proceeding with normal confirmation:', e);
+  }
+
+  if (!confirm("Are you sure you want to publish this post IMMEDIATELY to Buffer?")) return;
+  executePublish(id, false);
+};
+
+const executePublish = async (id: number, skipUpcomingSlot: boolean) => {
+  isPublishing.value = true;
   try {
     const res = await fetch(`/api/queue/${id}/publish`, {
       method: "POST",
-      headers: getAuthHeaders(),
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        skipUpcomingSlot,
+        upcomingPostId: upcomingSchedule.value?.upcomingPostId,
+      }),
     });
     if (res.status === 401) {
       toast.add({ title: "Unauthorized", color: "error" });
@@ -363,10 +400,15 @@ const publishNow = async (id: number) => {
     }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to publish");
-    toast.add({ title: "Published successfully!", color: "success" });
+    
+    const skipMsg = skipUpcomingSlot ? " (Jadwal berikutnya di-skip)" : "";
+    toast.add({ title: `Published successfully!${skipMsg}`, color: "success" });
+    isPublishWarningModalOpen.value = false;
     fetchQueue();
   } catch (err: any) {
     toast.add({ title: err.message, color: "error" });
+  } finally {
+    isPublishing.value = false;
   }
 };
 
@@ -826,6 +868,45 @@ const timeAgo = (dateObj: Date | string | null) => {
           <div class="flex justify-end gap-2">
              <UButton color="white" variant="ghost" @click="isScheduleModalOpen = false">Cancel</UButton>
              <UButton color="primary" variant="solid" @click="saveSchedule" :disabled="!scheduleModalDate">Save Schedule</UButton>
+          </div>
+       </template>
+    </UModal>
+
+    <!-- Warning Modal: Upcoming Post Detected in Next 60 Minutes -->
+    <UModal v-model:open="isPublishWarningModalOpen" title="⚠️ Upcoming Post Detected">
+       <template #body>
+         <div class="space-y-4" v-if="upcomingSchedule">
+            <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+              <p class="text-sm font-semibold text-amber-500 flex items-center gap-1.5">
+                <span>⏱️ Next post is in {{ upcomingSchedule.minutesRemaining }} minutes</span>
+                <span class="text-xs text-muted font-normal">({{ upcomingSchedule.timeStr }} WIB)</span>
+              </p>
+            </div>
+
+            <p class="text-sm text-default">
+              Postingan berikutnya dijadwalkan terbit dalam <b>{{ upcomingSchedule.minutesRemaining }} menit dari sekarang</b>.
+            </p>
+
+            <div v-if="upcomingSchedule.upcomingPostTitle" class="p-3 bg-elevated border border-default rounded-md text-xs text-muted italic">
+              📌 "{{ upcomingSchedule.upcomingPostTitle }}"
+            </div>
+
+            <p class="text-sm text-muted">
+              Karena Anda melakukan <b>Publish Now</b> saat ini, apakah Anda ingin <b>menge-skip</b> jadwal/slot postingan berikutnya tersebut agar jeda antar konten tidak terlalu rapat?
+            </p>
+         </div>
+       </template>
+       <template #footer>
+          <div class="flex flex-col sm:flex-row justify-end gap-2 w-full">
+             <UButton color="neutral" variant="ghost" @click="isPublishWarningModalOpen = false" :disabled="isPublishing">
+                Cancel
+             </UButton>
+             <UButton color="neutral" variant="outline" @click="executePublish(publishingPostId!, false)" :loading="isPublishing">
+                Publish & Biarkan Slot Tetap Jalan
+             </UButton>
+             <UButton color="primary" variant="solid" @click="executePublish(publishingPostId!, true)" :loading="isPublishing">
+                ⏭️ Skip Slot & Publish Now
+             </UButton>
           </div>
        </template>
     </UModal>

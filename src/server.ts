@@ -8,6 +8,7 @@ import { TEMPLATES } from './templates.js';
 import { generateMedia } from './media.js';
 import { publishToBuffer, fetchBufferChannelDetails } from './buffer.js';
 import { runAutomatedPipeline } from './agent.js';
+import { checkUpcomingSchedule } from './utils/scheduleChecker.js';
 import multer from 'multer';
 import { uploadToS3 } from './s3.js';
 import { generateObject } from 'ai';
@@ -667,6 +668,17 @@ app.post('/api/queue/:id/regenerate-media', requireDashboardAuth, async (req, re
     res.status(500).json({ error: error.message });
   }
 });
+app.get('/api/queue/:id/upcoming-schedule', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const scheduleInfo = await checkUpcomingSchedule({ db, postId: id });
+    return res.json(scheduleInfo);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
   try {
@@ -695,8 +707,30 @@ app.post('/api/queue/:id/publish', requireDashboardAuth, async (req, res) => {
         .set({
           status: 'buffering',
           bufferPostId: result?.id || null,
+          publishedAt: new Date(),
         })
         .where(eq(queueTable.id, id));
+
+      // Handle skipping upcoming slot/post if requested by user
+      const { skipUpcomingSlot, upcomingPostId } = req.body || {};
+      if (skipUpcomingSlot) {
+        if (upcomingPostId) {
+          const [upPost] = await db.select().from(queueTable).where(eq(queueTable.id, upcomingPostId));
+          if (upPost && upPost.scheduledAt) {
+            // Push upcoming custom scheduled post back by 1 hour
+            const newScheduledAt = new Date(new Date(upPost.scheduledAt).getTime() + 60 * 60 * 1000);
+            await db.update(queueTable)
+              .set({ scheduledAt: newScheduledAt })
+              .where(eq(queueTable.id, upPost.id));
+            console.log(`[API] Pushed upcoming scheduled post ID ${upPost.id} back by 1 hour to ${newScheduledAt.toISOString()}`);
+          }
+        }
+        // Update lastAutoPublishAt to skip upcoming auto slot
+        await db.update(settingsTable)
+          .set({ lastAutoPublishAt: new Date() })
+          .where(eq(settingsTable.id, post.connectionId));
+        console.log(`[API] Set lastAutoPublishAt for connection ${post.connectionId} to skip upcoming auto slot.`);
+      }
         
       res.json({ message: 'Submitted to Buffer successfully', result });
     } catch (publishError: any) {
