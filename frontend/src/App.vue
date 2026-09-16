@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
+import { useRoute } from "vue-router";
 import { useColorMode } from "@vueuse/core";
 import { useConnectionStore } from "./store";
 import { getAuthHeaders } from "./auth";
 import type { NavigationMenuItem } from '@nuxt/ui';
 
+const route = useRoute();
 const colorMode = useColorMode();
 const toggleColorMode = () => {
   colorMode.value = colorMode.value === "dark" ? "light" : "dark";
@@ -93,7 +95,13 @@ const sidebarNavItems = computed<NavigationMenuItem[]>(() => {
   ];
 });
 
-const topNavItems = computed<NavigationMenuItem[]>(() => [
+interface MainNavItem {
+  label: string;
+  icon: string;
+  to: string;
+}
+
+const topNavItems = computed<MainNavItem[]>(() => [
   { label: 'Queue', icon: 'i-lucide-list', to: '/' },
   { label: 'Ideas', icon: 'i-lucide-lightbulb', to: '/ideas' },
   { label: 'Jobs', icon: 'i-lucide-briefcase', to: '/jobs' },
@@ -108,6 +116,7 @@ const topNavItems = computed<NavigationMenuItem[]>(() => [
         v-model:open="sidebarOpen"
         collapsible="icon"
         rail
+        class="hidden md:flex"
         :ui="{
           container: 'h-full',
           inner: 'bg-elevated/25 divide-transparent',
@@ -155,26 +164,99 @@ const topNavItems = computed<NavigationMenuItem[]>(() => [
       </USidebar>
 
       <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div class="h-(--ui-header-height) shrink-0 flex items-center px-4 border-b border-default bg-default z-10 gap-2">
-          <UButton
-            icon="i-lucide-panel-left"
-            color="neutral"
-            variant="ghost"
-            aria-label="Toggle sidebar"
-            @click="sidebarOpen = !sidebarOpen"
-          />
-          <h1 class="text-lg font-semibold truncate shrink-0 mr-4">IG News Maker</h1>
+        <div class="h-(--ui-header-height) shrink-0 flex items-center justify-between px-3 sm:px-4 border-b border-default bg-default z-10 gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <UButton
+              icon="i-lucide-panel-left"
+              color="neutral"
+              variant="ghost"
+              aria-label="Toggle sidebar"
+              class="hidden md:inline-flex"
+              @click="sidebarOpen = !sidebarOpen"
+            />
+            <h1 class="text-base sm:text-lg font-semibold truncate shrink-0">IG News Maker</h1>
+          </div>
           
+          <!-- Desktop Navigation -->
           <UNavigationMenu
             :items="topNavItems"
             orientation="horizontal"
-            class="flex-1 min-w-0 overflow-x-auto"
+            class="hidden md:flex flex-1 min-w-0 overflow-x-auto mx-4"
           />
+
+          <!-- Quick Actions (Theme & Settings) -->
+          <div class="flex items-center gap-1 shrink-0">
+            <UButton
+              to="/global-settings"
+              icon="i-lucide-globe"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              class="md:hidden"
+              aria-label="Global Settings"
+            />
+            <UButton
+              :icon="colorMode === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon'"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              aria-label="Toggle theme"
+              @click="toggleColorMode"
+            />
+          </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-4 sm:p-8">
+        <div class="flex-1 overflow-y-auto p-4 sm:p-8 pb-36 md:pb-8">
           <div class="max-w-5xl mx-auto w-full">
             <router-view></router-view>
+          </div>
+        </div>
+
+        <!-- Mobile Bottom Dock (Connection Slider + Bottom Navigation Bar) -->
+        <div class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-default/95 backdrop-blur-lg border-t border-default shadow-lg pb-safe">
+          <!-- Connection Slider -->
+          <div class="px-3 py-2 border-b border-default/50 bg-elevated/40">
+            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <span class="text-[10px] font-bold text-muted uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+                <UIcon name="i-lucide-plug" class="w-3.5 h-3.5" />
+                Account:
+              </span>
+              <button
+                v-for="conn in connections"
+                :key="conn.id"
+                @click="connectionStore.setActiveConnection(conn.id)"
+                class="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition flex items-center gap-1.5 cursor-pointer"
+                :class="connectionStore.activeConnectionId === conn.id
+                  ? 'bg-primary text-white shadow-xs font-semibold'
+                  : 'bg-default/80 hover:bg-default text-muted hover:text-default border border-default/80'"
+              >
+                <span class="w-1.5 h-1.5 rounded-full" :class="connectionStore.activeConnectionId === conn.id ? 'bg-white' : 'bg-muted'"></span>
+                <span>{{ conn.name || 'Unnamed' }}</span>
+              </button>
+              <button
+                @click="createNewConnection"
+                class="shrink-0 px-2.5 py-1 rounded-full text-xs font-medium bg-default/50 hover:bg-default text-muted hover:text-default border border-dashed border-default flex items-center gap-1 cursor-pointer transition"
+              >
+                <UIcon name="i-lucide-plus" class="w-3.5 h-3.5" />
+                <span>New</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Bottom Navigation Bar -->
+          <div class="grid grid-cols-4 gap-1 px-2 pt-1.5 pb-1">
+            <router-link
+              v-for="item in topNavItems"
+              :key="item.to"
+              :to="item.to"
+              class="flex flex-col items-center justify-center py-1 rounded-lg transition text-xs font-medium"
+              :class="route.path === item.to
+                ? 'text-primary font-semibold'
+                : 'text-muted hover:text-default'"
+            >
+              <UIcon :name="item.icon!" class="w-5 h-5 mb-0.5" />
+              <span class="text-[11px] leading-tight">{{ item.label }}</span>
+            </router-link>
           </div>
         </div>
       </div>
