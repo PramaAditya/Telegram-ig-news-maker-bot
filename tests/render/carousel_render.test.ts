@@ -10,10 +10,10 @@ const puppeteer = require('../../services/media-renderer/node_modules/puppeteer'
 const Handlebars = require('../../services/media-renderer/node_modules/handlebars');
 
 // Register Handlebars helpers matching media-renderer/server.js
-Handlebars.registerHelper('markdown', function (options: any) {
+Handlebars.registerHelper('markdown', function (this: any, options: any) {
   return new Handlebars.SafeString(marked.parse(options.fn(this)));
 });
-Handlebars.registerHelper('markdownInline', function (options: any) {
+Handlebars.registerHelper('markdownInline', function (this: any, options: any) {
   return new Handlebars.SafeString(marked.parseInline(options.fn(this)));
 });
 
