@@ -162,6 +162,45 @@ describe('Carousel Pipelines Workflow Tests', () => {
       expect(result[0]).toEqual({ type: 'image', url: 'https://renderer.pelita.tech/output_cover.png' });
     });
 
+    it('generates source_qr page with valid QR Data URL when source_url is present', async () => {
+      vi.mocked(media.generateMedia).mockResolvedValueOnce([
+        'https://renderer.pelita.tech/output_cover.png',
+        'https://renderer.pelita.tech/output_slide1.png',
+        'https://renderer.pelita.tech/output_slide2.png',
+        'https://renderer.pelita.tech/output_source_qr.png',
+      ]);
+
+      const templateData = {
+        title: 'Sensational **Headline**',
+        coverImageUrl: 'https://mock-s3.pelita.tech/cover.jpg',
+        slides: ['First paragraph.', 'Second paragraph.'],
+        source_name: 'Antara News',
+        source_url: 'https://www.antaranews.com/berita/4450123/kpk?utm_source=share',
+      };
+
+      const result = await generateCarouselDarkMedia(templateData, mockContext.settings);
+
+      expect(media.generateMedia).toHaveBeenCalledWith(
+        '/render/image/poros.perjuangan/carousel_dark',
+        expect.objectContaining({
+          pages: expect.arrayContaining([
+            expect.objectContaining({ file: 'cover' }),
+            expect.objectContaining({ file: 'slide' }),
+            expect.objectContaining({
+              file: 'source_qr',
+              context: expect.objectContaining({
+                source_name: 'Antara News',
+                source_domain: 'antaranews.com',
+                qr_code_image: expect.stringMatching(/^data:image\/png;base64,/),
+              }),
+            }),
+          ]),
+        })
+      );
+
+      expect(result).toHaveLength(4);
+    });
+
     it('executes full runCarouselDarkPipeline end-to-end orchestration', async () => {
       // 1. Mock Content Generation (generateObject)
       vi.mocked(generateObject).mockResolvedValueOnce({
@@ -373,6 +412,42 @@ describe('Carousel Pipelines Workflow Tests', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ type: 'image', url: 'https://renderer.pelita.tech/single_page.png' });
+    });
+
+    it('generates source_qr page for single page when source_url is present', async () => {
+      vi.mocked(media.generateMedia).mockResolvedValueOnce([
+        'https://renderer.pelita.tech/single_page.png',
+        'https://renderer.pelita.tech/single_page_qr.png',
+      ]);
+
+      const templateData = {
+        title: 'Single Page Title',
+        description: 'P1.\n\nP2.',
+        coverImageUrl: 'https://mock-s3.pelita.tech/cover.jpg',
+        source_name: 'Tempo',
+        source_url: 'https://tempo.co/read/12345',
+      };
+
+      const result = await generateSinglePageMedia(templateData, mockContext.settings);
+
+      expect(media.generateMedia).toHaveBeenCalledWith(
+        '/render/image/poros.perjuangan/single_page',
+        expect.objectContaining({
+          pages: [
+            expect.objectContaining({ file: 'cover' }),
+            expect.objectContaining({
+              file: 'source_qr',
+              context: expect.objectContaining({
+                source_name: 'Tempo',
+                source_domain: 'tempo.co',
+                qr_code_image: expect.stringMatching(/^data:image\/png;base64,/),
+              }),
+            }),
+          ],
+        })
+      );
+
+      expect(result).toHaveLength(2);
     });
 
     it('executes full runSinglePagePipeline end-to-end orchestration', async () => {

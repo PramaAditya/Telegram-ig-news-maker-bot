@@ -48,11 +48,19 @@ export interface PipelineContext {
   heroStyle?: string;
 }
 
+export interface CandidateSource {
+  url: string;
+  title?: string;
+  domain?: string;
+}
+
 export interface ResearchResult {
   researchText: string;
   scrapedImageUrl: string | null;
   scrapedImageUrls?: string[];
   processedMedia: MediaItem[];
+  candidateSources?: CandidateSource[];
+  primarySourceUrl?: string | null;
 }
 
 export const googleAI = createGoogleGenerativeAI({

@@ -7,9 +7,15 @@ import { uploadToS3 } from "../s3.js";
 import {
   PipelineContext,
   ResearchResult,
+  CandidateSource,
   googleAI,
   withRetry,
 } from "../utils.js";
+import {
+  extractUrlsFromText,
+  sanitizeSourceUrl,
+  getCleanDomain,
+} from "../utils/urlSanitizer.js";
 
 export async function processMediaOnly(
   context: PipelineContext,
@@ -171,7 +177,17 @@ export async function runResearchPhase(
 
   let scrapedImageUrl: string | null = null;
   let scrapedImageUrls: string[] = [];
+  const candidateSources: CandidateSource[] = [];
 
+  const inputUrls = extractUrlsFromText(userInput);
+  let primarySourceUrl: string | null =
+    inputUrls.length > 0 ? sanitizeSourceUrl(inputUrls[0]) : null;
+  if (primarySourceUrl) {
+    candidateSources.push({
+      url: primarySourceUrl,
+      domain: getCleanDomain(primarySourceUrl),
+    });
+  }
   const extractImagesFromMarkdown = (md: string) => {
     const regex = /!\[.*?\]\((.*?)\)/g;
     let match;
@@ -220,6 +236,20 @@ export async function runResearchPhase(
                 if (exaRes && Array.isArray(exaRes.results)) {
                   exaRes.results.forEach((item: Record<string, unknown>) => {
                     if (
+                      item.url &&
+                      typeof item.url === "string" &&
+                      item.url.startsWith("http")
+                    ) {
+                      const clean = sanitizeSourceUrl(item.url);
+                      if (clean && !candidateSources.some((c) => c.url === clean)) {
+                        candidateSources.push({
+                          url: clean,
+                          title: typeof item.title === "string" ? item.title : undefined,
+                          domain: getCleanDomain(clean),
+                        });
+                      }
+                    }
+                    if (
                       item.image &&
                       typeof item.image === "string" &&
                       item.image.startsWith("http")
@@ -254,6 +284,16 @@ export async function runResearchPhase(
                   (item: unknown) => {
                     if (item && typeof item === "object") {
                       const typedItem = item as Record<string, unknown>;
+                      if (typedItem.url && typeof typedItem.url === "string" && typedItem.url.startsWith("http")) {
+                        const clean = sanitizeSourceUrl(typedItem.url);
+                        if (clean && !candidateSources.some((c) => c.url === clean)) {
+                          candidateSources.push({
+                            url: clean,
+                            title: typeof typedItem.title === "string" ? typedItem.title : undefined,
+                            domain: getCleanDomain(clean),
+                          });
+                        }
+                      }
                       const metadata = typedItem.metadata as
                         | Record<string, unknown>
                         | undefined;
@@ -275,7 +315,13 @@ export async function runResearchPhase(
             inputSchema: z.object({ url: z.string() }),
             execute: async ({ url }: { url: string }) => {
               console.log(`[Tool: scrapeUrl] Scraping URL: ${url}`);
-
+              const cleanScraped = sanitizeSourceUrl(url);
+              if (cleanScraped && !candidateSources.some((c) => c.url === cleanScraped)) {
+                candidateSources.push({
+                  url: cleanScraped,
+                  domain: getCleanDomain(cleanScraped),
+                });
+              }
               try {
                 // Try Exa getContents first
                 const exaRes = (await exaService.getContents(url, {
@@ -402,10 +448,16 @@ export async function runResearchPhase(
     );
   }
 
+  if (!primarySourceUrl && candidateSources.length > 0) {
+    primarySourceUrl = candidateSources[0].url;
+  }
+
   return {
     researchText,
     scrapedImageUrl,
     scrapedImageUrls,
     processedMedia,
+    candidateSources,
+    primarySourceUrl,
   };
 }

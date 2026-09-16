@@ -8,13 +8,16 @@ import { generateMedia } from '../../../../media.js';
 import { insertQueueItem } from '../../../../db/queue.js';
 import { marked } from 'marked';
 import { imageEditor } from '../../../../utils/imageEditor/index.js';
-
+import { sanitizeSourceUrl, getCleanDomain } from '../../../../utils/urlSanitizer.js';
+import { generateQrCodeDataUrl } from '../../../../utils/qrGenerator.js';
 export const singlePageTemplateConfig = {
   id: 'image:poros.perjuangan:single_page',
   name: 'Single Page Post',
   description: 'A 1-page high-impact news post with a title and a 2-paragraph description.',
   uiSchema: [
     { name: 'title', type: 'text', label: 'Provocative Title' },
+    { name: 'source_name', type: 'text', label: 'Source Media Name' },
+    { name: 'source_url', type: 'text', label: 'Source Article URL' },
     { name: 'description', type: 'text', label: 'Body Description (HTML/Markdown)' },
     { name: 'coverImageUrl', type: 'image', label: 'Background Image' }
   ] as any[]
@@ -24,7 +27,8 @@ const systemPromptAdditions = `
 Your task is to parse the gathered facts into final components for an Instagram news single-page post.
 - title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
 - description: Exactly 2 short, punchy paragraphs (maximum 2 sentences each) explaining the news. Write in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi) for a Gen-Z audience with a short attention span. AVOID complex political or academic jargon. Each paragraph must be highly informative, answering the 5W1H comprehensively across both paragraphs. Get straight to the point without unnecessary fluff. Do NOT repeat information already stated in the title.
-- source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
+- source_name: The original news source (e.g., Antara News, Kompas, Al Jazeera).
+- source_url: The direct HTTP/HTTPS URL of the primary article referenced.
 - image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "masterpiece professional photography, dramatic backlighting, heavy chiaroscuro, extreme low key".
 `;
 
@@ -32,6 +36,7 @@ const schema = z.object({
   title: z.string(),
   description: z.string(),
   source_name: z.string(),
+  source_url: z.string().optional(),
   image_prompt: z.string(),
 });
 
@@ -48,6 +53,24 @@ export async function generateSinglePageMedia(templateData: any, settings: any):
     }
   });
 
+  if (templateData.source_url) {
+    try {
+      const cleanUrl = sanitizeSourceUrl(templateData.source_url);
+      if (cleanUrl) {
+        const qrDataUrl = await generateQrCodeDataUrl(cleanUrl);
+        pages.push({
+          file: 'source_qr',
+          context: {
+            source_name: templateData.source_name || 'Sumber Resmi',
+            source_domain: getCleanDomain(cleanUrl),
+            qr_code_image: qrDataUrl,
+          }
+        });
+      }
+    } catch (qrErr) {
+      console.warn('Failed to generate QR code slide for single page:', qrErr);
+    }
+  }
   const renderPayload = {
     viewport: { width: 1080, height: 1350 },
     pages
@@ -87,7 +110,7 @@ export async function runSinglePagePipeline(context: PipelineContext, research: 
     model: googleAI(process.env.CONTENT_WRITER_MODEL || 'gemini-3.1-pro-preview'),
     system: writerSystemPrompt,
     schema: schema,
-    prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchText}`,
+    prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchText}${research.candidateSources && research.candidateSources.length > 0 ? '\n\nCandidate Source URLs:\n' + research.candidateSources.map(c => `- ${c.title || c.domain || ''}: ${c.url}`).join('\n') : ''}`,
   });
   
   let finalCaption = '';
@@ -175,6 +198,26 @@ RULES:
       description: marked.parse(templateData.description || '')
     }
   });
+
+  const chosenSourceUrl = sanitizeSourceUrl(contentParams.source_url || research.primarySourceUrl || '');
+  templateData.source_url = chosenSourceUrl || undefined;
+  templateData.source_name = contentParams.source_name;
+
+  if (templateData.source_url) {
+    try {
+      const qrDataUrl = await generateQrCodeDataUrl(templateData.source_url);
+      pages.push({
+        file: 'source_qr',
+        context: {
+          source_name: templateData.source_name || 'Sumber Resmi',
+          source_domain: getCleanDomain(templateData.source_url),
+          qr_code_image: qrDataUrl,
+        }
+      });
+    } catch (qrErr) {
+      console.warn('Failed to generate QR code slide for single page:', qrErr);
+    }
+  }
 
   const renderPayload = {
     viewport: { width: 1080, height: 1350 },

@@ -8,7 +8,8 @@ import { insertQueueItem } from '../../../../db/queue.js';
 import { curateImages } from '../../../image-curator/index.js';
 import { marked } from 'marked';
 import { imageEditor, imageGenerator } from '../../../../utils/imageEditor/index.js';
-
+import { sanitizeSourceUrl, getCleanDomain } from '../../../../utils/urlSanitizer.js';
+import { generateQrCodeDataUrl } from '../../../../utils/qrGenerator.js';
 // Helper for Roman numerals
 const toRoman = (num: number) => {
   const roman: Record<string, number> = {
@@ -29,6 +30,8 @@ export const carouselMultiImagesTemplateConfig = {
   description: 'A 4-slide breaking news carousel with a cover image and 3 content slides each with its own curated image.',
   uiSchema: [
     { name: 'title', type: 'text', label: 'Title (supports **bold**)', aiContext: 'This is the title of a sensational news post. It should be scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style targeted at Gen Z Indonesians.' },
+    { name: 'source_name', type: 'text', label: 'Source Media Name' },
+    { name: 'source_url', type: 'text', label: 'Source Article URL' },
     { name: 'coverImageUrl', type: 'image', label: 'Cover Image' },
     { name: 'slides', type: 'array', label: 'Slides', itemType: 'object', itemSchema: [
       { name: 'text', type: 'text', label: 'Slide Text (supports **bold**)', aiContext: 'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.' },
@@ -63,6 +66,24 @@ export async function generateCarouselMultiImagesMedia(templateData: any, settin
     });
   }
 
+  if (templateData.source_url) {
+    try {
+      const cleanUrl = sanitizeSourceUrl(templateData.source_url);
+      if (cleanUrl) {
+        const qrDataUrl = await generateQrCodeDataUrl(cleanUrl);
+        pages.push({
+          file: 'source_qr',
+          context: {
+            source_name: templateData.source_name || 'Sumber Resmi',
+            source_domain: getCleanDomain(cleanUrl),
+            qr_code_image: qrDataUrl,
+          }
+        });
+      }
+    } catch (qrErr) {
+      console.warn('Failed to generate QR code slide:', qrErr);
+    }
+  }
   if (templateData.inputImages) {
     templateData.inputImages.forEach((url: string) => {
       pages.push({
@@ -113,7 +134,8 @@ Your task is to parse the gathered facts into final components for an Instagram 
 - title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
 - slides: An array of exactly ${slideCount} objects, representing ${slideCount} slides explaining the news. Write in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span. AVOID complex political or academic jargon. Each slide MUST be exactly 1 short paragraph containing at most 2 sentences. Get straight to the point without unnecessary fluff. Answer the 5W1H comprehensively across the ${slideCount} slides. Do NOT repeat information already stated in the title.
   For each slide, you must also provide an \`image_search_query\` which is a concrete, real-world noun search query in English to find a relevant background image for that specific slide's content.
-- source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
+- source_name: The original news source (e.g., Antara News, Kompas, Al Jazeera).
+- source_url: The direct HTTP/HTTPS URL of the primary article referenced.
 - image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "masterpiece professional photography, dramatic backlighting, heavy chiaroscuro, extreme low key".
 `;
 
@@ -124,6 +146,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
       image_search_query: z.string().describe('Search query in English for a relevant background image.')
     })).length(slideCount),
     source_name: z.string(),
+    source_url: z.string().optional(),
     image_prompt: z.string(),
   });
 
@@ -135,7 +158,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
     model: googleAI(process.env.CONTENT_WRITER_MODEL || 'gemini-3.1-pro-preview'),
     system: writerSystemPrompt,
     schema: dynamicSchema,
-    prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchText}`,
+    prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchText}${research.candidateSources && research.candidateSources.length > 0 ? '\n\nCandidate Source URLs:\n' + research.candidateSources.map(c => `- ${c.title || c.domain || ''}: ${c.url}`).join('\n') : ''}`,
   });
   
   let finalCaption = '';
@@ -295,6 +318,25 @@ RULES:
     });
   }
 
+  const chosenSourceUrl = sanitizeSourceUrl(contentParams.source_url || research.primarySourceUrl || '');
+  templateData.source_url = chosenSourceUrl || undefined;
+  templateData.source_name = contentParams.source_name;
+
+  if (templateData.source_url) {
+    try {
+      const qrDataUrl = await generateQrCodeDataUrl(templateData.source_url);
+      pages.push({
+        file: 'source_qr',
+        context: {
+          source_name: templateData.source_name || 'Sumber Resmi',
+          source_domain: getCleanDomain(templateData.source_url),
+          qr_code_image: qrDataUrl,
+        }
+      });
+    } catch (qrErr) {
+      console.warn('Failed to generate QR code slide:', qrErr);
+    }
+  }
   const renderPayload = {
     viewport: { width: 1080, height: 1350 },
     pages
