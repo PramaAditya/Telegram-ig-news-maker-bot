@@ -6,6 +6,28 @@ import { db } from './db/index.js';
 import { jobsTable, ideasTable } from './db/schema.js';
 import { getGlobalSettings, getConnections } from './db/settings.js';
 import { TEMPLATES } from './templates.js';
+
+const TEMPLATE_SHORT_CODES: Record<string, string> = {
+  'carousel_dark': 'image:kabar.perjuangan:carousel_dark',
+  'carousel_multi': 'image:kabar.perjuangan:carousel_multi_images',
+  'single_page': 'image:kabar.perjuangan:single_page',
+  'title_only': 'video:kabar.perjuangan:title_only',
+};
+
+const TEMPLATE_TO_SHORT: Record<string, string> = {
+  'image:kabar.perjuangan:carousel_dark': 'carousel_dark',
+  'image:kabar.perjuangan:carousel_multi_images': 'carousel_multi',
+  'image:kabar.perjuangan:single_page': 'single_page',
+  'video:kabar.perjuangan:title_only': 'title_only',
+};
+
+function resolveTemplateId(code: string): string {
+  return TEMPLATE_SHORT_CODES[code] || code;
+}
+
+function getShortTemplateCode(templateId: string): string {
+  return TEMPLATE_TO_SHORT[templateId] || templateId;
+}
 import { eq } from 'drizzle-orm';
 import { InteractiveMenu } from './utils/interactiveMenu.js';
 import dns from 'dns';
@@ -141,7 +163,7 @@ async function askForTemplate(ctx: any, ideaId: number) {
   });
 
   const templateButtons = availableTemplates.map(t => {
-    return [{ text: t.name, callback_data: `convert_${ideaId}_${t.id}` }];
+    return [{ text: t.name, callback_data: `convert_${ideaId}_${getShortTemplateCode(t.id)}` }];
   });
 
   templateButtons.push([{ text: '❌ Batal', callback_data: `cancel_idea_${ideaId}` }]);
@@ -156,27 +178,28 @@ async function askForTemplate(ctx: any, ideaId: number) {
 }
 
 async function askForHeroStyle(ctx: any, ideaId: number, templateId: string) {
+  const shortCode = getShortTemplateCode(templateId);
   const styleButtons = [
     [
-      { text: '🌑 Dark Dramatize (Chiaroscuro)', callback_data: `style_${ideaId}_${templateId}_Dark-Dramatize` }
+      { text: '🌑 Dark Dramatize (Chiaroscuro)', callback_data: `hs_${ideaId}_${shortCode}_dark` }
     ],
     [
-      { text: '🌟 4K Realistic (Natural Photo)', callback_data: `style_${ideaId}_${templateId}_4K-Enhance` }
+      { text: '🌟 4K Realistic (Natural Photo)', callback_data: `hs_${ideaId}_${shortCode}_real` }
     ],
     [
-      { text: '⬅️ Kembali ke Template', callback_data: `back_template_${ideaId}` },
+      { text: '⬅️ Kembali ke Template', callback_data: `back_tmpl_${ideaId}` },
       { text: '❌ Batal', callback_data: `cancel_idea_${ideaId}` }
     ]
   ];
 
   const templateObj = (TEMPLATES as any)[templateId];
   const templateName = templateObj?.name || 'Carousel';
-  const messageText = `Template: *${templateName}*\n\nPilih gaya *Hero Image (Cover)* yang ingin digunakan:`;
+  const messageText = `Template: <b>${templateName}</b>\n\nPilih gaya <b>Hero Image (Cover)</b> yang ingin digunakan:`;
 
   if (ctx.callbackQuery) {
-    await InteractiveMenu.update(ctx, messageText, styleButtons);
+    await InteractiveMenu.update(ctx, messageText, styleButtons, 'HTML');
   } else {
-    await InteractiveMenu.send(ctx, messageText, styleButtons);
+    await InteractiveMenu.send(ctx, messageText, styleButtons, 'HTML');
   }
 }
 
@@ -421,7 +444,8 @@ bot.on('callback_query', async (ctx: any) => {
       if (!match) return ctx.answerCbQuery('Format data tidak valid.');
       
       const ideaId = parseInt(match[1], 10);
-      const templateId = match[2];
+      const rawTemplate = match[2];
+      const templateId = resolveTemplateId(rawTemplate);
 
       const [idea] = await db.select().from(ideasTable).where(eq(ideasTable.id, ideaId));
       if (!idea) {
@@ -433,6 +457,7 @@ bot.on('callback_query', async (ctx: any) => {
       if (!idea.connectionId) {
         return ctx.answerCbQuery('Silakan pilih akun/connection terlebih dahulu.');
       }
+
       // Jika template video (tidak ada hero image cover), langsung masukkan antrean
       if (templateId.startsWith('video:')) {
         await db.insert(jobsTable).values({
@@ -446,7 +471,7 @@ bot.on('callback_query', async (ctx: any) => {
         });
 
         await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, ideaId));
-        await InteractiveMenu.finalize(ctx, '✅ Masuk antrean sistem (Title Only Video)');
+        await InteractiveMenu.finalize(ctx, '✅ Masuk antrean sistem (Title Only Video)', 'HTML');
         return;
       }
 
@@ -454,13 +479,23 @@ bot.on('callback_query', async (ctx: any) => {
       await askForHeroStyle(ctx, ideaId, templateId);
       await ctx.answerCbQuery();
       
-    } else if (callbackData.startsWith('style_')) {
-      const match = callbackData.match(/^style_(\d+)_(.+?)_(Dark-Dramatize|4K-Enhance)$/);
-      if (!match) return ctx.answerCbQuery('Format data tidak valid.');
-      
-      const ideaId = parseInt(match[1], 10);
-      const templateId = match[2];
-      const heroStyle = match[3];
+    } else if (callbackData.startsWith('hs_') || callbackData.startsWith('style_')) {
+      let ideaId: number;
+      let templateId: string;
+      let heroStyle: string;
+
+      const hsMatch = callbackData.match(/^hs_(\d+)_(.+?)_(dark|real)$/);
+      if (hsMatch) {
+        ideaId = parseInt(hsMatch[1], 10);
+        templateId = resolveTemplateId(hsMatch[2]);
+        heroStyle = hsMatch[3] === 'real' ? '4K-Enhance' : 'Dark-Dramatize';
+      } else {
+        const styleMatch = callbackData.match(/^style_(\d+)_(.+?)_(Dark-Dramatize|4K-Enhance)$/);
+        if (!styleMatch) return ctx.answerCbQuery('Format data tidak valid.');
+        ideaId = parseInt(styleMatch[1], 10);
+        templateId = resolveTemplateId(styleMatch[2]);
+        heroStyle = styleMatch[3];
+      }
 
       const [idea] = await db.select().from(ideasTable).where(eq(ideasTable.id, ideaId));
       if (!idea) return ctx.answerCbQuery('Ide tidak ditemukan.');
@@ -481,10 +516,10 @@ bot.on('callback_query', async (ctx: any) => {
       await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, ideaId));
 
       const styleLabel = heroStyle === 'Dark-Dramatize' ? '🌑 Dark Dramatize' : '🌟 4K Realistic';
-      await InteractiveMenu.finalize(ctx, `✅ Masuk antrean sistem (${styleLabel})`);
+      await InteractiveMenu.finalize(ctx, `✅ Masuk antrean sistem (${styleLabel})`, 'HTML');
       
-    } else if (callbackData.startsWith('back_template_')) {
-      const ideaId = parseInt(callbackData.replace('back_template_', ''), 10);
+    } else if (callbackData.startsWith('back_tmpl_') || callbackData.startsWith('back_template_')) {
+      const ideaId = parseInt(callbackData.replace(/^back_(tmpl|template)_/, ''), 10);
       await askForTemplate(ctx, ideaId);
       await ctx.answerCbQuery();
     } else if (callbackData.startsWith('cancel_idea_')) {
