@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Source QR Code - Poros Perjuangan</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body, html {
+            width: 1080px;
+            height: 1350px;
+            font-family: 'Inter', sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cover-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1080px;
+            height: 1350px;
+            object-fit: cover;
+            filter: grayscale(100%) contrast(120%);
+            opacity: 0.08;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .ambient-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 950px;
+            height: 950px;
+            background: radial-gradient(circle, rgba(197, 2, 2, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .main-container {
+            width: 920px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            z-index: 2;
+        }
+
+        .main-heading {
+            font-family: 'Instrument Serif', serif;
+            font-size: 88px;
+            font-weight: 400;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+            margin-bottom: 56px;
+            text-shadow: 0 4px 28px rgba(0, 0, 0, 0.9);
+        }
+
+        .qr-card {
+            background: #ffffff;
+            padding: 32px;
+            border-radius: 36px;
+            box-shadow: 
+                0 0 80px rgba(197, 2, 2, 0.25),
+                0 30px 70px -15px rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 48px;
+        }
+
+        .qr-code-img {
+            width: 480px;
+            height: 480px;
+            display: block;
+            border-radius: 18px;
+            image-rendering: pixelated;
+        }
+
+        .source-meta {
+            margin-bottom: 24px;
+        }
+
+        .source-name {
+            font-size: 40px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #ffffff;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .source-domain {
+            font-size: 24px;
+            font-weight: 500;
+            color: #9ca3af;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .domain-icon {
+            width: 22px;
+            height: 22px;
+            stroke: #9ca3af;
+        }
+
+        .guide-text {
+            font-size: 24px;
+            line-height: 1.6;
+            color: #9ca3af;
+            max-width: 740px;
+        }
+    </style>
+</head>
+<body>
+    {{#if cover_image}}
+    <img src="{{cover_image}}" class="cover-backdrop" alt="Atmospheric Backdrop">
+    {{/if}}
+
+    <div class="ambient-glow"></div>
+
+    <div class="main-container">
+        <h1 class="main-heading">Baca Sumber Berita</h1>
+
+        <div class="qr-card">
+            <img src="{{qr_code_image}}" class="qr-code-img" alt="QR Code Rujukan">
+        </div>
+
+        <div class="source-meta">
+            <div class="source-name">{{source_name}}</div>
+            {{#if source_domain}}
+            <div class="source-domain">
+                <svg class="domain-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                <span>{{source_domain}}</span>
+            </div>
+            {{/if}}
+        </div>
+
+        <div class="guide-text">
+            Pindai kode QR di atas untuk membaca laporan lengkap langsung dari situs rujukan resmi.
+        </div>
+    </div>
+</body>
+</html>

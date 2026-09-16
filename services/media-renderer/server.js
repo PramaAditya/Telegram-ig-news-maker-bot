@@ -112,7 +112,20 @@ app.post('/render', async (req, res) => {
 
 // Helper function to compile template
 const compileTemplate = (templateName) => {
-  const templatePath = path.join(__dirname, 'templates', `${templateName}.html`);
+  let templatePath = path.join(__dirname, 'templates', `${templateName}.html`);
+  if (!fs.existsSync(templatePath)) {
+    // Fallback to brand-level common templates: e.g. image/poros.perjuangan/common/source_qr.html
+    const parts = templateName.split('/');
+    if (parts.length >= 3) {
+      const mediaType = parts[0];
+      const brand = parts[1];
+      const fileName = parts.slice(3).join('/') || parts[parts.length - 1];
+      const commonPath = path.join(__dirname, 'templates', mediaType, brand, 'common', `${fileName}.html`);
+      if (fs.existsSync(commonPath)) {
+        templatePath = commonPath;
+      }
+    }
+  }
   if (!fs.existsSync(templatePath)) {
     throw new Error(`Template "${templateName}" not found.`);
   }
