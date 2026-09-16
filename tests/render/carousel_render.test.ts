@@ -33,8 +33,8 @@ const toRoman = (num: number) => {
 
 // Constant Test Fixtures
 export const TEST_FIXTURES = {
-  heroImage: 'https://storage.pelita.tech/IGNewsMakerBot/c7a2e772-05fe-4af5-bf4b-4fab49aaa5fd.jpg',
-  logo: 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
+  heroImage: 'https://placehold.co/1080x1080/1a1a1a/ffffff.png?text=Hero+Cover',
+  logo: 'https://placehold.co/250x80/transparent/ffffff.png?text=POROS',
   title: 'Inovasi Fusi Nuklir <strong>Catat Sejarah Baru</strong> di 2026',
   slides: [
     'Reaktor fusi eksperimental berhasil mempertahankan reaksi stabil selama lebih dari **1.000 detik**, melampaui rekor dunia sebelumnya.',
@@ -42,9 +42,9 @@ export const TEST_FIXTURES = {
     'Para ilmuwan kini beralih ke tahap pembangunan **pembangkit listrik komersial pertama** yang ditargetkan beroperasi sebelum 2035.'
   ],
   slideImages: [
-    'https://storage.pelita.tech/IGNewsMakerBot/c7a2e772-05fe-4af5-bf4b-4fab49aaa5fd.jpg',
-    'https://storage.pelita.tech/IGNewsMakerBot/4a92807a-22c5-440e-a4bc-38b500d76b9c.png',
-    'https://storage.pelita.tech/IGNewsMakerBot/c7a2e772-05fe-4af5-bf4b-4fab49aaa5fd.jpg'
+    'https://placehold.co/1080x1080/2a2a2a/ffffff.png?text=Slide+1+Image',
+    'https://placehold.co/1080x1080/333333/ffffff.png?text=Slide+2+Image',
+    'https://placehold.co/1080x1080/3d3d3d/ffffff.png?text=Slide+3+Image'
   ]
 };
 
