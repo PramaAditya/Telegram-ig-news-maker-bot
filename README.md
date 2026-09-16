@@ -33,10 +33,10 @@ $ npm run start:worker
 [Phase 1] Researching URL: https://news.example.com/indonesia-tech-boom
 [Research] Extracted core 5W1H facts via Firecrawl & Gemini-3.1-Pro-Preview
 [Phase 2] Generating slide copy & visual prompts for 'Carousel Dark' template
-[Media] Triggering Puppeteer rendering engine for 'kabar.perjuangan/carousel_dark'
+[Media] Triggering Puppeteer rendering engine for 'poros.perjuangan/carousel_dark'
 [S3] Uploaded 3 rendered PNGs to S3 bucket (S3_BUCKET/posts/108/cover.jpg)
 [Queue] Sensationally crafted slide sequence pushed to DB publish queue (sort_order: 1)
-[Cron] Slot matched (Monday 14:00) for Connection: Kabar Perjuangan
+[Cron] Slot matched (Monday 14:00) for Connection: Poros Perjuangan
 [Cron] Auto-publishing post ID 108 to Buffer GraphQL API
 ✓ [Buffer] Successfully scheduled Instagram post with 3 slides!
 ```

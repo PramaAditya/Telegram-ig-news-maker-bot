@@ -17,7 +17,7 @@ const activeTab = ref('ai')
 
 const textInput = ref('')
 const mediaUrls = ref<string[]>([])
-const templateId = ref('image:kabar.perjuangan:carousel_multi_images')
+const templateId = ref('image:poros.perjuangan:carousel_multi_images')
 const submitting = ref(false)
 const error = ref('')
 const activeJobs = ref<any[]>([])

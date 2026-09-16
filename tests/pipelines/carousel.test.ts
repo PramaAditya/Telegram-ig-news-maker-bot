@@ -3,19 +3,19 @@ import {
   runCarouselDarkPipeline,
   generateCarouselDarkMedia,
   carouselDarkTemplateConfig,
-} from '../../src/agents/pipelines/image/kabar.perjuangan/carousel_dark.js';
+} from '../../src/agents/pipelines/image/poros.perjuangan/carousel_dark.js';
 import {
   runCarouselMultiImagesPipeline,
   generateCarouselMultiImagesMedia,
   carouselMultiImagesTemplateConfig,
-} from '../../src/agents/pipelines/image/kabar.perjuangan/carousel_multi_images.js';
+} from '../../src/agents/pipelines/image/poros.perjuangan/carousel_multi_images.js';
 import { generateObject, generateText } from 'ai';
 import { imageEditor } from '../../src/utils/imageEditor/index.js';
 import {
   runSinglePagePipeline,
   generateSinglePageMedia,
   singlePageTemplateConfig,
-} from '../../src/agents/pipelines/image/kabar.perjuangan/single_page.js';
+} from '../../src/agents/pipelines/image/poros.perjuangan/single_page.js';
 import * as media from '../../src/media.js';
 import * as queue from '../../src/db/queue.js';
 import * as curator from '../../src/agents/image-curator/index.js';
@@ -147,7 +147,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
       const result = await generateCarouselDarkMedia(templateData, mockContext.settings);
 
       expect(media.generateMedia).toHaveBeenCalledWith(
-        '/render/image/kabar.perjuangan/carousel_dark',
+        '/render/image/poros.perjuangan/carousel_dark',
         expect.objectContaining({
           viewport: { width: 1080, height: 1350 },
           pages: expect.arrayContaining([
@@ -208,7 +208,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
 
       // Phase 4: Renderer API called with 3 pages (cover + 2 slides)
       expect(media.generateMedia).toHaveBeenCalledWith(
-        '/render/image/kabar.perjuangan/carousel_dark',
+        '/render/image/poros.perjuangan/carousel_dark',
         expect.objectContaining({
           pages: expect.arrayContaining([
             expect.objectContaining({ file: 'cover' }),
@@ -263,7 +263,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
       const result = await generateCarouselMultiImagesMedia(templateData, mockContext.settings);
 
       expect(media.generateMedia).toHaveBeenCalledWith(
-        '/render/image/kabar.perjuangan/carousel_multi_images',
+        '/render/image/poros.perjuangan/carousel_multi_images',
         expect.objectContaining({
           viewport: { width: 1080, height: 1350 },
           pages: expect.arrayContaining([
@@ -331,7 +331,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
 
       // Renderer called
       expect(media.generateMedia).toHaveBeenCalledWith(
-        '/render/image/kabar.perjuangan/carousel_multi_images',
+        '/render/image/poros.perjuangan/carousel_multi_images',
         expect.any(Object)
       );
 
@@ -366,7 +366,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
       const result = await generateSinglePageMedia(templateData, mockContext.settings);
 
       expect(media.generateMedia).toHaveBeenCalledWith(
-        '/render/image/kabar.perjuangan/single_page',
+        '/render/image/poros.perjuangan/single_page',
         expect.objectContaining({
           viewport: { width: 1080, height: 1350 },
           pages: [

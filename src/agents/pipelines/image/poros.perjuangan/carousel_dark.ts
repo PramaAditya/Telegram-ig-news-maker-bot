@@ -1,7 +1,6 @@
 import { generateObject, generateText } from 'ai';
 import { z } from 'zod';
-import { googleAI, withRetry } from '../../../../utils.js';
-import type { PipelineContext, ResearchResult } from '../../../../utils.js';
+import { PipelineContext, ResearchResult, googleAI, withRetry } from '../../../../utils.js';
 import { censorText } from '../../../../sanitize.js';
 import { uploadToS3 } from '../../../../s3.js';
 import { generateMedia } from '../../../../media.js';
@@ -9,33 +8,49 @@ import { insertQueueItem } from '../../../../db/queue.js';
 import { marked } from 'marked';
 import { imageEditor } from '../../../../utils/imageEditor/index.js';
 
-export const singlePageTemplateConfig = {
-  id: 'image:kabar.perjuangan:single_page',
-  name: 'Single Page Post',
-  description: 'A 1-page high-impact news post with a title and a 2-paragraph description.',
+// Helper for Roman numerals
+const toRoman = (num: number) => {
+  const roman: Record<string, number> = {
+    M: 1000, CM: 900, D: 500, CD: 400, C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1
+  };
+  let str = '';
+  for (let i of Object.keys(roman)) {
+    let q = Math.floor(num / roman[i]);
+    num -= q * roman[i];
+    str += i.repeat(q);
+  }
+  return str;
+};
+
+export const carouselDarkTemplateConfig = {
+  id: 'image:poros.perjuangan:carousel_dark',
+  name: 'Carousel Dark',
+  description: 'A 2-slide breaking news carousel with a cover image.',
   uiSchema: [
-    { name: 'title', type: 'text', label: 'Provocative Title' },
-    { name: 'description', type: 'text', label: 'Body Description (HTML/Markdown)' },
-    { name: 'coverImageUrl', type: 'image', label: 'Background Image' }
+    { name: 'title', type: 'text', label: 'Title (supports **bold**)', aiContext: 'This is the title of a sensational news post. It should be scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style targeted at Gen Z Indonesians.' },
+    { name: 'coverImageUrl', type: 'image', label: 'Cover Image' },
+    { name: 'slides', type: 'array', label: 'Slides', itemType: 'text', itemSchema: [
+      { name: '', type: 'text', label: 'Slide Text (supports **bold**)', aiContext: 'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.' }
+    ]}
   ] as any[]
 };
 
 const systemPromptAdditions = `
-Your task is to parse the gathered facts into final components for an Instagram news single-page post.
+Your task is to parse the gathered facts into final components for an Instagram news carousel.
 - title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
-- description: Exactly 2 short, punchy paragraphs (maximum 2 sentences each) explaining the news. Write in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi) for a Gen-Z audience with a short attention span. AVOID complex political or academic jargon. Each paragraph must be highly informative, answering the 5W1H comprehensively across both paragraphs. Get straight to the point without unnecessary fluff. Do NOT repeat information already stated in the title.
+- slides: An array of exactly 2 strings, representing two slides explaining the news. Write in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span. AVOID complex political or academic jargon (e.g. use "hak penuh sebagai negara merdeka" instead of "hak kedaulatan"). Each slide MUST be exactly 1 short paragraph containing at most 2 sentences. Get straight to the point without unnecessary fluff. Answer the 5W1H comprehensively across the two slides. Do NOT repeat information already stated in the title.
 - source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
 - image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "masterpiece professional photography, dramatic backlighting, heavy chiaroscuro, extreme low key".
 `;
 
 const schema = z.object({
   title: z.string(),
-  description: z.string(),
+  slides: z.array(z.string()).length(2),
   source_name: z.string(),
   image_prompt: z.string(),
 });
 
-export async function generateSinglePageMedia(templateData: any, settings: any): Promise<{ type: 'image' | 'video', url: string }[]> {
+export async function generateCarouselDarkMedia(templateData: any, settings: any): Promise<{ type: 'image' | 'video', url: string }[]> {
   const pages: any[] = [];
   
   pages.push({
@@ -43,20 +58,44 @@ export async function generateSinglePageMedia(templateData: any, settings: any):
     context: {
       logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
       cover_image: templateData.coverImageUrl,
-      title: marked.parseInline(templateData.title || ''),
-      description: marked.parse(templateData.description || '')
+      title: marked.parseInline(templateData.title || '')
     }
   });
+
+  if (templateData.slides) {
+    templateData.slides.forEach((text: string, i: number) => {
+      pages.push({
+        file: 'slide',
+        context: {
+          cover_image: templateData.coverImageUrl,
+          text: marked.parse(text),
+          roman_number: toRoman(i + 1)
+        }
+      });
+    });
+  }
+
+  if (templateData.inputImages) {
+    templateData.inputImages.forEach((url: string) => {
+      pages.push({
+        file: 'image',
+        context: {
+          logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
+          image_url: url
+        }
+      });
+    });
+  }
 
   const renderPayload = {
     viewport: { width: 1080, height: 1350 },
     pages
   };
 
-  const renderedUrls = await generateMedia('/render/image/kabar.perjuangan/single_page', renderPayload);
+  const renderedUrls = await generateMedia('/render/image/poros.perjuangan/carousel_dark', renderPayload);
 
   if (!renderedUrls || renderedUrls.length === 0) {
-    throw new Error('Failed to render image from external API.');
+    throw new Error('Failed to render images from external API.');
   }
 
   return renderedUrls.map((url: string) => ({
@@ -65,7 +104,7 @@ export async function generateSinglePageMedia(templateData: any, settings: any):
   }));
 }
 
-export async function runSinglePagePipeline(context: PipelineContext, research: ResearchResult) {
+export async function runCarouselDarkPipeline(context: PipelineContext, research: ResearchResult) {
   const { chatId, messageId, telegram, statusMsg, userInput, settings, currentDateStr, baseSystemPrompt } = context;
   const { researchText, scrapedImageUrl, processedMedia } = research;
 
@@ -78,21 +117,38 @@ export async function runSinglePagePipeline(context: PipelineContext, research: 
     : '';
 
   const imageMediaItems = processedMedia ? processedMedia.filter(m => m.type === 'image' && m.buffer) : [];
+  const isAlbum = imageMediaItems.length > 1;
+  const slideCount = isAlbum ? 1 : 2;
+
+  const dynamicSystemPromptAdditions = `
+Your task is to parse the gathered facts into final components for an Instagram news carousel.
+- title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing clichAc slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
+- slides: An array of exactly ${slideCount} string${slideCount > 1 ? 's' : ''}, representing ${slideCount} slide${slideCount > 1 ? 's' : ''} explaining the news. Write in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span. AVOID complex political or academic jargon (e.g. use "hak penuh sebagai negara merdeka" instead of "hak kedaulatan"). Each slide MUST be exactly 1 short paragraph containing at most 2 sentences. Get straight to the point without unnecessary fluff. Answer the 5W1H comprehensively across the ${slideCount} slide${slideCount > 1 ? 's' : ''}. Do NOT repeat information already stated in the title.
+- source_name: The original news source (e.g., Al Jazeera). If multiple, pick the most prominent.
+- image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "masterpiece professional photography, dramatic backlighting, heavy chiaroscuro, extreme low key".
+`;
+
+  const dynamicSchema = z.object({
+    title: z.string(),
+    slides: z.array(z.string()).length(slideCount),
+    source_name: z.string(),
+    image_prompt: z.string(),
+  });
 
   // Phase 2: Content Generation
   console.log(`[Phase 2] Generating content using template schema`);
-  const writerSystemPrompt = baseSystemPrompt + `\n\nEDITORIAL GUIDELINES & FRAMING:\n${editorialGuidelines}\n\n${systemPromptAdditions}` + bannedWordsPrompt;
+  const writerSystemPrompt = baseSystemPrompt + `\n\nEDITORIAL GUIDELINES & FRAMING:\n${editorialGuidelines}\n\n${dynamicSystemPromptAdditions}` + bannedWordsPrompt;
   
   const { object: contentParams } = await generateObject({
     model: googleAI(process.env.CONTENT_WRITER_MODEL || 'gemini-3.1-pro-preview'),
     system: writerSystemPrompt,
-    schema: schema,
+    schema: dynamicSchema,
     prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchText}`,
   });
   
   let finalCaption = '';
-  if (contentParams.description && contentParams.source_name) {
-    finalCaption = `${contentParams.description}\n\n${currentDateStr}. Sumber: ${contentParams.source_name}`;
+  if (contentParams.slides && contentParams.source_name) {
+    finalCaption = `${contentParams.slides.join('\n\n')}\n\n${currentDateStr}. Sumber: ${contentParams.source_name}`;
   } else {
     finalCaption = `${currentDateStr}.`; // Generic fallback
   }
@@ -118,10 +174,21 @@ export async function runSinglePagePipeline(context: PipelineContext, research: 
     throw new Error('Gagal mendapatkan URL gambar.');
   }
 
+  let extraImageUrls: string[] = [];
+  if (isAlbum) {
+    console.log(`[Phase 3] Uploading raw input images for album...`);
+    for (const item of imageMediaItems) {
+      if (item.buffer) {
+         const url = await uploadToS3(item.buffer, item.mimeType || 'image/jpeg', item.mimeType === 'image/png' ? '.png' : '.jpg');
+         if (url) extraImageUrls.push(url);
+      }
+    }
+  }
+
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
 
   // Phase 4: Image Rendering
-  console.log(`[Phase 4] Rendering media via API for template ${singlePageTemplateConfig.id}`);
+  console.log(`[Phase 4] Rendering media via API for template ${carouselDarkTemplateConfig.id}`);
   
   let cleanTitle = contentParams.title || '';
   if (cleanTitle) {
@@ -131,12 +198,9 @@ export async function runSinglePagePipeline(context: PipelineContext, research: 
 
   let templateData: any = { ...contentParams, title: cleanTitle };
 
-  if (contentParams.description) {
+  if (contentParams.slides) {
     await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...'));
-    console.log(`[Phase 4] Enhancing paragraphs with markdown bolding via gemini-3.1-flash-lite...`);
-    
-    // Split description by paragraphs, bold each paragraph individually
-    const paragraphs = contentParams.description.split(/\n+/).map(p => p.trim()).filter(Boolean);
+    console.log(`[Phase 4] Enhancing slides with markdown bolding via gemini-3.1-flash-lite...`);
     
     const highlightText = async (text: string) => {
       try {
@@ -157,9 +221,8 @@ RULES:
       }
     };
 
-    const boldedParagraphs = await Promise.all(paragraphs.map((p: string) => highlightText(p)));
-    templateData.description = boldedParagraphs.join('\n\n');
-    templateData.description = censorText(templateData.description, bannedWords);
+    templateData.slides = await Promise.all(contentParams.slides.map((text: string) => highlightText(text)));
+    templateData.slides = templateData.slides.map((text: string) => censorText(text, bannedWords));
   }
 
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
@@ -171,20 +234,44 @@ RULES:
     context: {
       logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
       cover_image: coverImageUrl,
-      title: marked.parseInline(templateData.title || ''),
-      description: marked.parse(templateData.description || '')
+      title: marked.parseInline(templateData.title || '')
     }
   });
+
+  if (templateData.slides) {
+    templateData.slides.forEach((text: string, i: number) => {
+      pages.push({
+        file: 'slide',
+        context: {
+          cover_image: coverImageUrl,
+          text: marked.parse(text),
+          roman_number: toRoman(i + 1)
+        }
+      });
+    });
+  }
+
+  if (extraImageUrls) {
+    extraImageUrls.forEach((url: string) => {
+      pages.push({
+        file: 'image',
+        context: {
+          logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
+          image_url: url
+        }
+      });
+    });
+  }
 
   const renderPayload = {
     viewport: { width: 1080, height: 1350 },
     pages
   };
 
-  const renderedUrls = await generateMedia('/render/image/kabar.perjuangan/single_page', renderPayload);
+  const renderedUrls = await generateMedia('/render/image/poros.perjuangan/carousel_dark', renderPayload);
 
   if (!renderedUrls || renderedUrls.length === 0) {
-    throw new Error('Gagal merender post dari API.');
+    throw new Error('Gagal merender carousel dari API.');
   }
 
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🚀 Mempublikasikan ke Queue...'));
@@ -200,14 +287,15 @@ RULES:
   console.log(`[Phase 5] Saving to Queue with ${allPublishUrls.length} media items`);
   
   templateData.coverImageUrl = coverImageUrl; 
+  templateData.inputImages = extraImageUrls;
   
   const [inserted] = await insertQueueItem({
     connectionId: settings.id,
-    templateId: singlePageTemplateConfig.id,
+    templateId: carouselDarkTemplateConfig.id,
     templateData: templateData,
     text: finalCaption,
     media: allPublishUrls,
-    status: 'pending',
+    status: 'pending', // Allows passing 'draft' or other statuses in the future
     researchResult: researchText
   });
 

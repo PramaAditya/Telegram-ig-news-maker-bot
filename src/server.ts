@@ -145,7 +145,7 @@ app.post('/api/generate-content', requireDashboardAuth, async (req, res) => {
       connectionId: parseInt(connectionId),
       chatId: 'DASHBOARD',
       messageId: Date.now(),
-      templateId: templateId || 'image:kabar.perjuangan:carousel_dark',
+      templateId: templateId || 'image:poros.perjuangan:carousel_dark',
       text,
       media,
       status: 'pending'
@@ -206,7 +206,7 @@ app.post('/api/ideas/:id/convert', requireDashboardAuth, async (req, res) => {
     if (!chosenTemplateId) {
       const media = idea.media || [];
       const isSingleVideo = media.length === 1 && media[0]?.type === 'video';
-      chosenTemplateId = isSingleVideo ? 'video:kabar.perjuangan:title_only' : 'image:kabar.perjuangan:carousel_dark';
+      chosenTemplateId = isSingleVideo ? 'video:poros.perjuangan:title_only' : 'image:poros.perjuangan:carousel_dark';
     }
 
     await db.insert(jobsTable).values({

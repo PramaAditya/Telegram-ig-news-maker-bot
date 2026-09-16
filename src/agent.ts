@@ -9,7 +9,7 @@ export async function runAutomatedPipeline(
   userInput: string,
   uploadedMedia: MediaItem[] | undefined,
   telegram: any,
-  templateId: string = 'image:kabar.perjuangan:carousel_dark',
+  templateId: string = 'image:poros.perjuangan:carousel_dark',
   connectionId: number,
   heroStyle?: string
 ) {

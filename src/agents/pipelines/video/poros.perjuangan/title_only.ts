@@ -12,7 +12,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 export const titleOnlyTemplateConfig = {
-  id: 'video:kabar.perjuangan:title_only',
+  id: 'video:poros.perjuangan:title_only',
   name: 'Title Only Video',
   description: 'A 9:16 video overlay template. Normalizes video, adds blurred background if needed, and overlays a 5-second contextual title.',
   skipResearch: true,
@@ -114,7 +114,7 @@ export async function generateTitleOnlyMedia(templateData: any, settings: any): 
     }
 
     console.log(`[Video Generator] Requesting title overlay PNG from media-renderer...`);
-    const renderedUrls = await generateMedia('/render/video/kabar.perjuangan/title_only', renderPayload);
+    const renderedUrls = await generateMedia('/render/video/poros.perjuangan/title_only', renderPayload);
 
     if (!renderedUrls || renderedUrls.length === 0) {
       throw new Error('Failed to render title overlay PNG.');

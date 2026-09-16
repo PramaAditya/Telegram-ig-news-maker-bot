@@ -24,7 +24,7 @@ const toRoman = (num: number) => {
 };
 
 export const carouselMultiImagesTemplateConfig = {
-  id: 'image:kabar.perjuangan:carousel_multi_images',
+  id: 'image:poros.perjuangan:carousel_multi_images',
   name: 'Carousel Multi Images',
   description: 'A 4-slide breaking news carousel with a cover image and 3 content slides each with its own curated image.',
   uiSchema: [
@@ -43,7 +43,7 @@ export async function generateCarouselMultiImagesMedia(templateData: any, settin
   pages.push({
     file: 'cover',
     context: {
-      logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+      logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
       cover_image: templateData.coverImageUrl,
       title: marked.parseInline(templateData.title || '')
     }
@@ -68,7 +68,7 @@ export async function generateCarouselMultiImagesMedia(templateData: any, settin
       pages.push({
         file: 'image',
         context: {
-          logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+          logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
           image_url: url
         }
       });
@@ -80,7 +80,7 @@ export async function generateCarouselMultiImagesMedia(templateData: any, settin
     pages
   };
 
-  const renderedUrls = await generateMedia('/render/image/kabar.perjuangan/carousel_multi_images', renderPayload);
+  const renderedUrls = await generateMedia('/render/image/poros.perjuangan/carousel_multi_images', renderPayload);
 
   if (!renderedUrls || renderedUrls.length === 0) {
     throw new Error('Failed to render images from external API.');
@@ -275,7 +275,7 @@ RULES:
   pages.push({
     file: 'cover',
     context: {
-      logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_kabar_perjuangan_white.png',
+      logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
       cover_image: coverImageUrl,
       title: marked.parseInline(templateData.title || '')
     }
@@ -300,7 +300,7 @@ RULES:
     pages
   };
 
-  const renderedUrls = await generateMedia('/render/image/kabar.perjuangan/carousel_multi_images', renderPayload);
+  const renderedUrls = await generateMedia('/render/image/poros.perjuangan/carousel_multi_images', renderPayload);
 
   if (!renderedUrls || renderedUrls.length === 0) {
     throw new Error('Gagal merender carousel dari API.');

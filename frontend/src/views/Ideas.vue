@@ -85,8 +85,8 @@ const convertIdea = async (ideaId: number) => {
   const available = idea ? getAvailableTemplatesForIdea(idea) : templates.value;
   const isSingleVideo = idea?.media?.length === 1 && idea.media[0]?.type === 'video';
   const defaultFallback = isSingleVideo 
-    ? (available.find(t => t.id.startsWith('video:'))?.id || 'video:kabar.perjuangan:title_only')
-    : (available[0]?.id || 'image:kabar.perjuangan:carousel_dark');
+    ? (available.find(t => t.id.startsWith('video:'))?.id || 'video:poros.perjuangan:title_only')
+    : (available[0]?.id || 'image:poros.perjuangan:carousel_dark');
 
   const templateId = selectedTemplates.value[ideaId] || defaultFallback;
   try {

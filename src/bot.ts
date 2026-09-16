@@ -8,13 +8,17 @@ import { getGlobalSettings, getConnections } from './db/settings.js';
 import { TEMPLATES } from './templates.js';
 
 const TEMPLATE_SHORT_CODES: Record<string, string> = {
-  'carousel_dark': 'image:kabar.perjuangan:carousel_dark',
-  'carousel_multi': 'image:kabar.perjuangan:carousel_multi_images',
-  'single_page': 'image:kabar.perjuangan:single_page',
-  'title_only': 'video:kabar.perjuangan:title_only',
+  'carousel_dark': 'image:poros.perjuangan:carousel_dark',
+  'carousel_multi': 'image:poros.perjuangan:carousel_multi_images',
+  'single_page': 'image:poros.perjuangan:single_page',
+  'title_only': 'video:poros.perjuangan:title_only',
 };
 
 const TEMPLATE_TO_SHORT: Record<string, string> = {
+  'image:poros.perjuangan:carousel_dark': 'carousel_dark',
+  'image:poros.perjuangan:carousel_multi_images': 'carousel_multi',
+  'image:poros.perjuangan:single_page': 'single_page',
+  'video:poros.perjuangan:title_only': 'title_only',
   'image:kabar.perjuangan:carousel_dark': 'carousel_dark',
   'image:kabar.perjuangan:carousel_multi_images': 'carousel_multi',
   'image:kabar.perjuangan:single_page': 'single_page',
@@ -130,7 +134,7 @@ async function askForTemplate(ctx: any, ideaId: number) {
     }
 
     const videoTemplate = Object.values(TEMPLATES).find(t => t.id.startsWith('video:'));
-    const templateId = videoTemplate ? videoTemplate.id : 'video:kabar.perjuangan:title_only';
+    const templateId = videoTemplate ? videoTemplate.id : 'video:poros.perjuangan:title_only';
 
     await db.insert(jobsTable).values({
       connectionId: idea.connectionId,
