@@ -132,7 +132,7 @@ export async function runSinglePagePipeline(context: PipelineContext, research: 
     image: imageMediaItems.length > 0 ? imageMediaItems[0].buffer : null,
     scrapedImageUrl,
     searchQuery: contentParams.title,
-    prompt: contentParams.image_prompt,
+    prompt: heroMode === '4K-Enhance' ? undefined : contentParams.image_prompt,
     uploadToS3: true,
   });
 

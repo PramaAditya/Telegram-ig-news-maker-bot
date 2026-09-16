@@ -180,7 +180,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
     image: imageMediaItems.length > 0 ? imageMediaItems[0].buffer : null,
     scrapedImageUrl,
     searchQuery: contentParams.title,
-    prompt: contentParams.image_prompt,
+    prompt: heroMode === '4K-Enhance' ? undefined : contentParams.image_prompt,
     uploadToS3: true,
   });
 

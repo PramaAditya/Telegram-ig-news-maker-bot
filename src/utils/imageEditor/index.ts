@@ -145,7 +145,7 @@ async function searchWebImage(query: string): Promise<{ buffer: Buffer; mimeType
 export async function enhance4K(options: Omit<ImageEditorOptions, 'mode'>): Promise<ImageEditorResult> {
   const {
     image,
-    prompt = ENHANCE_4K_DEFAULT_PROMPT,
+    prompt,
     aspectRatio = 'auto',
     size = '1K',
     uploadToS3: shouldUploadToS3 = true,
@@ -176,10 +176,16 @@ export async function enhance4K(options: Omit<ImageEditorOptions, 'mode'>): Prom
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[imageEditor:4K-Enhance] Generation attempt ${attempt}/${maxRetries}...`);
+      // When a base image exists, strictly use ENHANCE_4K_DEFAULT_PROMPT unless
+      // the caller explicitly passed a targeted enhancement prompt (not an unrelated scene prompt).
+      const effectivePrompt = (prompt && (prompt.toLowerCase().includes('enhance') || prompt.toLowerCase().includes('preserve') || prompt.toLowerCase().includes('remaster')))
+        ? prompt
+        : ENHANCE_4K_DEFAULT_PROMPT;
+
       const result = await generateImage({
         model: google.image(modelName),
         prompt: {
-          text: prompt,
+          text: effectivePrompt,
           images: [resolved.buffer],
         },
         aspectRatio: aspectRatio === 'auto' ? undefined : aspectRatio,
