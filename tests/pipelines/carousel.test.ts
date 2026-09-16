@@ -11,6 +11,11 @@ import {
 } from '../../src/agents/pipelines/image/kabar.perjuangan/carousel_multi_images.js';
 import { generateObject, generateText } from 'ai';
 import { darkDramatize } from '../../src/utils/imageEditor/index.js';
+import {
+  runSinglePagePipeline,
+  generateSinglePageMedia,
+  singlePageTemplateConfig,
+} from '../../src/agents/pipelines/image/kabar.perjuangan/single_page.js';
 import * as media from '../../src/media.js';
 import * as queue from '../../src/db/queue.js';
 import * as curator from '../../src/agents/image-curator/index.js';
@@ -324,6 +329,86 @@ describe('Carousel Pipelines Workflow Tests', () => {
           media: expect.arrayContaining([
             { type: 'image', url: 'https://renderer.pelita.tech/mi_cover.jpg' },
           ]),
+        })
+      );
+
+      // Telegram notified
+      expect(mockTelegram.sendPhoto).toHaveBeenCalled();
+    });
+  });
+
+  describe('Single Page Post Workflow', () => {
+    it('generates media payload correctly with generateSinglePageMedia', async () => {
+      vi.mocked(media.generateMedia).mockResolvedValueOnce([
+        'https://renderer.pelita.tech/single_page.png',
+      ]);
+
+      const templateData = {
+        title: 'Sensational Single Page Headline',
+        description: 'Paragraph one.\n\nParagraph two.',
+        coverImageUrl: 'https://mock-s3.pelita.tech/cover.jpg',
+      };
+
+      const result = await generateSinglePageMedia(templateData, mockContext.settings);
+
+      expect(media.generateMedia).toHaveBeenCalledWith(
+        '/render/image/kabar.perjuangan/single_page',
+        expect.objectContaining({
+          viewport: { width: 1080, height: 1350 },
+          pages: [
+            expect.objectContaining({ file: 'cover' }),
+          ],
+        })
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ type: 'image', url: 'https://renderer.pelita.tech/single_page.png' });
+    });
+
+    it('executes full runSinglePagePipeline end-to-end orchestration', async () => {
+      // 1. Mock Content Generation
+      vi.mocked(generateObject).mockResolvedValueOnce({
+        object: {
+          title: 'Single Page Headline Title',
+          description: 'This is the first paragraph.\n\nThis is the second paragraph.',
+          source_name: 'Al Jazeera',
+          image_prompt: 'Dramatic political summit scene',
+        },
+      } as any);
+
+      // 2. Mock Paragraph text bolding (2 paragraphs)
+      vi.mocked(generateText)
+        .mockResolvedValueOnce({ text: 'This is the **first paragraph**.' } as any)
+        .mockResolvedValueOnce({ text: 'This is the **second paragraph**.' } as any);
+
+      // 3. Mock Renderer API
+      vi.mocked(media.generateMedia).mockResolvedValueOnce([
+        'https://renderer.pelita.tech/single_page_output.jpg',
+      ]);
+
+      await runSinglePagePipeline(mockContext, mockResearch);
+
+      // Content generation verified
+      expect(generateObject).toHaveBeenCalledOnce();
+
+      // Phase 3: darkDramatize verified
+      expect(darkDramatize).toHaveBeenCalledWith({
+        image: null,
+        scrapedImageUrl: 'https://news.com/article/hero.jpg',
+        searchQuery: 'Single Page Headline Title',
+        prompt: 'Dramatic political summit scene',
+        uploadToS3: true,
+      });
+
+      // Paragraph bolding verified (2 calls for 2 paragraphs)
+      expect(generateText).toHaveBeenCalledTimes(2);
+
+      // Queue inserted
+      expect(queue.insertQueueItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          templateId: singlePageTemplateConfig.id,
+          status: 'pending',
+          media: [{ type: 'image', url: 'https://renderer.pelita.tech/single_page_output.jpg' }],
         })
       );
 
