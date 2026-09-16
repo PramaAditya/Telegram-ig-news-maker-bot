@@ -6,3 +6,5 @@ dist
 *.log
 drizzle
 .kilo/
+tests/output/
+services/media-renderer/node_modules/
