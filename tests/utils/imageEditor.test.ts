@@ -57,12 +57,13 @@ describe('imageEditor utility', () => {
 
       expect(generateImage).toHaveBeenCalledOnce();
       const callArgs = vi.mocked(generateImage).mock.calls[0][0];
+      const promptObj = callArgs.prompt as any;
 
       // Prompt should contain dramatic suffix
-      expect(callArgs.prompt.text).toContain(DARK_DRAMATIZE_SUFFIX);
-      expect(callArgs.prompt.text).toContain('Based on the provided image');
+      expect(promptObj.text).toContain(DARK_DRAMATIZE_SUFFIX);
+      expect(promptObj.text).toContain('Based on the provided image');
       // Passed base image buffer to multimodal model
-      expect(callArgs.prompt.images).toEqual([mockInputBuffer]);
+      expect(promptObj.images).toEqual([mockInputBuffer]);
       expect(callArgs.aspectRatio).toBe('1:1');
 
       // Uploads to S3
@@ -79,10 +80,10 @@ describe('imageEditor utility', () => {
 
       expect(generateImage).toHaveBeenCalledOnce();
       const callArgs = vi.mocked(generateImage).mock.calls[0][0];
+      const promptText = typeof callArgs.prompt === 'string' ? callArgs.prompt : (callArgs.prompt as any).text;
 
-      expect(callArgs.prompt.text).toContain('Volcanic eruption in Java');
-      expect(callArgs.prompt.text).toContain(DARK_DRAMATIZE_SUFFIX);
-      expect(callArgs.prompt.images).toEqual([]);
+      expect(promptText).toContain('Volcanic eruption in Java');
+      expect(promptText).toContain(DARK_DRAMATIZE_SUFFIX);
       expect(result.url).toBe('https://mock-s3.pelita.tech/output.jpg');
     });
 
@@ -101,7 +102,8 @@ describe('imageEditor utility', () => {
       expect(fetchSpy).toHaveBeenCalledWith('https://news.com/article/hero.jpg', expect.any(Object));
       expect(generateImage).toHaveBeenCalledOnce();
       const callArgs = vi.mocked(generateImage).mock.calls[0][0];
-      expect(callArgs.prompt.images).toEqual([mockScrapedImageBuffer]);
+      const promptObj = callArgs.prompt as any;
+      expect(promptObj.images).toEqual([mockScrapedImageBuffer]);
       expect(result.url).toBe('https://mock-s3.pelita.tech/output.jpg');
 
       fetchSpy.mockRestore();
@@ -189,10 +191,11 @@ describe('imageEditor utility', () => {
 
       expect(generateImage).toHaveBeenCalledOnce();
       const callArgs = vi.mocked(generateImage).mock.calls[0][0];
+      const promptObj = callArgs.prompt as any;
 
-      expect(callArgs.prompt.text).toBe(ENHANCE_4K_DEFAULT_PROMPT);
-      expect(callArgs.prompt.images).toEqual([mockInputBuffer]);
-      expect(callArgs.providerOptions?.google?.imageConfig?.imageSize).toBe('4K');
+      expect(promptObj.text).toBe(ENHANCE_4K_DEFAULT_PROMPT);
+      expect(promptObj.images).toEqual([mockInputBuffer]);
+      expect((callArgs.providerOptions as any)?.google?.imageConfig?.imageSize).toBe('4K');
       expect(result.url).toBe('https://mock-s3.pelita.tech/output.jpg');
     });
 
@@ -209,7 +212,8 @@ describe('imageEditor utility', () => {
       });
 
       const callArgs = vi.mocked(generateImage).mock.calls[0][0];
-      expect(callArgs.prompt.text).toBe('Custom remaster with enhanced lighting');
+      const promptObj = callArgs.prompt as any;
+      expect(promptObj.text).toBe('Custom remaster with enhanced lighting');
     });
   });
 

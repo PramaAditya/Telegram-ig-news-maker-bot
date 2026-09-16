@@ -1,6 +1,7 @@
 import { generateImage } from 'ai';
 import { google } from '@ai-sdk/google';
 import { uploadToS3 } from '../../s3.js';
+import { imageGenerator, DRAMATIC_STYLE_SUFFIX, REALISTIC_STYLE_SUFFIX } from '../imageGenerator/index.js';
 
 export type ImageEditorMode = '4K-Enhance' | 'Dark-Dramatize';
 export type AspectRatio = 'auto' | '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9';
@@ -57,8 +58,7 @@ export interface ImageEditorResult {
   mediaType: string;
 }
 
-export const DARK_DRAMATIZE_SUFFIX =
-  'analyze input image, focus on main subject, masterpiece professional photography, dramatic backlighting, strong rim lighting from behind, intense edge light, front of subject in deep shadow, heavy chiaroscuro photography, extreme low key, edges fading completely into pitch black void. 4K ultra HD. Render in extreme detail with high-end remastering, sharp focus, accurate textures. Ensure it is strictly in 1:1 aspect ratio. NO TEXT whatsoever. DO NOT INCLUDE: front lighting, direct lighting, top lighting, overhead light, painting, bright background, daylight, flat lighting, overexposed, visible room edges, cutout, text, logo, signature.';
+export const DARK_DRAMATIZE_SUFFIX = DRAMATIC_STYLE_SUFFIX;
 
 export const ENHANCE_4K_DEFAULT_PROMPT =
   'Ultra-high-resolution 4K enhancement. Render in extreme detail, sharp focus, and high-fidelity textures. Strictly preserve the pose, composition, and subjects captured. Recover hidden details, remove pixelation and noise, and add realistic, lifelike clarity without altering the original style or morphing facial features.';
@@ -151,9 +151,19 @@ export async function enhance4K(options: Omit<ImageEditorOptions, 'mode'>): Prom
     uploadToS3: shouldUploadToS3 = true,
     maxRetries = 3,
   } = options;
-
   const resolved = await resolveImageBuffer(image);
   if (!resolved) {
+    if (prompt && prompt !== ENHANCE_4K_DEFAULT_PROMPT) {
+      console.log(`[imageEditor:4K-Enhance] No base image found. Delegating to imageGenerator (style: realistic)...`);
+      return imageGenerator({
+        prompt,
+        style: 'realistic',
+        aspectRatio,
+        size,
+        uploadToS3: shouldUploadToS3,
+        maxRetries,
+      });
+    }
     throw new Error('[imageEditor:4K-Enhance] An image buffer or valid image URL is required for 4K enhancement.');
   }
 
@@ -249,15 +259,21 @@ export async function darkDramatize(options: Omit<ImageEditorOptions, 'mode'>): 
 
   const baseBuffer = baseResolved?.buffer || null;
 
-  // Step 2: Build dramatic prompt
-  let finalPrompt = '';
-  if (baseBuffer) {
-    console.log(`[imageEditor:Dark-Dramatize] Enhancing base image with dramatic chiaroscuro style...`);
-    finalPrompt = `Based on the provided image, ${DARK_DRAMATIZE_SUFFIX}`;
-  } else {
-    console.log(`[imageEditor:Dark-Dramatize] Generating from text prompt: "${prompt || 'breaking news cover'}"`);
-    finalPrompt = `${prompt || 'breaking news cover'}. ${DARK_DRAMATIZE_SUFFIX}`;
+  // Step 2: If no base buffer, delegate to imageGenerator
+  if (!baseBuffer) {
+    console.log(`[imageEditor:Dark-Dramatize] No base image found. Delegating to imageGenerator (style: dramatic)...`);
+    return imageGenerator({
+      prompt: prompt || 'breaking news cover',
+      style: 'dramatic',
+      aspectRatio,
+      size,
+      uploadToS3: shouldUploadToS3,
+      maxRetries,
+    });
   }
+
+  console.log(`[imageEditor:Dark-Dramatize] Enhancing base image with dramatic chiaroscuro style...`);
+  const finalPrompt = `Based on the provided image, ${DARK_DRAMATIZE_SUFFIX}`;
 
   // Step 3: Generation with retry & backoff
   const modelName = process.env.IMAGE_GENERATION_MODEL || 'gemini-3.1-flash-image-preview';
@@ -301,16 +317,11 @@ export async function darkDramatize(options: Omit<ImageEditorOptions, 'mode'>): 
     }
   }
 
-  // Step 4: Fallback if generation failed
+  // Step 4: Fallback to base buffer if generation failed
   if (!outputBuffer) {
-    console.warn(`[imageEditor:Dark-Dramatize] Failed after ${maxRetries} attempts. Falling back to base image or transparent pixel.`);
-    if (baseBuffer) {
-      outputBuffer = baseBuffer;
-      mediaType = baseResolved?.mimeType || 'image/jpeg';
-    } else {
-      outputBuffer = BLACK_FALLBACK_PNG;
-      mediaType = 'image/png';
-    }
+    console.warn(`[imageEditor:Dark-Dramatize] Failed after ${maxRetries} attempts. Falling back to base image.`);
+    outputBuffer = baseBuffer;
+    mediaType = baseResolved?.mimeType || 'image/jpeg';
   }
 
   // Step 5: Upload to S3
@@ -353,5 +364,6 @@ export async function enhanceImage(
 ): Promise<ImageEditorResult> {
   return imageEditor({ mode: options.mode || '4K-Enhance', ...options });
 }
+export { imageGenerator } from '../imageGenerator/index.js';
 
 export default imageEditor;
