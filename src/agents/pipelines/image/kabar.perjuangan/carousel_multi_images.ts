@@ -7,7 +7,7 @@ import { generateMedia } from '../../../../media.js';
 import { insertQueueItem } from '../../../../db/queue.js';
 import { curateImages } from '../../../image-curator/index.js';
 import { marked } from 'marked';
-import { darkDramatize, imageGenerator } from '../../../../utils/imageEditor/index.js';
+import { imageEditor, imageGenerator } from '../../../../utils/imageEditor/index.js';
 
 // Helper for Roman numerals
 const toRoman = (num: number) => {
@@ -149,9 +149,11 @@ Your task is to parse the gathered facts into final components for an Instagram 
 
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Mempersiapkan gambar...'));
 
-  // Phase 3: Image Sourcing & Dramatic Cover Generation
-  console.log(`[Phase 3] Generating dramatic cover image with imageEditor (Dark-Dramatize)...`);
-  const coverResult = await darkDramatize({
+  // Phase 3: Image Sourcing & Cover Generation
+  const heroMode: '4K-Enhance' | 'Dark-Dramatize' = context.heroStyle === '4K-Enhance' ? '4K-Enhance' : 'Dark-Dramatize';
+  console.log(`[Phase 3] Generating cover image with imageEditor (Mode: ${heroMode})...`);
+  const coverResult = await imageEditor({
+    mode: heroMode,
     image: imageMediaItems.length > 0 ? imageMediaItems[0].buffer : null,
     scrapedImageUrl,
     searchQuery: contentParams.title,

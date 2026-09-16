@@ -56,6 +56,7 @@ export const jobsTable = pgTable('jobs', {
   chatId: text('chat_id').notNull(),
   messageId: bigint('message_id', { mode: 'number' }).notNull(),
   templateId: text('template_id').notNull().default('image:kabar.perjuangan:carousel_dark'),
+  heroStyle: text('hero_style').default('Dark-Dramatize'),
   text: text('text').notNull(),
   media: jsonb('media').$type<{ type: 'image' | 'video', url: string, mimeType?: string }[]>().default([]).notNull(),
   status: text('status').notNull().default('pending'), // pending, processing, completed, error

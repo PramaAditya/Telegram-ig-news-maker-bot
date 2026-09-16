@@ -155,6 +155,31 @@ async function askForTemplate(ctx: any, ideaId: number) {
   }
 }
 
+async function askForHeroStyle(ctx: any, ideaId: number, templateId: string) {
+  const styleButtons = [
+    [
+      { text: '🌑 Dark Dramatize (Chiaroscuro)', callback_data: `style_${ideaId}_${templateId}_Dark-Dramatize` }
+    ],
+    [
+      { text: '🌟 4K Realistic (Natural Photo)', callback_data: `style_${ideaId}_${templateId}_4K-Enhance` }
+    ],
+    [
+      { text: '⬅️ Kembali ke Template', callback_data: `back_template_${ideaId}` },
+      { text: '❌ Batal', callback_data: `cancel_idea_${ideaId}` }
+    ]
+  ];
+
+  const templateObj = (TEMPLATES as any)[templateId];
+  const templateName = templateObj?.name || 'Carousel';
+  const messageText = `Template: *${templateName}*\n\nPilih gaya *Hero Image (Cover)* yang ingin digunakan:`;
+
+  if (ctx.callbackQuery) {
+    await InteractiveMenu.update(ctx, messageText, styleButtons);
+  } else {
+    await InteractiveMenu.send(ctx, messageText, styleButtons);
+  }
+}
+
 bot.on(message('text'), async (ctx) => {
   const chatId = ctx.chat.id.toString();
   
@@ -408,6 +433,39 @@ bot.on('callback_query', async (ctx: any) => {
       if (!idea.connectionId) {
         return ctx.answerCbQuery('Silakan pilih akun/connection terlebih dahulu.');
       }
+      // Jika template video (tidak ada hero image cover), langsung masukkan antrean
+      if (templateId.startsWith('video:')) {
+        await db.insert(jobsTable).values({
+          connectionId: idea.connectionId,
+          chatId: idea.chatId,
+          messageId: idea.messageId,
+          text: idea.text,
+          media: idea.media,
+          templateId: templateId,
+          status: 'pending'
+        });
+
+        await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, ideaId));
+        await InteractiveMenu.finalize(ctx, '✅ Masuk antrean sistem (Title Only Video)');
+        return;
+      }
+
+      // Untuk template image/carousel, tanyakan style hero image
+      await askForHeroStyle(ctx, ideaId, templateId);
+      await ctx.answerCbQuery();
+      
+    } else if (callbackData.startsWith('style_')) {
+      const match = callbackData.match(/^style_(\d+)_(.+?)_(Dark-Dramatize|4K-Enhance)$/);
+      if (!match) return ctx.answerCbQuery('Format data tidak valid.');
+      
+      const ideaId = parseInt(match[1], 10);
+      const templateId = match[2];
+      const heroStyle = match[3];
+
+      const [idea] = await db.select().from(ideasTable).where(eq(ideasTable.id, ideaId));
+      if (!idea) return ctx.answerCbQuery('Ide tidak ditemukan.');
+      if (idea.status !== 'pending') return ctx.answerCbQuery('Ide ini sudah diproses.');
+      if (!idea.connectionId) return ctx.answerCbQuery('Silakan pilih akun/connection terlebih dahulu.');
 
       await db.insert(jobsTable).values({
         connectionId: idea.connectionId,
@@ -416,16 +474,21 @@ bot.on('callback_query', async (ctx: any) => {
         text: idea.text,
         media: idea.media,
         templateId: templateId,
+        heroStyle: heroStyle,
         status: 'pending'
       });
 
       await db.update(ideasTable).set({ status: 'converted' }).where(eq(ideasTable.id, ideaId));
 
-      await InteractiveMenu.finalize(ctx, '✅ Masuk antrean sistem');
+      const styleLabel = heroStyle === 'Dark-Dramatize' ? '🌑 Dark Dramatize' : '🌟 4K Realistic';
+      await InteractiveMenu.finalize(ctx, `✅ Masuk antrean sistem (${styleLabel})`);
       
+    } else if (callbackData.startsWith('back_template_')) {
+      const ideaId = parseInt(callbackData.replace('back_template_', ''), 10);
+      await askForTemplate(ctx, ideaId);
+      await ctx.answerCbQuery();
     } else if (callbackData.startsWith('cancel_idea_')) {
       const ideaId = parseInt(callbackData.replace('cancel_idea_', ''), 10);
-      
       await InteractiveMenu.finalize(ctx, '⏸️ Ide disimpan. Bisa diproses nanti di dashboard.');
     }
   } catch (error) {

@@ -45,6 +45,7 @@ export interface PipelineContext {
   currentYear: number;
   baseSystemPrompt: string;
   connectionId: number;
+  heroStyle?: string;
 }
 
 export interface ResearchResult {

@@ -3,7 +3,16 @@ import { getConnection } from './db/settings.js';
 import { runResearchPhase } from './agents/research.js';
 import { MediaItem, PipelineContext, getBaseSystemPrompt, withRetry } from './utils.js';
 
-export async function runAutomatedPipeline(chatId: string, messageId: number, userInput: string, uploadedMedia: MediaItem[] | undefined, telegram: any, templateId: string = 'image:kabar.perjuangan:carousel_dark', connectionId: number) {
+export async function runAutomatedPipeline(
+  chatId: string,
+  messageId: number,
+  userInput: string,
+  uploadedMedia: MediaItem[] | undefined,
+  telegram: any,
+  templateId: string = 'image:kabar.perjuangan:carousel_dark',
+  connectionId: number,
+  heroStyle?: string
+) {
   try {
     const template = TEMPLATES[templateId];
     if (!template) {
@@ -32,7 +41,8 @@ export async function runAutomatedPipeline(chatId: string, messageId: number, us
       currentDateStr,
       currentYear,
       baseSystemPrompt,
-      connectionId
+      connectionId,
+      heroStyle: heroStyle || 'Dark-Dramatize',
     };
 
     // Phase 1: Research

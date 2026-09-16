@@ -101,7 +101,8 @@ async function processNextJob() {
       jobToProcess.media && jobToProcess.media.length > 0 ? jobToProcess.media : undefined,
       telegramToUse,
       jobToProcess.template_id,
-      jobToProcess.connection_id
+      jobToProcess.connection_id,
+      jobToProcess.hero_style
     );
 
     await db.update(jobsTable)

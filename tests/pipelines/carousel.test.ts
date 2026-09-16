@@ -10,7 +10,7 @@ import {
   carouselMultiImagesTemplateConfig,
 } from '../../src/agents/pipelines/image/kabar.perjuangan/carousel_multi_images.js';
 import { generateObject, generateText } from 'ai';
-import { darkDramatize } from '../../src/utils/imageEditor/index.js';
+import { imageEditor } from '../../src/utils/imageEditor/index.js';
 import {
   runSinglePagePipeline,
   generateSinglePageMedia,
@@ -31,14 +31,24 @@ vi.mock('ai', async (importOriginal) => {
   };
 });
 
-// Mock imageEditor
+// Mock imageEditor & imageGenerator
 vi.mock('../../src/utils/imageEditor/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/utils/imageEditor/index.js')>();
   return {
     ...actual,
+    imageEditor: vi.fn().mockResolvedValue({
+      url: 'https://mock-s3.pelita.tech/cover-dramatic.jpg',
+      buffer: Buffer.from('mock-dramatic-cover'),
+      mediaType: 'image/jpeg',
+    }),
     darkDramatize: vi.fn().mockResolvedValue({
       url: 'https://mock-s3.pelita.tech/cover-dramatic.jpg',
       buffer: Buffer.from('mock-dramatic-cover'),
+      mediaType: 'image/jpeg',
+    }),
+    imageGenerator: vi.fn().mockResolvedValue({
+      url: 'https://mock-s3.pelita.tech/generated-slide.jpg',
+      buffer: Buffer.from('mock-generated-slide'),
       mediaType: 'image/jpeg',
     }),
   };
@@ -72,6 +82,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(media.generateMedia).mockReset();
 
     mockTelegram = {
       editMessageText: vi.fn().mockResolvedValue(true),
@@ -182,13 +193,15 @@ describe('Carousel Pipelines Workflow Tests', () => {
       expect(generateObject).toHaveBeenCalledOnce();
 
       // Phase 3: darkDramatize verified with correct parameters
-      expect(darkDramatize).toHaveBeenCalledWith({
+      // Phase 3: imageEditor verified with correct parameters
+      expect(imageEditor).toHaveBeenCalledWith(expect.objectContaining({
+        mode: 'Dark-Dramatize',
         image: null,
         scrapedImageUrl: 'https://news.com/article/hero.jpg',
         searchQuery: 'Solar Breakthrough Announced Today',
         prompt: 'High-tech clean energy laboratory',
         uploadToS3: true,
-      });
+      }));
 
       // Phase 4: Slide markdown bolding verified
       expect(generateText).toHaveBeenCalledTimes(2);
@@ -304,13 +317,14 @@ describe('Carousel Pipelines Workflow Tests', () => {
       expect(generateObject).toHaveBeenCalledOnce();
 
       // Cover dramatic generation verified
-      expect(darkDramatize).toHaveBeenCalledWith({
+      expect(imageEditor).toHaveBeenCalledWith(expect.objectContaining({
+        mode: 'Dark-Dramatize',
         image: null,
         scrapedImageUrl: 'https://news.com/article/hero.jpg',
         searchQuery: 'Global Tech Summit Highlights',
         prompt: 'Futuristic technology summit stage',
         uploadToS3: true,
-      });
+      }));
 
       // 3 slides curated
       expect(curator.curateImages).toHaveBeenCalledTimes(3);
@@ -392,13 +406,15 @@ describe('Carousel Pipelines Workflow Tests', () => {
       expect(generateObject).toHaveBeenCalledOnce();
 
       // Phase 3: darkDramatize verified
-      expect(darkDramatize).toHaveBeenCalledWith({
+      // Phase 3: imageEditor verified
+      expect(imageEditor).toHaveBeenCalledWith(expect.objectContaining({
+        mode: 'Dark-Dramatize',
         image: null,
         scrapedImageUrl: 'https://news.com/article/hero.jpg',
         searchQuery: 'Single Page Headline Title',
         prompt: 'Dramatic political summit scene',
         uploadToS3: true,
-      });
+      }));
 
       // Paragraph bolding verified (2 calls for 2 paragraphs)
       expect(generateText).toHaveBeenCalledTimes(2);
