@@ -14,6 +14,7 @@ export const singlePageTemplateConfig = {
   id: 'image:poros.perjuangan:single_page',
   name: 'Single Page Post',
   description: 'A 1-page high-impact news post with a title and a 2-paragraph description.',
+  albumStrategy: 'first_only' as const,
   uiSchema: [
     { name: 'title', type: 'text', label: 'Provocative Title' },
     { name: 'source_name', type: 'string', label: 'Source Media Name' },

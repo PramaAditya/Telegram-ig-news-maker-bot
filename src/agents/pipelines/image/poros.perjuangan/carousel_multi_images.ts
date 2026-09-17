@@ -28,6 +28,7 @@ export const carouselMultiImagesTemplateConfig = {
   id: 'image:poros.perjuangan:carousel_multi_images',
   name: 'Carousel Multi Images',
   description: 'A 4-slide breaking news carousel with a cover image and 3 content slides each with its own curated image.',
+  albumStrategy: 'first_only' as const,
   uiSchema: [
     { name: 'title', type: 'text', label: 'Title (supports **bold**)', aiContext: 'This is the title of a sensational news post. It should be scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style targeted at Gen Z Indonesians.' },
     { name: 'source_name', type: 'string', label: 'Source Media Name' },

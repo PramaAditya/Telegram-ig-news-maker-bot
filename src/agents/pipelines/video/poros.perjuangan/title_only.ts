@@ -16,6 +16,7 @@ export const titleOnlyTemplateConfig = {
   name: 'Title Only Video',
   description: 'A 9:16 video overlay template. Normalizes video, adds blurred background if needed, and overlays a 5-second contextual title.',
   skipResearch: true,
+  albumStrategy: 'first_video_only' as const,
   uiSchema: [
     { name: 'title', type: 'text', label: 'Title (max 10-12 words)', aiContext: 'A punchy, highly contextual title about the video in Bahasa Indonesia, max 10-12 words so it can be read in 5 seconds. Avoid fluff.' }
   ]

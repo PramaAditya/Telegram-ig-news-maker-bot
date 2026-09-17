@@ -4,13 +4,23 @@ import { runCarouselMultiImagesPipeline, carouselMultiImagesTemplateConfig, gene
 import { runSinglePagePipeline, singlePageTemplateConfig, generateSinglePageMedia } from './agents/pipelines/image/poros.perjuangan/single_page.js';
 import { runTitleOnlyPipeline, titleOnlyTemplateConfig, generateTitleOnlyMedia } from './agents/pipelines/video/poros.perjuangan/title_only.js';
 
+export type AlbumStrategy = 'first_only' | 'all_as_slides' | 'distribute_to_slides' | 'first_video_only' | 'ignore';
+
+export interface SlideTypeDefinition {
+  type: string;
+  label: string;
+  icon?: string;
+  fields: TemplateField[];
+}
+
 export interface TemplateField {
   name: string;
-  type: 'text' | 'image' | 'array' | string;
+  type: 'text' | 'image' | 'array' | 'string' | 'input' | string;
   label: string;
   aiContext?: string;
-  itemType?: 'text' | 'object';
+  itemType?: 'text' | 'object' | 'polymorphic';
   itemSchema?: TemplateField[];
+  slideTypes?: SlideTypeDefinition[];
 }
 
 export interface TemplateConfig {
@@ -19,6 +29,8 @@ export interface TemplateConfig {
   description: string;
   uiSchema?: TemplateField[];
   skipResearch?: boolean;
+  albumStrategy?: AlbumStrategy;
+  reduceTextOnAlbum?: boolean;
   runPipeline: (context: PipelineContext, research: ResearchResult) => Promise<void>;
   regenerateMedia: (templateData: any, settings: any) => Promise<{ type: 'image' | 'video', url: string }[]>;
 }

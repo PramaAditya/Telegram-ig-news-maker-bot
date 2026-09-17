@@ -26,14 +26,46 @@ export const carouselDarkTemplateConfig = {
   id: 'image:poros.perjuangan:carousel_dark',
   name: 'Carousel Dark',
   description: 'A 2-slide breaking news carousel with a cover image.',
+  albumStrategy: 'all_as_slides' as const,
+  reduceTextOnAlbum: true,
   uiSchema: [
     { name: 'title', type: 'text', label: 'Title (supports **bold**)', aiContext: 'This is the title of a sensational news post. It should be scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style targeted at Gen Z Indonesians.' },
     { name: 'source_name', type: 'string', label: 'Source Media Name' },
     { name: 'source_url', type: 'string', label: 'Source Article URL' },
     { name: 'coverImageUrl', type: 'image', label: 'Cover Image' },
-    { name: 'slides', type: 'array', label: 'Slides', itemType: 'text', itemSchema: [
-      { name: '', type: 'text', label: 'Slide Text (supports **bold**)', aiContext: 'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.' }
-    ]}
+    {
+      name: 'slides',
+      type: 'array',
+      label: 'Slides',
+      itemType: 'polymorphic',
+      slideTypes: [
+        {
+          type: 'text',
+          label: 'Text Slide',
+          icon: 'FileText',
+          fields: [
+            {
+              name: 'text',
+              type: 'text',
+              label: 'Slide Text (supports **bold**)',
+              aiContext: 'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.'
+            }
+          ]
+        },
+        {
+          type: 'image',
+          label: 'Full Image',
+          icon: 'Image',
+          fields: [
+            {
+              name: 'imageUrl',
+              type: 'image',
+              label: 'Slide Image'
+            }
+          ]
+        }
+      ]
+    }
   ] as any[]
 };
 
@@ -66,17 +98,30 @@ export async function generateCarouselDarkMedia(templateData: any, settings: any
     }
   });
 
-  if (templateData.slides) {
-    templateData.slides.forEach((text: string, i: number) => {
-      pages.push({
-        file: 'slide',
-        context: {
-          logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
-          cover_image: templateData.coverImageUrl,
-          text: marked.parse(text),
-          roman_number: toRoman(i + 1)
-        }
-      });
+  let textSlideIndex = 0;
+  if (templateData.slides && Array.isArray(templateData.slides)) {
+    templateData.slides.forEach((slide: any) => {
+      if (slide && typeof slide === 'object' && (slide.type === 'image' || (!slide.type && slide.imageUrl))) {
+        pages.push({
+          file: 'image',
+          context: {
+            logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
+            image_url: slide.imageUrl
+          }
+        });
+      } else {
+        textSlideIndex++;
+        const rawText = typeof slide === 'string' ? slide : (slide?.text || '');
+        pages.push({
+          file: 'slide',
+          context: {
+            logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
+            cover_image: templateData.coverImageUrl,
+            text: marked.parse(rawText),
+            roman_number: toRoman(textSlideIndex)
+          }
+        });
+      }
     });
   }
 
@@ -141,7 +186,7 @@ export async function runCarouselDarkPipeline(context: PipelineContext, research
 
   const imageMediaItems = processedMedia ? processedMedia.filter(m => m.type === 'image' && m.buffer) : [];
   const isAlbum = imageMediaItems.length > 1;
-  const slideCount = isAlbum ? 1 : 2;
+  const slideCount = (isAlbum && carouselDarkTemplateConfig.reduceTextOnAlbum) ? 1 : 2;
 
   const dynamicSystemPromptAdditions = `
 Your task is to parse the gathered facts into final components for an Instagram news carousel.
@@ -200,7 +245,7 @@ Your task is to parse the gathered facts into final components for an Instagram 
   }
 
   let extraImageUrls: string[] = [];
-  if (isAlbum) {
+  if (isAlbum && carouselDarkTemplateConfig.albumStrategy === 'all_as_slides') {
     console.log(`[Phase 3] Uploading raw input images for album...`);
     for (const item of imageMediaItems) {
       if (item.buffer) {
@@ -245,9 +290,20 @@ RULES:
         return text;
       }
     };
+    const textSlides = await Promise.all(contentParams.slides.map(async (text: string) => {
+      const bolded = await highlightText(text);
+      return {
+        type: 'text',
+        text: censorText(bolded, bannedWords)
+      };
+    }));
 
-    templateData.slides = await Promise.all(contentParams.slides.map((text: string) => highlightText(text)));
-    templateData.slides = templateData.slides.map((text: string) => censorText(text, bannedWords));
+    const imageSlides = extraImageUrls.map((url: string) => ({
+      type: 'image',
+      imageUrl: url
+    }));
+
+    templateData.slides = [...textSlides, ...imageSlides];
   }
 
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🎨 Merender desain post...'));
@@ -263,29 +319,30 @@ RULES:
     }
   });
 
-  if (templateData.slides) {
-    templateData.slides.forEach((text: string, i: number) => {
-      pages.push({
-        file: 'slide',
-        context: {
-          logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
-          cover_image: coverImageUrl,
-          text: marked.parse(text),
-          roman_number: toRoman(i + 1)
-        }
-      });
-    });
-  }
-
-  if (extraImageUrls) {
-    extraImageUrls.forEach((url: string) => {
-      pages.push({
-        file: 'image',
-        context: {
-          logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
-          image_url: url
-        }
-      });
+  let textSlideIndex = 0;
+  if (templateData.slides && Array.isArray(templateData.slides)) {
+    templateData.slides.forEach((slide: any) => {
+      if (slide && typeof slide === 'object' && (slide.type === 'image' || (!slide.type && slide.imageUrl))) {
+        pages.push({
+          file: 'image',
+          context: {
+            logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
+            image_url: slide.imageUrl
+          }
+        });
+      } else {
+        textSlideIndex++;
+        const rawText = typeof slide === 'string' ? slide : (slide?.text || '');
+        pages.push({
+          file: 'slide',
+          context: {
+            logo: settings.logoImageUrl || 'https://storage.pelita.tech/logo_poros_perjuangan_white.png',
+            cover_image: coverImageUrl,
+            text: marked.parse(rawText),
+            roman_number: toRoman(textSlideIndex)
+          }
+        });
+      }
     });
   }
 
