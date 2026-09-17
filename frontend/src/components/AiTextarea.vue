@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Sparkles, Undo2, RefreshCw } from 'lucide-vue-next'
+import { Sparkles, Undo2, RefreshCw, Shield, ShieldCheck } from 'lucide-vue-next'
 import { getAuthHeaders } from '../auth'
+import { censorTextWithReport, type BannedWord } from '../sanitize'
+import { useConnectionStore } from '../store'
 
 const props = defineProps<{
   modelValue: string
@@ -10,6 +12,8 @@ const props = defineProps<{
   guidancePlaceholder?: string
   guidanceDescription?: string
   aiContext?: string
+  bannedWords?: BannedWord[]
+  connectionId?: number
 }>()
 
 const emit = defineEmits(['update:modelValue', 'pasteImage', 'focus', 'blur'])
@@ -38,10 +42,15 @@ const instruction = ref('')
 const isRefining = ref(false)
 const previousText = ref('')
 const canUndo = ref(false)
-
+const isCensoring = ref(false)
+const justCensored = ref(false)
+const lastAction = ref<'ai' | 'censor' | null>(null)
+const connectionStore = useConnectionStore()
+const toast = useToast()
 const onInput = (e: Event) => {
   emit('update:modelValue', (e.target as HTMLTextAreaElement).value)
   canUndo.value = false
+  lastAction.value = null
 }
 
 const refine = async () => {
@@ -70,9 +79,11 @@ const refine = async () => {
     text.value = data.refinedText
     emit('update:modelValue', text.value)
     canUndo.value = true
+    lastAction.value = 'ai'
     isPopoverOpen.value = false
-  } catch (e: any) {
-    alert(e.message)
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    alert(message)
   } finally {
     isRefining.value = false
   }
@@ -82,6 +93,68 @@ const undo = () => {
   text.value = previousText.value
   emit('update:modelValue', text.value)
   canUndo.value = false
+  lastAction.value = null
+}
+
+const applyCensor = async () => {
+  const currentVal = text.value || ''
+  if (!currentVal) return
+
+  isCensoring.value = true
+  try {
+    let words = props.bannedWords
+    if (!words || words.length === 0) {
+      await connectionStore.ensureConnectionsLoaded()
+      words = connectionStore.getBannedWords(props.connectionId)
+    }
+
+    if (!words || words.length === 0) {
+      toast.add({
+        title: 'Banned Words Kosong',
+        description: 'Belum ada list kata terlarang di pengaturan koneksi.',
+        color: 'warning'
+      })
+      return
+    }
+
+    const { censoredText, replacedCount, replacedWords } = censorTextWithReport(currentVal, words)
+
+    if (replacedCount === 0) {
+      toast.add({
+        title: 'Teks Aman',
+        description: 'Tidak ada kata terlarang yang ditemukan.',
+        color: 'success'
+      })
+      return
+    }
+
+    previousText.value = currentVal
+    canUndo.value = true
+    lastAction.value = 'censor'
+
+    text.value = censoredText
+    emit('update:modelValue', censoredText)
+
+    justCensored.value = true
+    setTimeout(() => {
+      justCensored.value = false
+    }, 2000)
+
+    toast.add({
+      title: 'Kata Terlarang Diganti',
+      description: `${replacedCount} kata disensor: ${replacedWords.join(', ')}`,
+      color: 'success'
+    })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.add({
+      title: 'Gagal Menyensor',
+      description: message,
+      color: 'error'
+    })
+  } finally {
+    isCensoring.value = false
+  }
 }
 </script>
 
@@ -101,7 +174,8 @@ const undo = () => {
     <div class="absolute top-2 right-2 flex flex-col gap-1 z-10">
       <UPopover v-model:open="isPopoverOpen" :content="{ side: 'bottom', align: 'end' }">
         <button 
-          class="p-1.5 text-muted hover:text-primary hover:bg-primary-50 rounded-md transition-colors"
+          type="button"
+          class="p-1.5 text-muted hover:text-primary hover:bg-primary-50 rounded-md transition-colors cursor-pointer"
           title="Enhance with AI"
         >
           <Sparkles class="w-4 h-4" />
@@ -129,20 +203,34 @@ const undo = () => {
           </div>
         </template>
       </UPopover>
+      <button 
+        type="button"
+        @click="applyCensor"
+        :disabled="isCensoring"
+        class="p-1.5 rounded-md transition-colors cursor-pointer"
+        :class="justCensored ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40' : 'text-muted hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'"
+        title="Search & Replace Banned Words (Censor)"
+      >
+        <ShieldCheck v-if="justCensored" class="w-4 h-4 text-emerald-500" />
+        <Shield v-else class="w-4 h-4" />
+      </button>
+
 
       <button 
         v-if="canUndo"
+        type="button"
         @click="undo"
-        class="p-1.5 text-warning hover:text-warning-600 hover:bg-warning-50 rounded-md transition-colors"
-        title="Undo Enhancement"
+        class="p-1.5 text-warning hover:text-warning-600 hover:bg-warning-50 rounded-md transition-colors cursor-pointer"
+        :title="lastAction === 'censor' ? 'Undo Censor' : 'Undo Enhancement'"
       >
         <Undo2 class="w-4 h-4" />
       </button>
 
       <button 
-        v-if="canUndo"
+        v-if="canUndo && lastAction === 'ai'"
+        type="button"
         @click="refine"
-        class="p-1.5 text-primary hover:text-primary-700 hover:bg-primary-50 rounded-md transition-colors"
+        class="p-1.5 text-primary hover:text-primary-700 hover:bg-primary-50 rounded-md transition-colors cursor-pointer"
         title="Retry Enhancement"
         :disabled="isRefining"
       >

@@ -388,6 +388,27 @@ app.get('/api/connections', requireDashboardAuth, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+app.post('/api/connections/test-buffer', requireDashboardAuth, async (req, res) => {
+  try {
+    const { bufferApiKey, bufferChannelId } = req.body;
+    if (!bufferApiKey || !bufferChannelId) {
+      return res.status(400).json({ error: 'Buffer API Key and Channel ID are required.' });
+    }
+
+    const details = await fetchBufferChannelDetails(String(bufferApiKey).trim(), String(bufferChannelId).trim());
+    res.json({
+      success: true,
+      name: details.name,
+      network: details.network
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      error: error.message || 'Failed to connect to Buffer'
+    });
+  }
+});
+
 
 app.post('/api/connections', requireDashboardAuth, async (req, res) => {
   try {

@@ -16,8 +16,8 @@ export const singlePageTemplateConfig = {
   description: 'A 1-page high-impact news post with a title and a 2-paragraph description.',
   uiSchema: [
     { name: 'title', type: 'text', label: 'Provocative Title' },
-    { name: 'source_name', type: 'text', label: 'Source Media Name' },
-    { name: 'source_url', type: 'text', label: 'Source Article URL' },
+    { name: 'source_name', type: 'string', label: 'Source Media Name' },
+    { name: 'source_url', type: 'string', label: 'Source Article URL' },
     { name: 'description', type: 'text', label: 'Body Description (HTML/Markdown)' },
     { name: 'coverImageUrl', type: 'image', label: 'Background Image' }
   ] as any[]

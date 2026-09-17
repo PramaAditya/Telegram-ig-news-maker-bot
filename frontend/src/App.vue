@@ -13,36 +13,12 @@ const toggleColorMode = () => {
 };
 
 const connectionStore = useConnectionStore();
-const connections = ref<any[]>([]);
-const loading = ref(true);
+const connections = computed(() => connectionStore.connections);
+const loading = computed(() => connectionStore.loadingConnections);
 const sidebarOpen = ref(true);
 
 const fetchConnections = async () => {
-  loading.value = true;
-  try {
-    const res = await fetch("/api/connections", { headers: getAuthHeaders() });
-    if (res.ok) {
-      connections.value = await res.json();
-      if (connections.value.length > 0 && !connectionStore.activeConnectionId) {
-        connectionStore.setActiveConnection(connections.value[0].id);
-      } else if (connections.value.length === 0) {
-        connectionStore.setActiveConnection(null);
-      } else {
-        // ensure active connection still exists
-        if (
-          !connections.value.find(
-            (c) => c.id === connectionStore.activeConnectionId,
-          )
-        ) {
-          connectionStore.setActiveConnection(connections.value[0].id);
-        }
-      }
-    }
-  } catch (err) {
-    console.error("Failed to fetch connections:", err);
-  } finally {
-    loading.value = false;
-  }
+  await connectionStore.fetchConnections();
 };
 
 onMounted(() => {

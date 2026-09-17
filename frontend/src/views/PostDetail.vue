@@ -280,13 +280,24 @@ const regenerateMedia = async () => {
         <div v-if="currentTemplateConfig && currentTemplateConfig.uiSchema">
           <div v-for="field in currentTemplateConfig.uiSchema" :key="field.name" class="mb-6">
             
-            <template v-if="field.type === 'text'">
+            <template v-if="field.type === 'string' || field.type === 'input' || field.name === 'source_name' || field.name === 'source_url'">
+              <label class="block text-sm font-medium text-default mb-2">{{ field.label }}</label>
+              <input 
+                v-model="post.templateData[field.name]" 
+                type="text"
+                class="w-full px-4 py-2.5 border border-default rounded-md shadow-sm focus:ring-1 focus:ring-primary focus:border-primary text-sm bg-default text-default placeholder-muted"
+                :placeholder="field.label"
+              />
+            </template>
+
+            <template v-else-if="field.type === 'text'">
               <label class="block text-sm font-medium text-default mb-2">{{ field.label }}</label>
               <AiTextarea 
                 v-model="post.templateData[field.name]" 
                 :rows="3"
                 guidancePlaceholder="e.g., make it more sensational, fix typo"
                 :aiContext="field.aiContext + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                :connectionId="post.connectionId"
                 @focus="activePasteTarget = { type: 'top' }"
                 @pasteImage="handlePasteToTopImage"
               />
@@ -323,19 +334,30 @@ const regenerateMedia = async () => {
                     :rows="4" 
                     guidancePlaceholder="e.g., summarize this better, fix typo"
                     :aiContext="(field.itemSchema && field.itemSchema[0] ? field.itemSchema[0].aiContext : '') + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+                    :connectionId="post.connectionId"
                   />
                 </template>
 
                 <!-- Array Item is an object -->
                 <template v-else-if="field.itemType === 'object' && field.itemSchema">
                   <div v-for="subField in field.itemSchema" :key="subField.name" class="mt-4">
-                    <template v-if="subField.type === 'text'">
+                    <template v-if="subField.type === 'string' || subField.type === 'input' || subField.name === 'source_name' || subField.name === 'source_url'">
+                      <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
+                      <input 
+                        v-model="post.templateData[field.name][i][subField.name]" 
+                        type="text"
+                        class="w-full px-4 py-2.5 border border-default rounded-md shadow-sm focus:ring-1 focus:ring-primary focus:border-primary text-sm bg-default text-default placeholder-muted"
+                        :placeholder="subField.label"
+                      />
+                    </template>
+                    <template v-else-if="subField.type === 'text'">
                       <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
                       <AiTextarea 
                         v-model="post.templateData[field.name][i][subField.name]" 
                         :rows="4" 
                         guidancePlaceholder="e.g., summarize this better, fix typo"
                         :aiContext="subField.aiContext + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                        :connectionId="post.connectionId"
                         @focus="activePasteTarget = { type: 'slide', index: Number(i) }"
                         @pasteImage="(file) => handlePasteToSlideImage(field.name, Number(i), file)"
                       />
@@ -409,9 +431,9 @@ const regenerateMedia = async () => {
           :rows="12" 
           guidancePlaceholder="e.g., add relevant hashtags, fix typo"
           :aiContext="'This is the final caption for an Instagram news post. It should be engaging, informative, and include relevant hashtags at the end.' + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+          :connectionId="post.connectionId"
         />
       </div>
-
     </div>
   </div>
 </template>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Save, Settings2, Loader2, Info, Sparkles, X, Trash2 } from 'lucide-vue-next'
+import { Save, Settings2, Loader2, Info, Sparkles, X, Trash2, Plug, CheckCircle2, AlertCircle } from 'lucide-vue-next'
 import { getAuthHeaders } from '../auth'
 import ImageUploader from '../components/ImageUploader.vue'
 import PasswordInput from '../components/PasswordInput.vue'
@@ -315,6 +315,62 @@ const deleteConnection = async () => {
     isDeleting.value = false
   }
 }
+
+const testingBuffer = ref(false)
+const bufferTestResult = ref<{ success: boolean; message: string } | null>(null)
+
+const testBufferConnection = async () => {
+  if (!settings.value.bufferApiKey || !settings.value.bufferChannelId) {
+    toast.add({
+      title: 'Missing Credentials',
+      description: 'Please enter both Buffer API Key and Channel ID.',
+      color: 'warning'
+    })
+    return
+  }
+
+  testingBuffer.value = true
+  bufferTestResult.value = null
+  try {
+    const res = await fetch('/api/connections/test-buffer', {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bufferApiKey: settings.value.bufferApiKey,
+        bufferChannelId: settings.value.bufferChannelId
+      })
+    })
+
+    const data = await res.json()
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to connect to Buffer')
+    }
+
+    settings.value.bufferChannelNetwork = data.network
+    bufferTestResult.value = {
+      success: true,
+      message: `Connected successfully to "${data.name}" (${data.network.toUpperCase()})`
+    }
+    toast.add({
+      title: 'Buffer Connected!',
+      description: `Channel "${data.name}" verified (${data.network.toUpperCase()}).`,
+      color: 'success'
+    })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    bufferTestResult.value = {
+      success: false,
+      message
+    }
+    toast.add({
+      title: 'Connection Failed',
+      description: message,
+      color: 'error'
+    })
+  } finally {
+    testingBuffer.value = false
+  }
+}
 </script>
 
 <template>
@@ -615,7 +671,19 @@ const deleteConnection = async () => {
 
           <template #keys>
             <div class="mt-6 space-y-6">
-              <h2 class="text-lg font-bold text-default border-b border-default pb-2">API Keys & Tokens</h2>
+              <div class="flex items-center justify-between border-b border-default pb-2">
+                <h2 class="text-lg font-bold text-default">API Keys & Tokens</h2>
+                <button
+                  type="button"
+                  @click="testBufferConnection"
+                  :disabled="testingBuffer || !settings.bufferApiKey || !settings.bufferChannelId"
+                  class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md text-inverted bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  <Loader2 v-if="testingBuffer" class="w-3.5 h-3.5 animate-spin" />
+                  <Plug v-else class="w-3.5 h-3.5" />
+                  {{ testingBuffer ? 'Testing...' : 'Test Connection' }}
+                </button>
+              </div>
               
               <div class="space-y-4">
                 <div>
@@ -631,6 +699,29 @@ const deleteConnection = async () => {
                 <div v-if="settings.bufferChannelNetwork">
                   <label class="block text-sm font-medium text-default mb-2">Buffer Channel Network (Auto-detected)</label>
                   <input type="text" disabled :value="settings.bufferChannelNetwork" class="w-full px-4 py-2 border border-default rounded-md shadow-sm text-sm bg-muted text-muted uppercase cursor-not-allowed" />
+                </div>
+
+                <!-- Test Connection Status Box -->
+                <div v-if="bufferTestResult" class="p-3.5 rounded-lg border text-sm flex items-start gap-2.5 transition" :class="bufferTestResult.success ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400'">
+                  <CheckCircle2 v-if="bufferTestResult.success" class="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <AlertCircle v-else class="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <div class="flex-1">
+                    <p class="font-medium">{{ bufferTestResult.success ? 'Koneksi Berhasil' : 'Koneksi Gagal' }}</p>
+                    <p class="text-xs opacity-90 mt-0.5">{{ bufferTestResult.message }}</p>
+                  </div>
+                </div>
+
+                <div class="pt-2">
+                  <button
+                    type="button"
+                    @click="testBufferConnection"
+                    :disabled="testingBuffer || !settings.bufferApiKey || !settings.bufferChannelId"
+                    class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 border border-default shadow-sm text-sm font-medium rounded-md text-default bg-default hover:bg-muted focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    <Loader2 v-if="testingBuffer" class="w-4 h-4 animate-spin" />
+                    <Plug v-else class="w-4 h-4" />
+                    {{ testingBuffer ? 'Testing Connection to Buffer...' : 'Test Buffer Connection' }}
+                  </button>
                 </div>
               </div>
             </div>

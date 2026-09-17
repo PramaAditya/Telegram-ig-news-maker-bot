@@ -30,8 +30,8 @@ export const carouselMultiImagesTemplateConfig = {
   description: 'A 4-slide breaking news carousel with a cover image and 3 content slides each with its own curated image.',
   uiSchema: [
     { name: 'title', type: 'text', label: 'Title (supports **bold**)', aiContext: 'This is the title of a sensational news post. It should be scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style targeted at Gen Z Indonesians.' },
-    { name: 'source_name', type: 'text', label: 'Source Media Name' },
-    { name: 'source_url', type: 'text', label: 'Source Article URL' },
+    { name: 'source_name', type: 'string', label: 'Source Media Name' },
+    { name: 'source_url', type: 'string', label: 'Source Article URL' },
     { name: 'coverImageUrl', type: 'image', label: 'Cover Image' },
     { name: 'slides', type: 'array', label: 'Slides', itemType: 'object', itemSchema: [
       { name: 'text', type: 'text', label: 'Slide Text (supports **bold**)', aiContext: 'This is one slide out of a multi-slide news carousel. It should be written in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span.' },
