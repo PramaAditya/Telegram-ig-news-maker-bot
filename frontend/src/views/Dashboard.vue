@@ -507,12 +507,14 @@ const getPostDropdownItems = (item: any) => {
       }
     });
   }
-  actions.push({
-    label: 'Delete',
-    onSelect: () => deleteItem(item.id),
-    color: 'error'
-  });
-  return [actions];
+  if (activeTab.value !== 'published') {
+    actions.push({
+      label: 'Delete',
+      onSelect: () => deleteItem(item.id),
+      color: 'error'
+    });
+  }
+  return actions.length > 0 ? [actions] : [];
 };
 </script>
 
@@ -868,7 +870,11 @@ const getPostDropdownItems = (item: any) => {
                             </template>
                             Duplicate to Queue
                           </UButton>
-                          <UDropdownMenu :items="getPostDropdownItems(qItem)" :content="{ align: 'end' }">
+                          <UDropdownMenu 
+                            v-if="getPostDropdownItems(qItem).length > 0" 
+                            :items="getPostDropdownItems(qItem)" 
+                            :content="{ align: 'end' }"
+                          >
                             <UButton color="white" variant="solid" :padded="false" class="p-2">
                               <MoreVertical class="w-4 h-4 text-muted" />
                             </UButton>
