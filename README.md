@@ -108,6 +108,31 @@ docker-compose up --build -d
 
 ---
 
+## 🧪 Testing & Editorial Pipeline CLI
+
+Test the editorial intelligence and copywriting pipeline without rendering images, touching Puppeteer, or uploading to S3:
+
+```bash
+# 1. Run with default input (configured Al Mayadeen article)
+npm run test:pipeline:text
+
+# 2. Run with a custom news URL or topic via CLI argument
+npx tsx scripts/test_pipeline_text.ts "https://news.example.com/article Topik analisis spesifik"
+
+# 3. Run with an environment variable
+INPUT_TEXT="https://news.example.com/article" npm run test:pipeline:text
+```
+
+### What the CLI runs:
+| Stage | Agent / Module | Output Produced |
+| :--- | :--- | :--- |
+| **Phase 1** | `src/agents/editorial/research.ts` | 5W1H factual research, source URL metadata, curated news images |
+| **Phase 2** | `src/agents/editorial/opinion.ts` | Editorial stance (*Tesis Utama, Poin Kritis, Punchline*) guided by account guidelines & banned words moderation |
+| **Phase 3** | Content Generator (`generateCarouselDarkContent`) | Viral title, structured slides, and sanitized Instagram caption |
+
+---
+
+
 ## 🗄️ Project Landscape
 
 ```text
