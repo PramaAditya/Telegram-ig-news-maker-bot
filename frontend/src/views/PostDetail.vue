@@ -121,7 +121,7 @@ const openLightbox = (mediaArray: any[], index: number) => {
 const fetchPost = async () => {
   loading.value = true
   try {
-    const res = await fetch('/api/queue', { headers: getAuthHeaders() })
+    const res = await fetch(`/api/queue/${postId}`, { headers: getAuthHeaders() })
     if (res.status === 401) {
       const pwd = prompt('Enter Dashboard Password:')
       if (pwd !== null) {
@@ -130,10 +130,11 @@ const fetchPost = async () => {
       }
       throw new Error('Unauthorized')
     }
-    if (!res.ok) throw new Error('Failed to fetch queue')
-    const queue = await res.json()
-    post.value = queue.find((p: any) => p.id === parseInt(postId as string))
-    if (!post.value) throw new Error('Post not found in pending queue')
+    if (res.status === 404) {
+      throw new Error(`Post #${postId} not found`)
+    }
+    if (!res.ok) throw new Error('Failed to fetch post')
+    post.value = await res.json()
     
     // Ensure templateData exists
     if (!post.value.templateData) post.value.templateData = {}
@@ -149,8 +150,9 @@ const fetchPost = async () => {
     }
     
     error.value = ''
-  } catch (err: any) {
-    error.value = err.message
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    error.value = message
   } finally {
     loading.value = false
   }
@@ -174,7 +176,8 @@ const saveChanges = async () => {
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text: post.value.text,
-        templateData: post.value.templateData
+        templateData: post.value.templateData,
+        status: post.value.status
       })
     })
     if (res.status === 401) {
@@ -183,11 +186,18 @@ const saveChanges = async () => {
     }
     if (!res.ok) throw new Error('Failed to save')
     toast.add({ title: 'Changes saved!', color: 'success' })
-  } catch (err: any) {
-    toast.add({ title: err.message, color: 'error' })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.add({ title: message, color: 'error' })
   } finally {
     saving.value = false
   }
+}
+
+const moveToPending = async () => {
+  post.value.status = 'pending'
+  await saveChanges()
+  toast.add({ title: 'Post moved to Pending Queue!', color: 'success' })
 }
 
 const removeSlide = (fieldName: string, index: number) => {
@@ -310,20 +320,44 @@ const regenerateMedia = async () => {
 <template>
   <div>
     <div class="mb-6 flex items-center justify-between">
-      <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-3">
         <router-link to="/" class="p-2 bg-default rounded-full border border-default text-muted hover:text-default hover:bg-muted">
           <ArrowLeft class="w-5 h-5" />
         </router-link>
         <h1 class="text-2xl font-bold text-default">Edit Post #{{ postId }}</h1>
+        <span 
+          v-if="post?.status" 
+          class="px-2.5 py-0.5 text-xs font-semibold rounded-full uppercase"
+          :class="{
+            'bg-amber-500/10 text-amber-600 border border-amber-500/30': post.status === 'draft',
+            'bg-blue-500/10 text-blue-600 border border-blue-500/30': post.status === 'pending',
+            'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30': post.status === 'published',
+            'bg-red-500/10 text-red-600 border border-red-500/30': post.status === 'error'
+          }"
+        >
+          {{ post.status }}
+        </span>
       </div>
-      <button 
-        @click="saveChanges" 
-        :disabled="saving"
-        class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-inverted bg-primary hover:bg-primary disabled:opacity-50"
-      >
-        <Save class="w-4 h-4 mr-2" />
-        {{ saving ? 'Saving...' : 'Save Draft' }}
-      </button>
+      <div class="flex items-center gap-2">
+        <button 
+          v-if="post?.status === 'draft'"
+          type="button"
+          @click="moveToPending" 
+          :disabled="saving"
+          class="inline-flex items-center px-4 py-2 border border-default shadow-sm text-sm font-medium rounded-md text-default bg-default hover:bg-muted disabled:opacity-50 cursor-pointer transition"
+        >
+          Move to Pending
+        </button>
+        <button 
+          type="button"
+          @click="saveChanges" 
+          :disabled="saving"
+          class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-inverted bg-primary hover:bg-primary disabled:opacity-50 cursor-pointer transition"
+        >
+          <Save class="w-4 h-4 mr-2" />
+          {{ saving ? 'Saving...' : (post?.status === 'draft' ? 'Save Draft' : 'Save Changes') }}
+        </button>
+      </div>
     </div>
 
     <div v-if="loading" class="text-center py-10 text-muted">Loading...</div>

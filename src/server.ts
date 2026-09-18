@@ -625,6 +625,19 @@ app.get('/api/queue', requireDashboardAuth, async (req, res) => {
   }
 });
 
+app.get('/api/queue/:id', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const items = await db.select().from(queueTable).where(eq(queueTable.id, id));
+    if (items.length === 0) return res.status(404).json({ error: 'Post not found' });
+
+    res.json(items[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
