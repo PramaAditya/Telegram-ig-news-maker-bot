@@ -10,6 +10,8 @@ export async function insertQueueItem(data: {
   media: { type: 'image' | 'video', url: string }[];
   publishMetadata?: any;
   researchResult?: string;
+  agentInsights?: Record<string, string>;
+  rawInput?: string;
   status?: string; // e.g., 'pending', 'publishing', 'buffering', 'published', 'error'
   chatId?: string;
   messageId?: number;
@@ -31,6 +33,8 @@ export async function insertQueueItem(data: {
     publishMetadata: data.publishMetadata || {},
     status: data.status || 'pending',
     researchResult: data.researchResult,
+    agentInsights: data.agentInsights || (data.researchResult ? { research: data.researchResult } : {}),
+    rawInput: data.rawInput,
     chatId: data.chatId,
     messageId: data.messageId,
     bufferPostId: data.bufferPostId,

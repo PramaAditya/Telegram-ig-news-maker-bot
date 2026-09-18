@@ -114,10 +114,14 @@ export async function generateCarouselMultiImagesMedia(templateData: any, settin
   }));
 }
 
-export async function runCarouselMultiImagesPipeline(context: PipelineContext, research: ResearchResult) {
+export async function runCarouselMultiImagesPipeline(
+  context: PipelineContext,
+  research: ResearchResult,
+  agentInsights?: Record<string, string>
+) {
   const { chatId, messageId, telegram, statusMsg, userInput, settings, currentDateStr, baseSystemPrompt } = context;
   const { researchText, scrapedImageUrl, processedMedia } = research;
-
+  const insights = agentInsights || context.agentInsights || (researchText ? { research: researchText } : {});
   const defaultGuidelines = process.env.EDITORIAL_GUIDELINES || `Your reporting should maintain a professional and highly informative journalistic tone. Focus on delivering factual news while highlighting perspectives from the Global South, particularly Palestine, Lebanon, Iran, Iraq, and Yemen. When covering conflicts or international relations, critically examine the roles, policies, and actions of the US, Israel, and their allies.\n\nCrucially, avoid emotive language, sensationalism, or blatant propaganda. Let the facts, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How) drive the narrative. Your goal is to inform the audience thoroughly and objectively within the constraints of a short format.`;
   const editorialGuidelines = settings.editorialGuidelines || defaultGuidelines;
   const bannedWords = settings.bannedWords || [];
@@ -373,9 +377,10 @@ RULES:
     status: 'pending',
     chatId: chatId,
     messageId: messageId,
-    researchResult: researchText
+    researchResult: researchText,
+    agentInsights: insights,
+    rawInput: userInput
   });
-
   const postButton = {
     reply_markup: {
       inline_keyboard: [

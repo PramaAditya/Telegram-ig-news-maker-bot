@@ -168,10 +168,14 @@ export async function generateTitleOnlyMedia(templateData: any, settings: any): 
   }
 }
 
-export async function runTitleOnlyPipeline(context: PipelineContext, research: ResearchResult) {
+export async function runTitleOnlyPipeline(
+  context: PipelineContext,
+  research: ResearchResult,
+  agentInsights?: Record<string, string>
+) {
   const { chatId, messageId, telegram, statusMsg, userInput, settings, currentDateStr, baseSystemPrompt } = context;
   const { processedMedia } = research;
-
+  const insights = agentInsights || context.agentInsights || {};
   const videoMedia = processedMedia?.find(m => m.type === 'video');
   if (!videoMedia || !videoMedia.buffer) {
     throw new Error('Pipeline ini membutuhkan input video.');
@@ -232,9 +236,10 @@ export async function runTitleOnlyPipeline(context: PipelineContext, research: R
     status: 'pending',
     chatId: chatId,
     messageId: messageId,
-    researchResult: 'Video auto-generated.'
+    researchResult: 'Video auto-generated.',
+    agentInsights: insights,
+    rawInput: userInput
   });
-
   const postButton = {
     reply_markup: {
       inline_keyboard: [

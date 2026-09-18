@@ -46,6 +46,7 @@ export interface PipelineContext {
   baseSystemPrompt: string;
   connectionId: number;
   heroStyle?: string;
+  agentInsights?: Record<string, string>;
 }
 
 export interface CandidateSource {

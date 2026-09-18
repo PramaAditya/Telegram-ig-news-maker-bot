@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowLeft, Save, RefreshCw, ArrowUp, ArrowDown, Plus } from 'lucide-vue-next'
+import { ArrowLeft, Save, RefreshCw, ArrowUp, ArrowDown, Plus, Sparkles, Zap, Search, Lightbulb } from 'lucide-vue-next'
 import { getAuthHeaders, setPassword } from '../auth'
 import { Fancybox } from '@fancyapps/ui'
 import ImageUploader from '../components/ImageUploader.vue'
@@ -16,10 +16,96 @@ const post = ref<any>(null)
 const loading = ref(true)
 const saving = ref(false)
 const generating = ref(false)
+const regeneratingType = ref<'media' | 'content' | 'pipeline' | null>(null)
 const error = ref('')
 const availableTemplates = ref<any[]>([])
-
 const activePasteTarget = ref<{ type: 'top' | 'slide', index?: number } | null>(null)
+
+interface EditorialAgentConfig {
+  id: string;
+  name: string;
+  label: string;
+  description?: string;
+  icon?: string;
+  badgeColor?: 'blue' | 'amber' | 'emerald' | 'purple' | 'rose' | 'gray';
+  displayOrder?: number;
+  ui?: {
+    format?: 'markdown' | 'text' | 'json';
+    collapsible?: boolean;
+    defaultExpanded?: boolean;
+    editable?: boolean;
+  };
+  promptContext?: {
+    header: string;
+  };
+}
+
+const editorialAgents = ref<EditorialAgentConfig[]>([
+  { id: 'research', name: 'Factual Research', label: 'AI Research Notes (5W1H)', icon: 'Search', badgeColor: 'blue', promptContext: { header: 'BACKGROUND RESEARCH / FACTS TO USE' } },
+  { id: 'opinion', name: 'Editorial Opinion', label: 'Analisis Opini & Sudut Pandang', icon: 'Lightbulb', badgeColor: 'amber', promptContext: { header: 'EDITORIAL OPINION & CORE ARGUMENT' } },
+])
+
+const activeInsightTab = ref<string>('research')
+
+const fetchEditorialAgents = async () => {
+  try {
+    const res = await fetch('/api/editorial/agents', { headers: getAuthHeaders() })
+    if (res.ok) {
+      editorialAgents.value = await res.json()
+    }
+  } catch (e) {}
+}
+
+const availableInsightTabs = computed(() => {
+  if (!post.value?.agentInsights) return []
+  return editorialAgents.value.filter(agent => {
+    return Boolean(post.value.agentInsights[agent.id] && post.value.agentInsights[agent.id].trim().length > 0)
+  })
+})
+
+const getAiContextForSlide = (slide: unknown, field: any, basePrompt?: string): string => {
+  const slideType = getSlideType(slide, field)
+  const slideDef = field?.slideTypes?.find((st: any) => st.type === slideType)
+  
+  let requiredInsights = slideDef?.requiredInsights
+  if (!requiredInsights) {
+    if (slideType === 'opinion') requiredInsights = ['research', 'opinion']
+    else if (slideType === 'news') requiredInsights = ['research']
+    else requiredInsights = ['research', 'opinion']
+  }
+
+  const sections: string[] = []
+  if (basePrompt) {
+    sections.push(basePrompt)
+  }
+
+  if (post.value?.agentInsights) {
+    for (const key of requiredInsights) {
+      const content = post.value.agentInsights[key]
+      if (content && content.trim().length > 0) {
+        const agent = editorialAgents.value.find(a => a.id === key)
+        const header = agent?.promptContext?.header || `${key.toUpperCase()} NOTES`
+        sections.push(`\n\n=== ${header} ===\n${content.trim()}`)
+      }
+    }
+  }
+
+  return sections.join('\n')
+}
+
+const getAiContextForField = (field: any): string => {
+  const sections: string[] = [field?.aiContext || '']
+  if (post.value?.agentInsights) {
+    for (const agent of editorialAgents.value) {
+      const content = post.value.agentInsights[agent.id]
+      if (content && content.trim().length > 0) {
+        const header = agent.promptContext?.header || `${agent.id.toUpperCase()} NOTES`
+        sections.push(`\n\n=== ${header} ===\n${content.trim()}`)
+      }
+    }
+  }
+  return sections.join('\n')
+}
 
 const uploadImageFile = async (file: File): Promise<string> => {
   const formData = new FormData()
@@ -139,6 +225,14 @@ const fetchPost = async () => {
     // Ensure templateData exists
     if (!post.value.templateData) post.value.templateData = {}
 
+    // Normalize agentInsights
+    if (!post.value.agentInsights) {
+      post.value.agentInsights = {}
+    }
+    if (post.value.researchResult && !post.value.agentInsights.research) {
+      post.value.agentInsights.research = post.value.researchResult
+    }
+
     const templateConfig = availableTemplates.value.find(t => t.id === post.value.templateId)
     if (templateConfig && templateConfig.uiSchema) {
       // Initialize arrays based on schema if they don't exist
@@ -148,7 +242,6 @@ const fetchPost = async () => {
         }
       })
     }
-    
     error.value = ''
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
@@ -160,10 +253,10 @@ const fetchPost = async () => {
 
 onMounted(async () => {
   window.addEventListener('paste', onGlobalPaste)
+  await fetchEditorialAgents()
   await fetchTemplates()
   await fetchPost()
 })
-
 onUnmounted(() => {
   window.removeEventListener('paste', onGlobalPaste)
 })
@@ -177,7 +270,8 @@ const saveChanges = async () => {
       body: JSON.stringify({ 
         text: post.value.text,
         templateData: post.value.templateData,
-        status: post.value.status
+        status: post.value.status,
+        agentInsights: post.value.agentInsights
       })
     })
     if (res.status === 401) {
@@ -288,12 +382,9 @@ const currentTemplateConfig = computed(() => {
 })
 
 const regenerateMedia = async () => {
-  // We can skip hardcoded validation for now, or just ensure arrays are not empty
-  
-  // First save the current draft so backend uses the latest text
   await saveChanges()
-
   generating.value = true
+  regeneratingType.value = 'media'
   try {
     const res = await fetch(`/api/queue/${postId}/regenerate-media`, {
       method: 'POST',
@@ -306,13 +397,76 @@ const regenerateMedia = async () => {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Failed to regenerate media')
     
-    // Update local media state with newly generated ones
     post.value.media = data.media
-    toast.add({ title: 'Media regenerated successfully!', color: 'success' })
-  } catch (err: any) {
-    toast.add({ title: err.message, color: 'error' })
+    toast.add({ title: 'Media grid regenerated successfully!', color: 'success' })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.add({ title: message, color: 'error' })
   } finally {
     generating.value = false
+    regeneratingType.value = null
+  }
+}
+
+const regenerateContent = async () => {
+  await saveChanges()
+  generating.value = true
+  regeneratingType.value = 'content'
+  try {
+    const res = await fetch(`/api/queue/${postId}/regenerate-content`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    })
+    if (res.status === 401) {
+      toast.add({ title: 'Unauthorized', color: 'error' })
+      return
+    }
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to regenerate content')
+    
+    post.value.text = data.text
+    post.value.templateData = data.templateData
+    post.value.media = data.media
+    toast.add({ title: 'Slides copy and media regenerated successfully!', color: 'success' })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.add({ title: message, color: 'error' })
+  } finally {
+    generating.value = false
+    regeneratingType.value = null
+  }
+}
+
+const regeneratePipeline = async () => {
+  if (!confirm('Re-run the entire pipeline? This will perform fresh web research, opinion analysis, and re-create slides & images.')) {
+    return
+  }
+  generating.value = true
+  regeneratingType.value = 'pipeline'
+  try {
+    const res = await fetch(`/api/queue/${postId}/regenerate-pipeline`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    })
+    if (res.status === 401) {
+      toast.add({ title: 'Unauthorized', color: 'error' })
+      return
+    }
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to regenerate pipeline')
+    
+    post.value.text = data.text
+    post.value.templateData = data.templateData
+    post.value.media = data.media
+    if (data.agentInsights) post.value.agentInsights = data.agentInsights
+    if (data.researchResult) post.value.researchResult = data.researchResult
+    toast.add({ title: 'Whole pipeline regenerated successfully!', color: 'success' })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.add({ title: message, color: 'error' })
+  } finally {
+    generating.value = false
+    regeneratingType.value = null
   }
 }
 </script>
@@ -365,11 +519,58 @@ const regenerateMedia = async () => {
     
     <div v-else-if="post" class="space-y-6 max-w-4xl mx-auto">
       
-      <!-- Research Result Reference -->
-      <div v-if="post.researchResult" class="bg-default shadow rounded-lg p-6">
-        <h2 class="text-lg font-bold mb-4 text-default">AI Research Notes</h2>
-        <div class="bg-muted border border-default rounded-md p-4 max-h-64 overflow-y-auto">
-          <p class="text-sm text-default whitespace-pre-wrap font-mono">{{ post.researchResult }}</p>
+      <!-- AI Editorial Insights (Research, Opinion, etc.) -->
+      <div v-if="availableInsightTabs.length > 0" class="bg-default shadow rounded-lg p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-bold text-default">AI Editorial Insights</h2>
+            <span class="text-xs text-muted">Pre-production analysis</span>
+          </div>
+
+          <!-- Insight Tabs -->
+          <div class="flex items-center gap-1 bg-muted p-1 rounded-lg border border-default self-start sm:self-auto">
+            <button
+              v-for="agent in availableInsightTabs"
+              :key="agent.id"
+              type="button"
+              @click="activeInsightTab = agent.id"
+              class="px-3 py-1.5 text-xs font-medium rounded-md transition flex items-center gap-1.5 cursor-pointer"
+              :class="activeInsightTab === agent.id ? 'bg-default text-default shadow-sm border border-default' : 'text-muted hover:text-default'"
+            >
+              <Search v-if="agent.id === 'research'" class="w-3.5 h-3.5 text-blue-500" />
+              <Lightbulb v-else-if="agent.id === 'opinion'" class="w-3.5 h-3.5 text-amber-500" />
+              <Sparkles v-else class="w-3.5 h-3.5 text-primary" />
+              {{ agent.label }}
+            </button>
+          </div>
+        </div>
+
+        <div v-for="agent in availableInsightTabs" :key="agent.id">
+          <div v-if="activeInsightTab === agent.id" class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span 
+                class="px-2 py-0.5 text-xs font-semibold rounded-full uppercase"
+                :class="{
+                  'bg-blue-500/10 text-blue-600 border border-blue-500/30': agent.badgeColor === 'blue',
+                  'bg-amber-500/10 text-amber-600 border border-amber-500/30': agent.badgeColor === 'amber',
+                  'bg-purple-500/10 text-purple-600 border border-purple-500/30': agent.badgeColor === 'purple',
+                }"
+              >
+                {{ agent.name }}
+              </span>
+              <span v-if="agent.description" class="text-xs text-muted">{{ agent.description }}</span>
+            </div>
+            <div class="bg-muted border border-default rounded-md p-4 max-h-72 overflow-y-auto">
+              <textarea
+                v-if="agent.ui?.editable"
+                v-model="post.agentInsights[agent.id]"
+                rows="8"
+                class="w-full text-sm text-default bg-transparent font-mono focus:outline-none resize-y"
+                placeholder="Edit editorial insight..."
+              ></textarea>
+              <p v-else class="text-sm text-default whitespace-pre-wrap font-mono">{{ post.agentInsights[agent.id] }}</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -396,7 +597,7 @@ const regenerateMedia = async () => {
                 v-model="post.templateData[field.name]" 
                 :rows="3"
                 guidancePlaceholder="e.g., make it more sensational, fix typo"
-                :aiContext="field.aiContext + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                :aiContext="getAiContextForField(field)"
                 :connectionId="post.connectionId"
                 @focus="activePasteTarget = { type: 'top' }"
                 @pasteImage="handlePasteToTopImage"
@@ -482,7 +683,7 @@ const regenerateMedia = async () => {
                       v-model="post.templateData[field.name][i]" 
                       :rows="4" 
                       guidancePlaceholder="e.g., summarize this better, fix typo"
-                      :aiContext="'This is one slide out of a multi-slide news carousel. Keep it punchy and concise.' + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                      :aiContext="getAiContextForSlide(post.templateData[field.name][i], field, 'This is one slide out of a multi-slide news carousel. Keep it punchy and concise.')"
                       :connectionId="post.connectionId"
                     />
                     <!-- If object { type: 'text', text: '...' } -->
@@ -491,7 +692,7 @@ const regenerateMedia = async () => {
                       v-model="post.templateData[field.name][i].text" 
                       :rows="4" 
                       guidancePlaceholder="e.g., summarize this better, fix typo"
-                      :aiContext="'This is one slide out of a multi-slide news carousel. Keep it punchy and concise.' + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                      :aiContext="getAiContextForSlide(post.templateData[field.name][i], field, 'This is one slide out of a multi-slide news carousel. Keep it punchy and concise.')"
                       :connectionId="post.connectionId"
                     />
                   </template>
@@ -530,7 +731,7 @@ const regenerateMedia = async () => {
                             v-model="post.templateData[field.name][i][subField.name]" 
                             :rows="6" 
                             guidancePlaceholder="e.g., edit text, fix typo"
-                            :aiContext="(subField.aiContext || '') + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                            :aiContext="getAiContextForSlide(post.templateData[field.name][i], field, subField.aiContext || '')"
                             :connectionId="post.connectionId"
                           />
                         </template>
@@ -553,7 +754,7 @@ const regenerateMedia = async () => {
                     v-model="post.templateData[field.name][i]" 
                     :rows="4" 
                     guidancePlaceholder="e.g., summarize this better, fix typo"
-                    :aiContext="(field.itemSchema && field.itemSchema[0] ? field.itemSchema[0].aiContext : '') + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+                    :aiContext="getAiContextForSlide(post.templateData[field.name][i], field, field.itemSchema && field.itemSchema[0] ? field.itemSchema[0].aiContext : '')"
                     :connectionId="post.connectionId"
                   />
                 </template>
@@ -581,7 +782,7 @@ const regenerateMedia = async () => {
                           v-model="post.templateData[field.name][i][subField.name]" 
                           :rows="6" 
                           guidancePlaceholder="e.g., summarize this better, fix typo"
-                          :aiContext="subField.aiContext + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                          :aiContext="getAiContextForSlide(post.templateData[field.name][i], field, subField.aiContext || '')"
                           :connectionId="post.connectionId"
                           @focus="activePasteTarget = { type: 'slide', index: Number(i) }"
                           @pasteImage="(file) => handlePasteToSlideImage(field.name, Number(i), file)"
@@ -635,14 +836,39 @@ const regenerateMedia = async () => {
           ></textarea>
         </div>
 
-        <button 
-          @click="regenerateMedia" 
-          :disabled="generating"
-          class="w-full mt-4 inline-flex justify-center items-center px-4 py-3 border border-default shadow-sm text-base font-medium rounded-md text-default bg-default hover:bg-muted disabled:opacity-50"
-        >
-          <RefreshCw class="w-5 h-5 mr-2" :class="{ 'animate-spin': generating }" />
-          {{ generating ? 'Generating Images from API...' : 'Regenerate Media Grid' }}
-        </button>
+        <!-- Tiered Regeneration Actions -->
+        <div class="mt-4 pt-4 border-t border-default grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button 
+            type="button"
+            @click="regenerateMedia" 
+            :disabled="generating"
+            class="inline-flex justify-center items-center px-4 py-2.5 border border-default shadow-sm text-sm font-medium rounded-md text-default bg-default hover:bg-muted disabled:opacity-50 cursor-pointer transition"
+            title="Fast re-render of images from current text (0 LLM tokens)"
+          >
+            <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': regeneratingType === 'media' }" />
+            {{ regeneratingType === 'media' ? 'Rendering...' : 'Regenerate Media Grid' }}
+          </button>
+          <button 
+            type="button"
+            @click="regenerateContent" 
+            :disabled="generating"
+            class="inline-flex justify-center items-center px-4 py-2.5 border border-default shadow-sm text-sm font-medium rounded-md text-default bg-default hover:bg-muted disabled:opacity-50 cursor-pointer transition"
+            title="Re-run AI Writer using current research and opinion insights"
+          >
+            <Sparkles class="w-4 h-4 mr-2 text-amber-500" :class="{ 'animate-spin': regeneratingType === 'content' }" />
+            {{ regeneratingType === 'content' ? 'Re-writing...' : 'Re-generate Slides Copy' }}
+          </button>
+          <button 
+            type="button"
+            @click="regeneratePipeline" 
+            :disabled="generating"
+            class="inline-flex justify-center items-center px-4 py-2.5 border border-default shadow-sm text-sm font-medium rounded-md text-default bg-default hover:bg-muted disabled:opacity-50 cursor-pointer transition"
+            title="Fresh web scraping, research, opinion analysis, and image generation"
+          >
+            <Zap class="w-4 h-4 mr-2 text-primary" :class="{ 'animate-spin': regeneratingType === 'pipeline' }" />
+            {{ regeneratingType === 'pipeline' ? 'Running...' : 'Re-run Full Pipeline' }}
+          </button>
+        </div>
       </div>
 
       <!-- Media Preview -->
@@ -671,7 +897,7 @@ const regenerateMedia = async () => {
           v-model="post.text" 
           :rows="12" 
           guidancePlaceholder="e.g., add relevant hashtags, fix typo"
-          :aiContext="'This is the final caption for an Instagram news post. It should be engaging, informative, and include relevant hashtags at the end.' + (post.researchResult ? '\\n\\nBACKGROUND RESEARCH / FACTS TO USE:\\n' + post.researchResult : '')"
+          :aiContext="getAiContextForField({ aiContext: 'This is the final caption for an Instagram news post. It should be engaging, informative, and include relevant hashtags at the end.' })"
           :connectionId="post.connectionId"
         />
       </div>

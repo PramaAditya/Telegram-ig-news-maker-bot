@@ -40,6 +40,8 @@ export const queueTable = pgTable('queue', {
   nextRetryAt: timestamp('next_retry_at'),
   errorLog: text('error_log'),
   researchResult: text('research_result'),
+  agentInsights: jsonb('agent_insights').$type<Record<string, string>>().default({}).notNull(),
+  rawInput: text('raw_input'),
   scheduledAt: timestamp('scheduled_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   publishedAt: timestamp('published_at'),

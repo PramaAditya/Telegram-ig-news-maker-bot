@@ -9,6 +9,8 @@ import { marked } from 'marked';
 import { imageEditor } from '../../../../utils/imageEditor/index.js';
 import { sanitizeSourceUrl, getCleanDomain } from '../../../../utils/urlSanitizer.js';
 import { generateQrCodeDataUrl } from '../../../../utils/qrGenerator.js';
+import { buildPromptContextFromInsights } from '../../../editorial/registry.js';
+
 const toRoman = (num: number) => {
   const roman: Record<string, number> = {
     M: 1000, CM: 900, D: 500, CD: 400, C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1
@@ -28,6 +30,21 @@ export const carouselDarkTemplateConfig = {
   description: 'A 2-slide breaking news carousel with a cover image.',
   albumStrategy: 'all_as_slides' as const,
   reduceTextOnAlbum: true,
+  slidesComposition: { news: 2, opinion: 0 },
+  requiredEditorialAgents: ['research'],
+  regenerateContent: async (templateData: any, settings: any, insights: Record<string, string>, context: PipelineContext) => {
+    const { title, slides, source_name, source_url, finalCaption } = await generateCarouselDarkContent(context, insights);
+    return {
+      text: finalCaption,
+      templateData: {
+        ...templateData,
+        title,
+        slides,
+        source_name,
+        source_url: source_url || templateData.source_url,
+      }
+    };
+  },
   uiSchema: [
     { name: 'title', type: 'text', label: 'Title (supports **bold**)', aiContext: 'This is the title of a sensational news post. It should be scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style targeted at Gen Z Indonesians.' },
     { name: 'source_name', type: 'string', label: 'Source Media Name' },
@@ -43,6 +60,7 @@ export const carouselDarkTemplateConfig = {
           type: 'text',
           label: 'Text Slide',
           icon: 'FileText',
+          requiredInsights: ['research'],
           fields: [
             {
               name: 'text',
@@ -53,9 +71,40 @@ export const carouselDarkTemplateConfig = {
           ]
         },
         {
+          type: 'news',
+          label: 'Fakta Berita',
+          icon: 'Newspaper',
+          requiredInsights: ['research'],
+          promptInstruction: 'Fokus murni pada fakta 5W1H, lugas, netral, tanpa opini atau spekulasi.',
+          fields: [
+            {
+              name: 'text',
+              type: 'text',
+              label: 'Slide Text (supports **bold**)',
+              aiContext: 'This is a news slide. Focus strictly on objective 5W1H facts without editorial bias.'
+            }
+          ]
+        },
+        {
+          type: 'opinion',
+          label: 'Analisis Opini',
+          icon: 'Lightbulb',
+          requiredInsights: ['research', 'opinion'],
+          promptInstruction: 'Sintesis fakta berita dengan sudut pandang kritis/editorial. Buat argumen berani dan tajam.',
+          fields: [
+            {
+              name: 'text',
+              type: 'text',
+              label: 'Slide Text (supports **bold**)',
+              aiContext: 'This is an editorial opinion slide. Synthesize factual research with critical editorial analysis.'
+            }
+          ]
+        },
+        {
           type: 'image',
           label: 'Full Image',
           icon: 'Image',
+          requiredInsights: [],
           fields: [
             {
               name: 'imageUrl',
@@ -172,10 +221,14 @@ export async function generateCarouselDarkMedia(templateData: any, settings: any
   }));
 }
 
-export async function runCarouselDarkPipeline(context: PipelineContext, research: ResearchResult) {
+export async function runCarouselDarkPipeline(
+  context: PipelineContext,
+  research: ResearchResult,
+  agentInsights?: Record<string, string>
+) {
   const { chatId, messageId, telegram, statusMsg, userInput, settings, currentDateStr, baseSystemPrompt } = context;
   const { researchText, scrapedImageUrl, processedMedia } = research;
-
+  const insights = agentInsights || context.agentInsights || (researchText ? { research: researchText } : {});
   const defaultGuidelines = process.env.EDITORIAL_GUIDELINES || `Your reporting should maintain a professional and highly informative journalistic tone. Focus on delivering factual news while highlighting perspectives from the Global South, particularly Palestine, Lebanon, Iran, Iraq, and Yemen. When covering conflicts or international relations, critically examine the roles, policies, and actions of the US, Israel, and their allies.\n\nCrucially, avoid emotive language, sensationalism, or blatant propaganda. Let the facts, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How) drive the narrative. Your goal is to inform the audience thoroughly and objectively within the constraints of a short format.`;
   const editorialGuidelines = settings.editorialGuidelines || defaultGuidelines;
   const bannedWords = settings.bannedWords || [];
@@ -209,13 +262,13 @@ Your task is to parse the gathered facts into final components for an Instagram 
   console.log(`[Phase 2] Generating content using template schema`);
   const writerSystemPrompt = baseSystemPrompt + `\n\nEDITORIAL GUIDELINES & FRAMING:\n${editorialGuidelines}\n\n${dynamicSystemPromptAdditions}` + bannedWordsPrompt;
   
+  const insightsPrompt = buildPromptContextFromInsights(insights);
   const { object: contentParams } = await generateObject({
     model: googleAI(process.env.CONTENT_WRITER_MODEL || 'gemini-3.1-pro-preview'),
     system: writerSystemPrompt,
     schema: dynamicSchema,
-    prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Facts:\n\n${researchText}${research.candidateSources && research.candidateSources.length > 0 ? '\n\nCandidate Source URLs:\n' + research.candidateSources.map(c => `- ${c.title || c.domain || ''}: ${c.url}`).join('\n') : ''}`,
+    prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Insights:\n${insightsPrompt || researchText}${research.candidateSources && research.candidateSources.length > 0 ? '\n\nCandidate Source URLs:\n' + research.candidateSources.map(c => `- ${c.title || c.domain || ''}: ${c.url}`).join('\n') : ''}`,
   });
-  
   let finalCaption = '';
   if (contentParams.slides && contentParams.source_name) {
     finalCaption = `${contentParams.slides.join('\n\n')}\n\n${currentDateStr}. Sumber: ${contentParams.source_name}`;
@@ -401,9 +454,10 @@ RULES:
     status: 'pending',
     chatId: chatId,
     messageId: messageId,
-    researchResult: researchText
+    researchResult: researchText,
+    agentInsights: insights,
+    rawInput: userInput
   });
-
   const postButton = {
     reply_markup: {
       inline_keyboard: [
@@ -439,4 +493,64 @@ RULES:
 
   await withRetry(() => telegram.deleteMessage(statusMsg.chat.id, statusMsg.message_id)).catch(() => {});
   console.log(`[Done] Pipeline finished successfully.`);
+}
+
+export async function generateCarouselDarkContent(
+  context: PipelineContext,
+  insights: Record<string, string>,
+  candidateSources?: any[],
+  primarySourceUrl?: string | null
+): Promise<{ title: string; slides: { type: string; text: string }[]; source_name: string; source_url?: string; finalCaption: string }> {
+  const { userInput, settings, currentDateStr, baseSystemPrompt } = context;
+  const defaultGuidelines = process.env.EDITORIAL_GUIDELINES || `Your reporting should maintain a professional and highly informative journalistic tone. Focus on delivering factual news while highlighting perspectives from the Global South, particularly Palestine, Lebanon, Iran, Iraq, and Yemen. When covering conflicts or international relations, critically examine the roles, policies, and actions of the US, Israel, and their allies.\n\nCrucially, avoid emotive language, sensationalism, or blatant propaganda. Let the facts, context, and a comprehensive delivery of the 5W1H (Who, What, When, Where, Why, How) drive the narrative. Your goal is to inform the audience thoroughly and objectively within the constraints of a short format.`;
+  const editorialGuidelines = settings?.editorialGuidelines || defaultGuidelines;
+  const bannedWords = settings?.bannedWords || [];
+
+  const bannedWordsPrompt = bannedWords.length > 0 
+    ? `\n\nCRITICAL MODERATION RULE:\nYou are allowed to discuss sensitive topics, but you MUST replace specific words with their safe alternatives for spelling. Whenever you would normally write one of the following words, you MUST use its exact replacement instead:\n${bannedWords.map((w: any) => `- Replace "${w.word}" with "${w.replacement}"`).join('\n')}`
+    : '';
+
+  const slideCount = 2;
+  const dynamicSystemPromptAdditions = `
+Your task is to parse the gathered facts into final components for an Instagram news carousel.
+- title: Scroll-stopping, casual, highly sensational, and provocative (but factual) breaking news style. Target audience is Gen Z Indonesians. Use natural, modern, and impactful Indonesian phrasing. AVOID sounding repetitive, robotic, or overusing cliché slang like "Kena Mental" or "Skakmat". Make it sound like an authentic viral news alert on social media. Highlight the key factual phrase with HTML tags (<strong>text</strong>). Do NOT use markdown. IT MUST BE PROPER TITLE CASING (Capitalize the first letter of each major word, including inside the tags).
+- slides: An array of exactly ${slideCount} strings, representing ${slideCount} slides explaining the news. Write in clear, accessible, and easily understood Indonesian (Bahasa Indonesia yang membumi). Keep it PUNCHY, CONCISE, and FAST-PACED (singkat, padat, jelas) for a Gen-Z audience with a short attention span. AVOID complex political or academic jargon. Each slide MUST be exactly 1 short paragraph containing at most 2 sentences. Get straight to the point without unnecessary fluff. Answer the 5W1H comprehensively across the slides. Do NOT repeat information already stated in the title.
+- source_name: The original news source (e.g., Antara News, Kompas, Al Jazeera).
+- source_url: The direct HTTP/HTTPS URL of the primary article referenced.
+- image_prompt: A prompt for an AI image generator to create an accompanying cover background image. MUST specify: "masterpiece professional photography, dramatic backlighting, heavy chiaroscuro, extreme low key".
+`;
+
+  const dynamicSchema = z.object({
+    title: z.string(),
+    slides: z.array(z.string()).length(slideCount),
+    source_name: z.string(),
+    source_url: z.string().optional(),
+    image_prompt: z.string(),
+  });
+
+  const writerSystemPrompt = baseSystemPrompt + `\n\nEDITORIAL GUIDELINES & FRAMING:\n${editorialGuidelines}\n\n${dynamicSystemPromptAdditions}` + bannedWordsPrompt;
+  const insightsPrompt = buildPromptContextFromInsights(insights);
+
+  const { object: contentParams } = await generateObject({
+    model: googleAI(process.env.CONTENT_WRITER_MODEL || 'gemini-3.1-pro-preview'),
+    system: writerSystemPrompt,
+    schema: dynamicSchema,
+    prompt: `Original User Input/Caption:\n${userInput}\n\nGathered Insights:\n${insightsPrompt || ''}${candidateSources && candidateSources.length > 0 ? '\n\nCandidate Source URLs:\n' + candidateSources.map((c: any) => `- ${c.title || c.domain || ''}: ${c.url}`).join('\n') : ''}`,
+  });
+
+  let finalCaption = '';
+  if (contentParams.slides && contentParams.source_name) {
+    finalCaption = `${contentParams.slides.join('\n\n')}\n\n${currentDateStr}. Sumber: ${contentParams.source_name}`;
+  } else {
+    finalCaption = `${currentDateStr}.`;
+  }
+  finalCaption = censorText(finalCaption, bannedWords);
+
+  return {
+    title: contentParams.title,
+    slides: contentParams.slides.map((s: string) => ({ type: 'news', text: s })),
+    source_name: contentParams.source_name,
+    source_url: contentParams.source_url || primarySourceUrl || undefined,
+    finalCaption,
+  };
 }

@@ -10,6 +10,8 @@ export interface SlideTypeDefinition {
   type: string;
   label: string;
   icon?: string;
+  requiredInsights?: string[];
+  promptInstruction?: string;
   fields: TemplateField[];
 }
 
@@ -29,9 +31,11 @@ export interface TemplateConfig {
   description: string;
   uiSchema?: TemplateField[];
   skipResearch?: boolean;
+  requiredEditorialAgents?: string[];
+  slidesComposition?: Record<string, number>;
   albumStrategy?: AlbumStrategy;
   reduceTextOnAlbum?: boolean;
-  runPipeline: (context: PipelineContext, research: ResearchResult) => Promise<void>;
+  runPipeline: (context: PipelineContext, research: ResearchResult, agentInsights?: Record<string, string>) => Promise<void>;
   regenerateMedia: (templateData: any, settings: any) => Promise<{ type: 'image' | 'video', url: string }[]>;
 }
 

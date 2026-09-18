@@ -8,7 +8,11 @@ import { TEMPLATES } from './templates.js';
 import { generateMedia } from './media.js';
 import { publishToBuffer, fetchBufferChannelDetails } from './buffer.js';
 import { runAutomatedPipeline } from './agent.js';
-import { checkUpcomingSchedule } from './utils/scheduleChecker.js';
+import { getEditorialAgentConfigs } from './agents/editorial/registry.js';
+import { runResearchPhase } from './agents/editorial/research.js';
+import { runOpinionPhase } from './agents/editorial/opinion.js';
+import { getBaseSystemPrompt } from './utils.js';
+import type { PipelineContext } from './utils.js';
 import multer from 'multer';
 import { uploadToS3 } from './s3.js';
 import { generateObject } from 'ai';
@@ -641,7 +645,7 @@ app.get('/api/queue/:id', requireDashboardAuth, async (req, res) => {
 app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { text, templateData, scheduledAt, status } = req.body;
+    const { text, templateData, scheduledAt, status, agentInsights } = req.body;
     
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
 
@@ -657,7 +661,9 @@ app.put('/api/queue/:id', requireDashboardAuth, async (req, res) => {
       }
       updateData.status = status;
     }
-
+    if (agentInsights !== undefined) {
+      updateData.agentInsights = agentInsights;
+    }
     if (Object.keys(updateData).length > 0) {
       await db.update(queueTable)
         .set(updateData)
@@ -698,6 +704,178 @@ app.post('/api/queue/:id/regenerate-media', requireDashboardAuth, async (req, re
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed to regenerate media', details: err.message });
     }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/editorial/agents', requireDashboardAuth, (_req, res) => {
+  try {
+    const configs = getEditorialAgentConfigs();
+    res.json(configs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/queue/:id/regenerate-content', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const items = await db.select().from(queueTable).where(eq(queueTable.id, id));
+    if (items.length === 0) return res.status(404).json({ error: 'Post not found in queue' });
+    
+    const post = items[0];
+    if (!post.connectionId) return res.status(400).json({ error: 'Post missing connectionId' });
+    
+    const template = TEMPLATES[post.templateId];
+    if (!template) return res.status(400).json({ error: `Template ${post.templateId} not found` });
+
+    const connection = await getConnection(post.connectionId);
+    if (!connection) return res.status(404).json({ error: 'Connection not found' });
+
+    const insights = post.agentInsights || (post.researchResult ? { research: post.researchResult } : {});
+    
+    const currentDateObj = new Date();
+    const currentYear = currentDateObj.getFullYear();
+    const currentDateStr = currentDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
+    const baseSystemPrompt = getBaseSystemPrompt(currentDateStr, currentYear);
+
+    const context: PipelineContext = {
+      chatId: post.chatId || '',
+      messageId: post.messageId || 0,
+      userInput: post.rawInput || post.text,
+      uploadedMedia: [],
+      telegram: null,
+      statusMsg: null,
+      settings: connection,
+      currentDateStr,
+      currentYear,
+      baseSystemPrompt,
+      connectionId: post.connectionId,
+      agentInsights: insights,
+    };
+
+    let newText = post.text;
+    let newTemplateData = post.templateData;
+
+    if (template.regenerateContent) {
+      const regenerated = await template.regenerateContent(post.templateData, connection, insights, context);
+      newText = regenerated.text;
+      newTemplateData = regenerated.templateData;
+    }
+
+    const allPublishUrls = await template.regenerateMedia(newTemplateData, connection as any);
+
+    await db.update(queueTable)
+      .set({
+        text: newText,
+        templateData: newTemplateData,
+        media: allPublishUrls,
+      })
+      .where(eq(queueTable.id, post.id));
+
+    return res.json({
+      message: 'Content and media regenerated successfully',
+      text: newText,
+      templateData: newTemplateData,
+      media: allPublishUrls,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/queue/:id/regenerate-pipeline', requireDashboardAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const items = await db.select().from(queueTable).where(eq(queueTable.id, id));
+    if (items.length === 0) return res.status(404).json({ error: 'Post not found in queue' });
+    
+    const post = items[0];
+    if (!post.connectionId) return res.status(400).json({ error: 'Post missing connectionId' });
+    
+    const template = TEMPLATES[post.templateId];
+    if (!template) return res.status(400).json({ error: `Template ${post.templateId} not found` });
+
+    const connection = await getConnection(post.connectionId);
+    if (!connection) return res.status(404).json({ error: 'Connection not found' });
+
+    const currentDateObj = new Date();
+    const currentYear = currentDateObj.getFullYear();
+    const currentDateStr = currentDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
+    const baseSystemPrompt = getBaseSystemPrompt(currentDateStr, currentYear);
+
+    const rawInput = post.rawInput || post.text;
+
+    const pipelineContext: PipelineContext = {
+      chatId: post.chatId || '',
+      messageId: post.messageId || 0,
+      userInput: rawInput,
+      uploadedMedia: [],
+      telegram: null,
+      statusMsg: null,
+      settings: connection,
+      currentDateStr,
+      currentYear,
+      baseSystemPrompt,
+      connectionId: post.connectionId,
+    };
+
+    // 1. Run Research
+    const researchResult = await runResearchPhase(pipelineContext);
+    const agentInsights: Record<string, string> = {};
+    if (researchResult.researchText) {
+      agentInsights.research = researchResult.researchText;
+    }
+
+    // 2. Run Opinion (if required)
+    const requiresOpinion = template.requiredEditorialAgents?.includes('opinion') ||
+      Boolean(template.slidesComposition?.opinion && template.slidesComposition.opinion > 0);
+
+    if (requiresOpinion && researchResult.researchText) {
+      const opinionText = await runOpinionPhase(pipelineContext, researchResult.researchText);
+      if (opinionText) {
+        agentInsights.opinion = opinionText;
+      }
+    }
+
+    pipelineContext.agentInsights = agentInsights;
+
+    // 3. Re-generate content & media
+    let newText = post.text;
+    let newTemplateData = post.templateData;
+
+    if (template.regenerateContent) {
+      const regenerated = await template.regenerateContent(post.templateData, connection, agentInsights, pipelineContext);
+      newText = regenerated.text;
+      newTemplateData = regenerated.templateData;
+    }
+
+    const allPublishUrls = await template.regenerateMedia(newTemplateData, connection as any);
+
+    await db.update(queueTable)
+      .set({
+        text: newText,
+        templateData: newTemplateData,
+        media: allPublishUrls,
+        researchResult: researchResult.researchText,
+        agentInsights: agentInsights,
+        rawInput: rawInput,
+      })
+      .where(eq(queueTable.id, post.id));
+
+    return res.json({
+      message: 'Whole pipeline regenerated successfully',
+      text: newText,
+      templateData: newTemplateData,
+      media: allPublishUrls,
+      researchResult: researchResult.researchText,
+      agentInsights: agentInsights,
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -900,6 +1078,8 @@ app.post('/api/queue/:id/duplicate', requireDashboardAuth, async (req, res) => {
       templateData: originalItem.templateData,
       publishMetadata: originalItem.publishMetadata,
       researchResult: originalItem.researchResult,
+      agentInsights: originalItem.agentInsights || (originalItem.researchResult ? { research: originalItem.researchResult } : {}),
+      rawInput: originalItem.rawInput,
       status: 'pending',
       sortOrder: newSortOrder,
       scheduledAt: null,

@@ -1,7 +1,9 @@
 import { TEMPLATES } from './templates.js';
 import { getConnection } from './db/settings.js';
-import { runResearchPhase } from './agents/research.js';
-import { MediaItem, PipelineContext, getBaseSystemPrompt, withRetry } from './utils.js';
+import { runResearchPhase, processMediaOnly } from './agents/editorial/research.js';
+import { runOpinionPhase } from './agents/editorial/opinion.js';
+import type { MediaItem, PipelineContext, ResearchResult } from './utils.js';
+import { getBaseSystemPrompt, withRetry } from './utils.js';
 
 export async function runAutomatedPipeline(
   chatId: string,
@@ -45,19 +47,37 @@ export async function runAutomatedPipeline(
       heroStyle: heroStyle || 'Dark-Dramatize',
     };
 
-    // Phase 1: Research
-    let researchResult: import('./utils.js').ResearchResult;
+    // Phase 1: Editorial Research
+    let researchResult: ResearchResult;
     
     if (template.skipResearch) {
       console.log(`[Pipeline] Skipping research phase for template ${templateId}`);
-      researchResult = await import('./agents/research.js').then(m => m.processMediaOnly(pipelineContext));
+      researchResult = await processMediaOnly(pipelineContext);
     } else {
       researchResult = await runResearchPhase(pipelineContext);
     }
 
-    // Phase 2-5: Template-specific Pipeline
-    await template.runPipeline(pipelineContext, researchResult);
+    const agentInsights: Record<string, string> = {};
+    if (researchResult.researchText) {
+      agentInsights.research = researchResult.researchText;
+    }
 
+    // Phase 1b: Editorial Opinion (if requested or configured)
+    const requiresOpinion = template.requiredEditorialAgents?.includes('opinion') ||
+      Boolean(template.slidesComposition && template.slidesComposition.opinion && template.slidesComposition.opinion > 0);
+
+    if (requiresOpinion && researchResult.researchText) {
+      console.log(`[Pipeline] Running opinion analysis agent for template ${templateId}`);
+      const opinionText = await runOpinionPhase(pipelineContext, researchResult.researchText);
+      if (opinionText) {
+        agentInsights.opinion = opinionText;
+      }
+    }
+
+    pipelineContext.agentInsights = agentInsights;
+
+    // Phase 2-5: Template-specific Pipeline
+    await template.runPipeline(pipelineContext, researchResult, agentInsights);
   } catch (error: any) {
     console.error('[Pipeline Error]', error);
     try {
