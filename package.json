@@ -10,7 +10,8 @@
     "db:push": "drizzle-kit push",
     "test": "vitest run tests/agents tests/utils tests/pipelines tests/worker",
     "test:render": "vitest run tests/render/carousel_render.test.ts",
-    "test:all": "vitest run"
+    "test:all": "vitest run",
+    "test:pipeline:text": "tsx scripts/test_pipeline_text.ts"
   },
   "keywords": [],
   "author": "",

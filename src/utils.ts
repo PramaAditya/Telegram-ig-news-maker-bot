@@ -1,8 +1,12 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import dotenv from 'dotenv';
-
 dotenv.config();
 
+for (const [key, val] of Object.entries(process.env)) {
+  if (typeof val === 'string' && val.includes('${')) {
+    process.env[key] = val.replace(/\$\{([a-zA-Z0-9_]+)\}/g, (_, varName) => process.env[varName] || '');
+  }
+}
 export const withRetry = async <T>(fn: () => Promise<T>, retries = 3, delayMs = 2000): Promise<T> => {
   for (let i = 0; i < retries; i++) {
     try {
@@ -65,5 +69,5 @@ export interface ResearchResult {
 }
 
 export const googleAI = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+  apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
