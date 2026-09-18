@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { Edit, Send, GripVertical, RotateCcw, MoreVertical, Copy, Loader2 } from "lucide-vue-next";
+import { Edit, Send, GripVertical, RotateCcw, MoreVertical, Copy, Loader2, ExternalLink } from "lucide-vue-next";
 import { getAuthHeaders, setPassword } from "../auth";
 import { Fancybox } from "@fancyapps/ui";
 import draggable from "vuedraggable";
@@ -495,6 +495,25 @@ const timeAgo = (dateObj: Date | string | null) => {
   const diffInDays = Math.floor(diffInHours / 24);
   return `${diffInDays} day${diffInDays !== 1 ? 's' : ''} ago`;
 };
+
+const getPostDropdownItems = (item: any) => {
+  const actions: any[] = [];
+  if (item?.postUrl) {
+    actions.push({
+      label: 'Copy Instagram Link',
+      onSelect: () => {
+        navigator.clipboard.writeText(item.postUrl);
+        toast.add({ title: 'Instagram link copied to clipboard!', color: 'success' });
+      }
+    });
+  }
+  actions.push({
+    label: 'Delete',
+    onSelect: () => deleteItem(item.id),
+    color: 'error'
+  });
+  return [actions];
+};
 </script>
 
 <template>
@@ -811,7 +830,12 @@ const timeAgo = (dateObj: Date | string | null) => {
                     <template #footer>
                       <div class="flex items-center justify-between">
                         <div class="text-sm text-muted">
-                          Created {{ timeAgo((qItem as any).createdAt) }}
+                          <span v-if="activeTab === 'published' && (qItem as any).publishedAt">
+                            Published {{ timeAgo((qItem as any).publishedAt) }}
+                          </span>
+                          <span v-else>
+                            Created {{ timeAgo((qItem as any).createdAt) }}
+                          </span>
                         </div>
                         <div class="flex items-center gap-2">
                           <UButton v-if="activeTab === 'draft'" color="white" variant="solid" @click="updatePostStatus((qItem as any).id, 'pending')">
@@ -825,6 +849,18 @@ const timeAgo = (dateObj: Date | string | null) => {
                             <template #leading><RotateCcw class="w-4 h-4" /></template>
                             Retry
                           </UButton>
+                          <UButton 
+                            v-if="activeTab === 'published' && (qItem as any).postUrl" 
+                            color="white" 
+                            variant="solid" 
+                            as="a"
+                            :href="(qItem as any).postUrl" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                          >
+                            <template #leading><ExternalLink class="w-4 h-4 text-emerald-500" /></template>
+                            View on Instagram
+                          </UButton>
                           <UButton v-if="activeTab === 'published'" color="white" variant="solid" :disabled="duplicating[(qItem as any).id]" @click="duplicateToQueue((qItem as any).id)">
                             <template #leading>
                               <Loader2 v-if="duplicating[(qItem as any).id]" class="w-4 h-4 animate-spin" />
@@ -832,7 +868,7 @@ const timeAgo = (dateObj: Date | string | null) => {
                             </template>
                             Duplicate to Queue
                           </UButton>
-                          <UDropdownMenu :items="[[{ label: 'Delete', onSelect: () => deleteItem((qItem as any).id), color: 'error' }]]" :content="{ align: 'end' }">
+                          <UDropdownMenu :items="getPostDropdownItems(qItem)" :content="{ align: 'end' }">
                             <UButton color="white" variant="solid" :padded="false" class="p-2">
                               <MoreVertical class="w-4 h-4 text-muted" />
                             </UButton>

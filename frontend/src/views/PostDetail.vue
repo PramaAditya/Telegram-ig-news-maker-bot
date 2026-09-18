@@ -491,6 +491,17 @@ const regeneratePipeline = async () => {
         >
           {{ post.status }}
         </span>
+        <a 
+          v-if="post?.postUrl" 
+          :href="post.postUrl" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md border border-default bg-default hover:bg-muted text-default transition"
+          title="Open published post on Instagram"
+        >
+          <ExternalLink class="w-3.5 h-3.5 text-emerald-500" />
+          View on Instagram
+        </a>
       </div>
       <div class="flex items-center gap-2">
         <button 
