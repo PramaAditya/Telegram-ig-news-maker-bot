@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { UploadCloud, Loader2, X } from 'lucide-vue-next'
 import { getAuthHeaders } from '../auth'
 
@@ -12,6 +12,18 @@ const props = withDefaults(defineProps<{
   isActivePasteTarget: false
 })
 const isDragging = ref(false)
+
+const hasMedia = computed(() => {
+  if (!props.modelValue) return false
+  if (Array.isArray(props.modelValue)) return props.modelValue.length > 0
+  return typeof props.modelValue === 'string' && props.modelValue.trim().length > 0
+})
+
+const mediaList = computed<string[]>(() => {
+  if (!props.modelValue) return []
+  if (Array.isArray(props.modelValue)) return props.modelValue as string[]
+  return typeof props.modelValue === 'string' && props.modelValue.trim() ? [props.modelValue] : []
+})
 
 const handlePaste = async (e: ClipboardEvent) => {
   const items = e.clipboardData?.items
@@ -140,29 +152,48 @@ const isVideo = (url: string) => {
       @change="handleFileUpload" 
     />
     
-    <div v-if="props.modelValue && (Array.isArray(props.modelValue) ? props.modelValue.length > 0 : true)" class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-      <div v-for="(url, index) in (Array.isArray(props.modelValue) ? props.modelValue : [props.modelValue])" :key="index" class="relative group aspect-square rounded overflow-hidden shadow-sm bg-default">
+    <!-- Single Media: Full width on mobile, clean responsive display -->
+    <div v-if="hasMedia && !props.multiple" class="relative group w-full rounded-md overflow-hidden bg-default">
+      <video v-if="isVideo(mediaList[0])" :src="mediaList[0]" class="w-full max-h-72 object-contain sm:object-cover mx-auto" muted autoplay loop></video>
+      <img v-else :src="mediaList[0]" class="w-full max-h-72 object-contain sm:object-cover mx-auto" />
+      <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
+        <div class="flex items-center gap-2">
+          <button type="button" @click.stop="triggerUpload" class="px-3 py-1.5 bg-primary text-inverted text-xs font-medium rounded-md hover:bg-primary/90 transition flex items-center gap-1.5 cursor-pointer shadow">
+            <UploadCloud class="w-3.5 h-3.5" /> Ganti Gambar
+          </button>
+          <button type="button" @click.stop="removeMedia(0)" class="px-3 py-1.5 bg-error text-inverted text-xs font-medium rounded-md hover:bg-error/90 transition flex items-center gap-1.5 cursor-pointer shadow">
+            <X class="w-3.5 h-3.5" /> Hapus
+          </button>
+        </div>
+        <p class="text-[11px] text-white/90">atau tekan Ctrl+V untuk paste</p>
+      </div>
+    </div>
+
+    <!-- Multiple Media Grid -->
+    <div v-else-if="hasMedia && props.multiple" class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+      <div v-for="(url, index) in mediaList" :key="index" class="relative group aspect-square rounded overflow-hidden shadow-sm bg-default">
         <video v-if="isVideo(url)" :src="url" class="w-full h-full object-cover" muted autoplay loop></video>
         <img v-else :src="url" class="w-full h-full object-cover" />
         <div class="absolute inset-0 bg-inverted bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <button @click.stop="removeMedia(index)" class="p-2 bg-error text-inverted rounded-full hover:bg-error">
+          <button type="button" @click.stop="removeMedia(index)" class="p-2 bg-error text-inverted rounded-full hover:bg-error cursor-pointer">
             <X class="w-5 h-5" />
           </button>
         </div>
       </div>
     </div>
 
-    <div v-if="uploading" class="flex flex-col items-center justify-center space-y-2 py-4">
+    <!-- Uploading State -->
+    <div v-if="uploading" class="flex flex-col items-center justify-center space-y-2 py-6">
       <Loader2 class="w-8 h-8 text-primary animate-spin" />
       <span class="text-sm text-muted">Uploading to S3...</span>
     </div>
 
-    <div v-else class="py-6 cursor-pointer" @click="triggerUpload">
+    <!-- Dropzone / Click to upload (shown when no media or in multiple mode) -->
+    <div v-else-if="!hasMedia || props.multiple" class="py-6 cursor-pointer" @click="triggerUpload">
       <UploadCloud class="w-10 h-10 text-muted mx-auto mb-2" />
       <p class="text-sm text-muted">Click to upload media or press <kbd class="px-1.5 py-0.5 text-xs bg-default border border-default rounded shadow-xs font-mono">Ctrl+V</kbd> to paste</p>
       <p class="text-xs text-muted mt-1">Accepts {{ props.multiple ? 'multiple' : 'single' }} image(s) & video(s) (JPG, PNG, MP4)</p>
     </div>
-
     <div v-if="error" class="mt-2 text-sm text-error">
       {{ error }}
     </div>

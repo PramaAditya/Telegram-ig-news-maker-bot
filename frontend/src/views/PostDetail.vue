@@ -475,34 +475,39 @@ const regenerateMedia = async () => {
 
                   <!-- Generic Polymorphic Fields (e.g. quote, etc.) -->
                   <template v-else>
-                    <div v-for="subField in (field.slideTypes?.find((st: any) => st.type === getSlideType(post.templateData[field.name][i], field))?.fields || [])" :key="subField.name" class="mt-3">
-                      <template v-if="subField.type === 'string' || subField.type === 'input'">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-5 mt-3 items-start">
+                      <div 
+                        v-for="subField in (field.slideTypes?.find((st: any) => st.type === getSlideType(post.templateData[field.name][i], field))?.fields || [])" 
+                        :key="subField.name" 
+                        class="flex flex-col"
+                        :class="subField.type === 'image' ? 'md:col-span-5' : ((field.slideTypes?.find((st: any) => st.type === getSlideType(post.templateData[field.name][i], field))?.fields?.some((sf: any) => sf.type === 'image')) ? 'md:col-span-7' : 'md:col-span-6')"
+                      >
                         <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
-                        <input 
-                          v-model="post.templateData[field.name][i][subField.name]" 
-                          type="text"
-                          class="w-full px-4 py-2.5 border border-default rounded-md shadow-sm focus:ring-1 focus:ring-primary focus:border-primary text-sm bg-default text-default placeholder-muted"
-                          :placeholder="subField.label"
-                        />
-                      </template>
-                      <template v-else-if="subField.type === 'text'">
-                        <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
-                        <AiTextarea 
-                          v-model="post.templateData[field.name][i][subField.name]" 
-                          :rows="3" 
-                          guidancePlaceholder="e.g., edit text, fix typo"
-                          :aiContext="(subField.aiContext || '') + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
-                          :connectionId="post.connectionId"
-                        />
-                      </template>
-                      <template v-else-if="subField.type === 'image'">
-                        <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
-                        <ImageUploader 
-                          v-model="post.templateData[field.name][i][subField.name]" 
-                          :isActivePasteTarget="activePasteTarget?.type === 'slide' && activePasteTarget?.index === Number(i)"
-                          @focusin="activePasteTarget = { type: 'slide', index: Number(i) }"
-                        />
-                      </template>
+                        <template v-if="subField.type === 'string' || subField.type === 'input'">
+                          <input 
+                            v-model="post.templateData[field.name][i][subField.name]" 
+                            type="text"
+                            class="w-full px-4 py-2.5 border border-default rounded-md shadow-sm focus:ring-1 focus:ring-primary focus:border-primary text-sm bg-default text-default placeholder-muted"
+                            :placeholder="subField.label"
+                          />
+                        </template>
+                        <template v-else-if="subField.type === 'text'">
+                          <AiTextarea 
+                            v-model="post.templateData[field.name][i][subField.name]" 
+                            :rows="6" 
+                            guidancePlaceholder="e.g., edit text, fix typo"
+                            :aiContext="(subField.aiContext || '') + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                            :connectionId="post.connectionId"
+                          />
+                        </template>
+                        <template v-else-if="subField.type === 'image'">
+                          <ImageUploader 
+                            v-model="post.templateData[field.name][i][subField.name]" 
+                            :isActivePasteTarget="activePasteTarget?.type === 'slide' && activePasteTarget?.index === Number(i)"
+                            @focusin="activePasteTarget = { type: 'slide', index: Number(i) }"
+                          />
+                        </template>
+                      </div>
                     </div>
                   </template>
                 </template>
@@ -521,36 +526,41 @@ const regenerateMedia = async () => {
 
                 <!-- Array Item is an object -->
                 <template v-else-if="field.itemType === 'object' && field.itemSchema">
-                  <div v-for="subField in field.itemSchema" :key="subField.name" class="mt-4">
-                    <template v-if="subField.type === 'string' || subField.type === 'input' || subField.name === 'source_name' || subField.name === 'source_url'">
+                  <div :class="field.itemSchema.length > 1 ? 'grid grid-cols-1 md:grid-cols-12 gap-5 mt-4 items-start' : 'mt-4 space-y-4'">
+                    <div 
+                      v-for="subField in field.itemSchema" 
+                      :key="subField.name" 
+                      class="flex flex-col"
+                      :class="subField.type === 'image' ? 'md:col-span-5' : (field.itemSchema.some((sf: any) => sf.type === 'image') ? 'md:col-span-7' : 'md:col-span-6')"
+                    >
                       <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
-                      <input 
-                        v-model="post.templateData[field.name][i][subField.name]" 
-                        type="text"
-                        class="w-full px-4 py-2.5 border border-default rounded-md shadow-sm focus:ring-1 focus:ring-primary focus:border-primary text-sm bg-default text-default placeholder-muted"
-                        :placeholder="subField.label"
-                      />
-                    </template>
-                    <template v-else-if="subField.type === 'text'">
-                      <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
-                      <AiTextarea 
-                        v-model="post.templateData[field.name][i][subField.name]" 
-                        :rows="4" 
-                        guidancePlaceholder="e.g., summarize this better, fix typo"
-                        :aiContext="subField.aiContext + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
-                        :connectionId="post.connectionId"
-                        @focus="activePasteTarget = { type: 'slide', index: Number(i) }"
-                        @pasteImage="(file) => handlePasteToSlideImage(field.name, Number(i), file)"
-                      />
-                    </template>
-                    <template v-else-if="subField.type === 'image'">
-                      <label class="block text-sm font-medium text-default mb-2">{{ subField.label }}</label>
-                      <ImageUploader 
-                        v-model="post.templateData[field.name][i][subField.name]" 
-                        :isActivePasteTarget="activePasteTarget?.type === 'slide' && activePasteTarget?.index === Number(i)"
-                        @focusin="activePasteTarget = { type: 'slide', index: Number(i) }"
-                      />
-                    </template>
+                      <template v-if="subField.type === 'string' || subField.type === 'input' || subField.name === 'source_name' || subField.name === 'source_url'">
+                        <input 
+                          v-model="post.templateData[field.name][i][subField.name]" 
+                          type="text"
+                          class="w-full px-4 py-2.5 border border-default rounded-md shadow-sm focus:ring-1 focus:ring-primary focus:border-primary text-sm bg-default text-default placeholder-muted"
+                          :placeholder="subField.label"
+                        />
+                      </template>
+                      <template v-else-if="subField.type === 'text'">
+                        <AiTextarea 
+                          v-model="post.templateData[field.name][i][subField.name]" 
+                          :rows="6" 
+                          guidancePlaceholder="e.g., summarize this better, fix typo"
+                          :aiContext="subField.aiContext + (post.researchResult ? '\n\nBACKGROUND RESEARCH / FACTS TO USE:\n' + post.researchResult : '')"
+                          :connectionId="post.connectionId"
+                          @focus="activePasteTarget = { type: 'slide', index: Number(i) }"
+                          @pasteImage="(file) => handlePasteToSlideImage(field.name, Number(i), file)"
+                        />
+                      </template>
+                      <template v-else-if="subField.type === 'image'">
+                        <ImageUploader 
+                          v-model="post.templateData[field.name][i][subField.name]" 
+                          :isActivePasteTarget="activePasteTarget?.type === 'slide' && activePasteTarget?.index === Number(i)"
+                          @focusin="activePasteTarget = { type: 'slide', index: Number(i) }"
+                        />
+                      </template>
+                    </div>
                   </div>
                 </template>
               </div>
