@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowLeft, Save, RefreshCw, ArrowUp, ArrowDown, Plus, Sparkles, Zap, Search, Lightbulb } from 'lucide-vue-next'
-import { getAuthHeaders, setPassword } from '../auth'
+import { getAuthHeaders, apiFetch } from '../auth'
 import { Fancybox } from '@fancyapps/ui'
 import ImageUploader from '../components/ImageUploader.vue'
 import AiTextarea from '../components/AiTextarea.vue'
@@ -18,7 +18,79 @@ const saving = ref(false)
 const generating = ref(false)
 const regeneratingType = ref<'media' | 'content' | 'pipeline' | null>(null)
 const error = ref('')
-const availableTemplates = ref<any[]>([])
+
+const FALLBACK_TEMPLATES = [
+  {
+    id: 'image:poros.perjuangan:carousel_dark',
+    name: 'Carousel Dark',
+    uiSchema: [
+      { name: 'title', type: 'text', label: 'Title (supports **bold**)', aiContext: 'This is the title of a sensational news post.' },
+      { name: 'source_name', type: 'string', label: 'Source Media Name' },
+      { name: 'source_url', type: 'string', label: 'Source Article URL' },
+      { name: 'coverImageUrl', type: 'image', label: 'Cover Image' },
+      {
+        name: 'slides',
+        type: 'array',
+        label: 'Slides',
+        itemType: 'polymorphic',
+        slideTypes: [
+          { type: 'text', label: 'Text Slide', fields: [{ name: 'text', type: 'text', label: 'Slide Text' }] },
+          { type: 'news', label: 'Fakta Berita', fields: [{ name: 'text', type: 'text', label: 'Slide Text' }] },
+          { type: 'opinion', label: 'Analisis Opini', fields: [{ name: 'text', type: 'text', label: 'Slide Text' }] },
+          { type: 'image', label: 'Full Image', fields: [{ name: 'imageUrl', type: 'image', label: 'Slide Image' }] }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'image:poros.perjuangan:carousel_multi_images',
+    name: 'Carousel Multi Images',
+    uiSchema: [
+      { name: 'title', type: 'text', label: 'Title (supports **bold**)', aiContext: 'This is the title of a sensational news post.' },
+      { name: 'source_name', type: 'string', label: 'Source Media Name' },
+      { name: 'source_url', type: 'string', label: 'Source Article URL' },
+      { name: 'coverImageUrl', type: 'image', label: 'Cover Image' },
+      {
+        name: 'slides',
+        type: 'array',
+        label: 'Slides',
+        itemType: 'object',
+        itemSchema: [
+          { name: 'text', type: 'text', label: 'Slide Text (supports **bold**)', aiContext: 'This is one slide out of a multi-slide news carousel.' },
+          { name: 'slide_image', type: 'image', label: 'Slide Background Image' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'image:poros.perjuangan:single_page',
+    name: 'Single Page',
+    uiSchema: [
+      { name: 'title', type: 'text', label: 'Title (supports **bold**)' },
+      { name: 'source_name', type: 'string', label: 'Source Media Name' },
+      { name: 'source_url', type: 'string', label: 'Source Article URL' },
+      { name: 'coverImageUrl', type: 'image', label: 'Cover Image' },
+      {
+        name: 'slides',
+        type: 'array',
+        label: 'Summary Bullet Points',
+        itemType: 'text',
+        itemSchema: [
+          { name: 'point', type: 'text', label: 'Bullet Point' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'video:poros.perjuangan:title_only',
+    name: 'Title Only',
+    uiSchema: [
+      { name: 'title', type: 'text', label: 'Video Title' }
+    ]
+  }
+]
+
+const availableTemplates = ref<any[]>([...FALLBACK_TEMPLATES])
 const activePasteTarget = ref<{ type: 'top' | 'slide', index?: number } | null>(null)
 
 interface EditorialAgentConfig {
@@ -49,9 +121,9 @@ const activeInsightTab = ref<string>('research')
 
 const fetchEditorialAgents = async () => {
   try {
-    const res = await fetch('/api/editorial/agents', { headers: getAuthHeaders() })
-    if (res.ok) {
-      editorialAgents.value = await res.json()
+    const data = await apiFetch('/api/editorial/agents')
+    if (data && Array.isArray(data) && data.length > 0) {
+      editorialAgents.value = data
     }
   } catch (e) {}
 }
@@ -189,11 +261,13 @@ const onGlobalPaste = async (e: ClipboardEvent) => {
 
 const fetchTemplates = async () => {
   try {
-    const res = await fetch('/api/templates', { headers: getAuthHeaders() })
-    if (res.ok) {
-      availableTemplates.value = await res.json()
+    const data = await apiFetch('/api/templates')
+    if (data && Array.isArray(data) && data.length > 0) {
+      availableTemplates.value = data
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Failed to fetch templates from API, using fallback schemas:', e)
+  }
 }
 
 const openLightbox = (mediaArray: any[], index: number) => {
@@ -207,20 +281,7 @@ const openLightbox = (mediaArray: any[], index: number) => {
 const fetchPost = async () => {
   loading.value = true
   try {
-    const res = await fetch(`/api/queue/${postId}`, { headers: getAuthHeaders() })
-    if (res.status === 401) {
-      const pwd = prompt('Enter Dashboard Password:')
-      if (pwd !== null) {
-        setPassword(pwd)
-        return fetchPost()
-      }
-      throw new Error('Unauthorized')
-    }
-    if (res.status === 404) {
-      throw new Error(`Post #${postId} not found`)
-    }
-    if (!res.ok) throw new Error('Failed to fetch post')
-    post.value = await res.json()
+    post.value = await apiFetch(`/api/queue/${postId}`)
     
     // Ensure templateData exists
     if (!post.value.templateData) post.value.templateData = {}
@@ -233,10 +294,9 @@ const fetchPost = async () => {
       post.value.agentInsights.research = post.value.researchResult
     }
 
-    const templateConfig = availableTemplates.value.find(t => t.id === post.value.templateId)
-    if (templateConfig && templateConfig.uiSchema) {
+    if (currentTemplateConfig.value && currentTemplateConfig.value.uiSchema) {
       // Initialize arrays based on schema if they don't exist
-      templateConfig.uiSchema.forEach((field: any) => {
+      currentTemplateConfig.value.uiSchema.forEach((field: any) => {
         if (field.type === 'array' && !post.value.templateData[field.name]) {
           post.value.templateData[field.name] = []
         }
@@ -264,9 +324,8 @@ onUnmounted(() => {
 const saveChanges = async () => {
   saving.value = true
   try {
-    const res = await fetch(`/api/queue/${postId}`, {
+    await apiFetch(`/api/queue/${postId}`, {
       method: 'PUT',
-      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text: post.value.text,
         templateData: post.value.templateData,
@@ -274,11 +333,6 @@ const saveChanges = async () => {
         agentInsights: post.value.agentInsights
       })
     })
-    if (res.status === 401) {
-      toast.add({ title: 'Unauthorized', color: 'error' })
-      return
-    }
-    if (!res.ok) throw new Error('Failed to save')
     toast.add({ title: 'Changes saved!', color: 'success' })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
@@ -378,7 +432,15 @@ const addSlide = (field: any) => {
 }
 
 const currentTemplateConfig = computed(() => {
-  return availableTemplates.value.find(t => t.id === post.value?.templateId)
+  if (!post.value?.templateId) return null
+  const targetId = post.value.templateId
+  const match = (t: any) =>
+    t.id === targetId ||
+    t.id.endsWith(':' + targetId) ||
+    targetId.endsWith(':' + t.id) ||
+    t.id.split(':').pop() === targetId.split(':').pop()
+
+  return availableTemplates.value.find(match) || FALLBACK_TEMPLATES.find(match) || null
 })
 
 const regenerateMedia = async () => {
@@ -386,17 +448,9 @@ const regenerateMedia = async () => {
   generating.value = true
   regeneratingType.value = 'media'
   try {
-    const res = await fetch(`/api/queue/${postId}/regenerate-media`, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    const data = await apiFetch(`/api/queue/${postId}/regenerate-media`, {
+      method: 'POST'
     })
-    if (res.status === 401) {
-      toast.add({ title: 'Unauthorized', color: 'error' })
-      return
-    }
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Failed to regenerate media')
-    
     post.value.media = data.media
     toast.add({ title: 'Media grid regenerated successfully!', color: 'success' })
   } catch (err: unknown) {
@@ -413,17 +467,9 @@ const regenerateContent = async () => {
   generating.value = true
   regeneratingType.value = 'content'
   try {
-    const res = await fetch(`/api/queue/${postId}/regenerate-content`, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    const data = await apiFetch(`/api/queue/${postId}/regenerate-content`, {
+      method: 'POST'
     })
-    if (res.status === 401) {
-      toast.add({ title: 'Unauthorized', color: 'error' })
-      return
-    }
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Failed to regenerate content')
-    
     post.value.text = data.text
     post.value.templateData = data.templateData
     post.value.media = data.media
@@ -444,17 +490,9 @@ const regeneratePipeline = async () => {
   generating.value = true
   regeneratingType.value = 'pipeline'
   try {
-    const res = await fetch(`/api/queue/${postId}/regenerate-pipeline`, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    const data = await apiFetch(`/api/queue/${postId}/regenerate-pipeline`, {
+      method: 'POST'
     })
-    if (res.status === 401) {
-      toast.add({ title: 'Unauthorized', color: 'error' })
-      return
-    }
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Failed to regenerate pipeline')
-    
     post.value.text = data.text
     post.value.templateData = data.templateData
     post.value.media = data.media
