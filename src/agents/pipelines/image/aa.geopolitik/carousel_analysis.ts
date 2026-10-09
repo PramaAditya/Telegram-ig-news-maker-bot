@@ -15,7 +15,7 @@ export const carouselAnalysisTemplateConfig = {
   description: 'An in-depth geopolitical analysis carousel featuring impactful Bebas Neue headlines, Alumni Sans analytical body copy, and amber contrast highlights.',
   albumStrategy: 'all_as_slides' as const,
   reduceTextOnAlbum: true,
-  slidesComposition: { news: 2, opinion: 2 },
+  slidesComposition: { news: 0, opinion: 8 },
   requiredEditorialAgents: ['research', 'opinion'],
   regenerateContent: async (templateData: any, settings: any, insights: Record<string, string>, context: PipelineContext) => {
     const { title, subtitle, slides, source_name, source_url, finalCaption } = await generateCarouselAnalysisContent(context, insights);
@@ -50,7 +50,7 @@ export const carouselAnalysisTemplateConfig = {
     {
       name: 'slides',
       type: 'array',
-      label: 'Analysis Slides',
+      label: 'Analysis Slides (8 Slides Story Arc)',
       itemType: 'polymorphic',
       slideTypes: [
         {
@@ -377,30 +377,57 @@ export async function generateCarouselAnalysisContent(
     : '';
 
   const dynamicSystemPromptAdditions = `
-Your task is to craft an in-depth geopolitical analysis carousel for Instagram.
-1. title: The main cover headline in proper Title Casing. Highlight the most punchy/controversial phrase with <strong>...</strong> (this turns amber in the Bebas Neue font). Example: "Geopolitik Itu <strong>BUKAN Cuma Perang Agama!</strong>"
-2. subtitle: A punchy cover subtitle in Alumni Sans explaining the angle or misconception. Example: "Banyak yang Masih Salah Paham" or "Membongkar Motif Tersembunyi di Balik Perebutan Wilayah".
-3. slides: Exactly 4 slides structuring a compelling story arc:
-   - Slide 1 (news): Context/Trigger — what event just happened or what reality are people talking about? Heading should be a clear question or statement.
-   - Slide 2 (opinion): The Core Interest — what resource, territory, or strategic chokepoint is actually at stake?
-   - Slide 3 (opinion): The Power Play — how are major powers maneuvering or using proxies to secure advantage?
-   - Slide 4 (opinion): Reflection/Punchline — realistic takeaway for readers on what to watch next.
-   Each slide text must be 1 concise paragraph (2-3 sentences max) in lucid, powerful Indonesian.
-4. source_name: Reputable primary news/analysis source (e.g. Foreign Policy, Al Jazeera, Reuters, Antara).
-5. source_url: Direct article URL.
-6. image_prompt: AI prompt for a dramatic geopolitical cover background image. Specify: "dramatic cinematic lighting, high-contrast chiaroscuro, global conflict geopolitics concept, strategic maps or embassy summit silhouette".
-`;
+Your task is to craft an in-depth geopolitical analysis Instagram carousel with EXACTLY 1 COVER + 8 SLIDES.
+Adopt a pop-intellectual, engaging, and articulate Indonesian voice (Tier 2 Semi-Formal / Essayist style).
 
+CRITICAL TONE & GRAMMAR RULES:
+1. Use natural, conversational collective pronouns: "kita", "di sekitar kita", "cara pandang kita".
+2. Use organic conversational transitions: "Singkatnya,", "Nah, kebiasaan inilah yang...", "Padahal,", "Contoh paling nyata:".
+3. NO AI clichés: NEVER use "Di era modern/globalisasi ini", "Sangat krusial untuk dicatat", "Tidak dapat dipungkiri bahwa", "Merupakan salah satu yang paling", "Sebagai kesimpulan".
+4. ZERO DASHES: NEVER use em dashes (—) or en dashes (–). Use commas, colons (:), periods, or parentheses ( ) instead.
+5. Each slide body text MUST contain EXACTLY 2 short paragraphs (1-2 punchy sentences each), separated by a single "<br/>".
+6. Bold around 20-30% of pivotal keywords, actor names, and strategic concepts using markdown: **keyword**.
+7. Slide titles MUST be punchy uppercase phrases (3-5 words), highlighting the key punchy word with <strong>...</strong> (this turns amber in the Bebas Neue font).
+
+THE 8-SLIDE STORY ARC (Follow this exact progression):
+- Cover:
+  * title: Provocative main headline in proper Title Casing with <strong>...</strong> on the punchy word. Example: "Geopolitik Itu <strong>BUKAN Cuma Perang Agama!</strong>"
+  * subtitle: Punchy Alumni Sans subtitle framing the angle or misconception. Example: "Banyak yang Masih Salah Paham"
+- Slide 1 (opinion - Landasan Konseptual / Definisi):
+  * title: Exploratory opening question, e.g. "APA SIH SEBENARNYA <strong>GEOPOLITIK?</strong>"
+  * text: Paragraf 1: Definisi operasional membumi (hubungan wilayah/teritori, sumber daya, dan akses strategis). <br/> Paragraf 2: Cara pandang realistis bagaimana negara bertindak mengamankan keuntungan.
+- Slide 2 (opinion - De-mistifikasi / Meluruskan Anggapan Dangkal):
+  * title: Rejecting shallow perception, e.g. "BUKAN SEKADAR <strong>GEOGRAFI BIASA</strong>"
+  * text: Paragraf 1: Menolak anggapan bahwa ini cuma soal letak gunung/benua. <br/> Paragraf 2: Ruang dan geografi yang terus diatur, diubah, dan dikuasai oleh aktivitas manusia/negara demi tujuan tertentu.
+- Slide 3 (opinion - Cara Kerja Dunia & Media / Reduksionisme):
+  * title: Pattern of media simplification, e.g. "KEBIASAAN <strong>MENYEDERHANAKAN DUNIA</strong>"
+  * text: Paragraf 1: Kompleksitas politik global yang disederhanakan media memakai label geografis/kategoris. <br/> Paragraf 2: Media membagi kawan vs lawan agar dunia terlihat mudah dipahami.
+- Slide 4 (opinion - Fenomena Oversimplifikasi Publik):
+  * title: Public trap, e.g. "FENOMENA <strong>OVERSIMPLIFIKASI DI SEKITAR KITA</strong>"
+  * text: Paragraf 1: Mengaitkan ke kebiasaan di sekitar kita ("Nah, kebiasaan inilah..."). <br/> Paragraf 2: Terjebak mereduksi isu rumit jadi sekadar isu tunggal/agama, menciptakan pandangan hitam-putih yang mengabaikan kenyataan.
+- Slide 5 (opinion - Studi Kasus Empiris & Aktor Lapangan):
+  * title: Real case study name, e.g. "KASUS <strong>SURIAH DAN YAMAN</strong>"
+  * text: Paragraf 1: Contoh nyata konflik dan bagaimana sering keliru dibingkai semata perseteruan sentimen. <br/> Paragraf 2: Aktor-aktor riil yang terlibat, aliansi, dan motif perebutan pengaruh nyata di balik layar.
+- Slide 6 (opinion - Kritik Teori Populer / Bedah Narasi):
+  * title: Critiquing popular theories, e.g. "BAHAYA TEORI <strong>'BENTURAN PERADABAN'</strong>"
+  * text: Paragraf 1: Bahaya mengabaikan sejarah, kolonialisme masa lalu, dan perebutan energi. <br/> Paragraf 2: Kritik para ahli terhadap simplifikasi yang menjadikan satu faktor sebagai kambing hitam.
+- Slide 7 (opinion - Geopolitik Populer & Budaya Konsumsi):
+  * title: Pop-culture presence, e.g. "GEOPOLITIK ADA DI <strong>MEDIA YANG KITA KONSUMSI</strong>"
+  * text: Paragraf 1: Pengenalan konsep "geopolitik populer" yang membentuk persepsi publik. <br/> Paragraf 2: Film, internet, medsos, dan berita yang secara tidak sadar menyetir cara pandang kita terhadap wilayah dan identitasnya.
+- Slide 8 (opinion - Refleksi & Urgensi Berpikir Kritis):
+  * title: The closing punchline question, e.g. "KENAPA KITA <strong>HARUS PAHAM?</strong>"
+  * text: Paragraf 1: Penegasan pentingnya kemampuan berpikir geopolitik. <br/> Paragraf 2: Output untuk pembaca: menjadi warga yang kritis, bijak, dan tidak mudah terprovokasi oleh informasi yang menyederhanakan kerumitan dunia.
+`;
   const slideSchema = z.object({
-    type: z.enum(['news', 'opinion']),
+    type: z.literal('opinion').default('opinion'),
     title: z.string().describe('Slide heading in Bebas Neue. Bold words with <strong> for amber accent.'),
-    text: z.string().describe('Analytical body paragraph in Alumni Sans.')
+    text: z.string().describe('Analytical body paragraph in Alumni Sans (exactly 2 short paragraphs separated by <br/>).')
   });
 
   const schema = z.object({
     title: z.string(),
     subtitle: z.string(),
-    slides: z.array(slideSchema).length(4),
+    slides: z.array(slideSchema).length(8),
     source_name: z.string(),
     source_url: z.string().optional(),
     image_prompt: z.string()

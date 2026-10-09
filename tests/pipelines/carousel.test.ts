@@ -511,7 +511,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
     it('verifies carouselAnalysisTemplateConfig configuration', () => {
       expect(carouselAnalysisTemplateConfig.id).toBe('image:aa.geopolitik:carousel_analysis');
       expect(carouselAnalysisTemplateConfig.requiredEditorialAgents).toEqual(['research', 'opinion']);
-      expect(carouselAnalysisTemplateConfig.slidesComposition).toEqual({ news: 2, opinion: 2 });
+      expect(carouselAnalysisTemplateConfig.slidesComposition).toEqual({ news: 0, opinion: 8 });
     });
 
     it('generates media payload for carousel_analysis matching Handlebars templates', async () => {
@@ -523,7 +523,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
         source_url: 'https://foreignpolicy.com/geopolitics-analysis',
         slides: [
           {
-            type: 'news',
+            type: 'opinion',
             title: 'Apa sih sebenarnya **geopolitik?**',
             text: 'Singkatnya, geopolitik adalah cara pandang terhadap **wilayah dan sumber daya**.',
           },
