@@ -29,7 +29,7 @@ async function main() {
 
   const slideHtmlPlaceholder = compileSlide({
     title: 'Apa sih sebenarnya <strong>geopolitik?</strong>',
-    text: 'Singkatnya, geopolitik adalah sebuah cara pandang untuk melihat <strong>hubungan antara wilayah (teritori), sumber daya, dan akses strategis</strong>.<br/><br/>Konsep ini melihat <strong>secara realistis</strong> bagaimana negara-negara bertindak demi <strong>mengamankan keuntungan di suatu wilayah.</strong>',
+    text: 'Singkatnya, geopolitik adalah sebuah cara pandang untuk melihat <strong>hubungan antara wilayah (teritori), sumber daya, dan akses strategis</strong>.<br/>Konsep ini melihat <strong>secara realistis</strong> bagaimana negara-negara bertindak demi <strong>mengamankan keuntungan di suatu wilayah.</strong>',
     cover_image: 'https://placehold.co/1080x1350',
     slide_number: '01 / 04'
   });
@@ -45,7 +45,7 @@ async function main() {
 
   const slideHtmlReal = compileSlide({
     title: 'Apa sih sebenarnya <strong>geopolitik?</strong>',
-    text: 'Singkatnya, geopolitik adalah sebuah cara pandang untuk melihat <strong>hubungan antara wilayah (teritori), sumber daya, dan akses strategis</strong>.<br/><br/>Konsep ini melihat <strong>secara realistis</strong> bagaimana negara-negara bertindak demi <strong>mengamankan keuntungan di suatu wilayah.</strong>',
+    text: 'Singkatnya, geopolitik adalah sebuah cara pandang untuk melihat <strong>hubungan antara wilayah (teritori), sumber daya, dan akses strategis</strong>.<br/>Konsep ini melihat <strong>secara realistis</strong> bagaimana negara-negara bertindak demi <strong>mengamankan keuntungan di suatu wilayah.</strong>',
     cover_image: realCoverImage,
     slide_number: '01 / 04'
   });
