@@ -34,13 +34,21 @@
       font-family: 'Chivo Mono', monospace;
     }
     .slide-gradient {
-      background: linear-gradient(to top, #000000 0%, #000000 39%, rgba(0, 0, 0, 0) 100%);
+      background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0) 0%,
+        rgba(0, 0, 0, 0.45) 16%,
+        rgba(0, 0, 0, 0.9) 25%,
+        #000000 32%,
+        #000000 100%
+      );
     }
     .slide-title {
       font-family: 'Bebas Neue', sans-serif;
       font-size: 96px;
       line-height: 89px;
       color: #ffffff;
+      text-shadow: 0px 4px 20px rgba(0, 0, 0, 0.95);
     }
     .slide-title strong,
     .slide-title b,
@@ -109,7 +117,7 @@
       alt="Slide Background" 
     />
 
-    <div class="w-[1080px] h-[810px] left-0 top-[540px] absolute slide-gradient"></div>
+    <div class="w-[1080px] h-[1100px] left-0 top-[250px] absolute slide-gradient"></div>
 
     <div class="w-[934px] left-[73px] top-[569px] absolute inline-flex flex-col justify-start items-start gap-5">
       {{#if title}}
