@@ -7,8 +7,6 @@ import { generateMedia } from '../../../../media.js';
 import { insertQueueItem } from '../../../../db/queue.js';
 import { marked } from 'marked';
 import { imageEditor } from '../../../../utils/imageEditor/index.js';
-import { sanitizeSourceUrl, getCleanDomain } from '../../../../utils/urlSanitizer.js';
-import { generateQrCodeDataUrl } from '../../../../utils/qrGenerator.js';
 import { buildPromptContextFromInsights } from '../../../editorial/registry.js';
 
 export const carouselAnalysisTemplateConfig = {
@@ -196,25 +194,6 @@ export async function generateCarouselAnalysisMedia(templateData: any, settings:
     });
   }
 
-  if (templateData.source_url) {
-    try {
-      const cleanUrl = sanitizeSourceUrl(templateData.source_url);
-      if (cleanUrl) {
-        const qrDataUrl = await generateQrCodeDataUrl(cleanUrl);
-        pages.push({
-          file: 'source_qr',
-          context: {
-            cover_image: templateData.coverImageUrl,
-            source_name: templateData.source_name || 'Sumber Rujukan',
-            source_domain: getCleanDomain(cleanUrl),
-            qr_code_image: qrDataUrl,
-          }
-        });
-      }
-    } catch (qrErr) {
-      console.warn('Failed to generate QR code slide:', qrErr);
-    }
-  }
 
   const renderPayload = {
     viewport: { width: 1080, height: 1350 },

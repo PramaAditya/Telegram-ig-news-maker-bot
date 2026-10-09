@@ -543,7 +543,6 @@ describe('Carousel Pipelines Workflow Tests', () => {
         'https://renderer.pelita.tech/cover.png',
         'https://renderer.pelita.tech/slide-1.png',
         'https://renderer.pelita.tech/slide-2.png',
-        'https://renderer.pelita.tech/source-qr.png',
       ]);
 
       const result = await generateCarouselAnalysisMedia(mockTemplateData, mockSettings);
@@ -552,7 +551,7 @@ describe('Carousel Pipelines Workflow Tests', () => {
         '/render/image/aa.geopolitik/carousel_analysis',
         expect.objectContaining({
           viewport: { width: 1080, height: 1350 },
-          pages: expect.arrayContaining([
+          pages: [
             expect.objectContaining({
               file: 'cover',
               context: expect.objectContaining({
@@ -563,21 +562,24 @@ describe('Carousel Pipelines Workflow Tests', () => {
             expect.objectContaining({
               file: 'slide',
               context: expect.objectContaining({
-                cover_image: 'https://mock-s3.pelita.tech/cover.jpg',
+                title: 'Apa sih sebenarnya <strong>geopolitik?</strong>',
               }),
             }),
             expect.objectContaining({
-              file: 'source_qr',
+              file: 'slide',
               context: expect.objectContaining({
-                source_name: 'Foreign Policy',
-                source_domain: 'foreignpolicy.com',
+                title: 'Perebutan <strong>Akses Strategis</strong>',
               }),
             }),
-          ]),
+          ],
         })
       );
 
-      expect(result).toHaveLength(4);
+      // Ensure no source_qr page was added
+      const callPayload = vi.mocked(media.generateMedia).mock.calls[0][1] as any;
+      expect(callPayload.pages.some((p: any) => p.file === 'source_qr')).toBe(false);
+
+      expect(result).toHaveLength(3);
       expect(result[0].url).toBe('https://renderer.pelita.tech/cover.png');
     });
   });
