@@ -87,6 +87,50 @@ const FALLBACK_TEMPLATES = [
     uiSchema: [
       { name: 'title', type: 'text', label: 'Video Title' }
     ]
+  },
+  {
+    id: 'image:aa.geopolitik:carousel_analysis',
+    name: 'Carousel Analysis (AA Geopolitik)',
+    uiSchema: [
+      { name: 'title', type: 'text', label: 'Main Headline (Bebas Neue, **bold** = amber)' },
+      { name: 'subtitle', type: 'text', label: 'Cover Subtitle (Alumni Sans)' },
+      { name: 'source_name', type: 'string', label: 'Source Media Name' },
+      { name: 'source_url', type: 'string', label: 'Source Article URL' },
+      { name: 'coverImageUrl', type: 'image', label: 'Cover Image' },
+      {
+        name: 'slides',
+        type: 'array',
+        label: 'Analysis Slides',
+        itemType: 'polymorphic',
+        slideTypes: [
+          {
+            type: 'opinion',
+            label: 'Analisis Opini',
+            fields: [
+              { name: 'title', type: 'text', label: 'Slide Heading (Bebas Neue, **bold** = amber)' },
+              { name: 'text', type: 'text', label: 'Analytical Paragraph (Alumni Sans)' },
+              { name: 'slide_image', type: 'image', label: 'Slide Background Image (Optional)' }
+            ]
+          },
+          {
+            type: 'news',
+            label: 'Fakta Geopolitik',
+            fields: [
+              { name: 'title', type: 'text', label: 'Slide Heading (Bebas Neue, **bold** = amber)' },
+              { name: 'text', type: 'text', label: 'Factual Paragraph (Alumni Sans)' },
+              { name: 'slide_image', type: 'image', label: 'Slide Background Image (Optional)' }
+            ]
+          },
+          {
+            type: 'image',
+            label: 'Full Image / Map',
+            fields: [
+              { name: 'imageUrl', type: 'image', label: 'Full Slide Image' }
+            ]
+          }
+        ]
+      }
+    ]
   }
 ]
 

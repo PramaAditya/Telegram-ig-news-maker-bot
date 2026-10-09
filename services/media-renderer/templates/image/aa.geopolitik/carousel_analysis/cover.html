@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1080, height=1350, initial-scale=1.0">
+  <title>Cover - AA Geopolitik</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alumni+Sans:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Bebas+Neue&family=Chivo+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 1080px;
+      height: 1350px;
+      background-color: #000000;
+      color: #ffffff;
+      overflow: hidden;
+      position: relative;
+    }
+    .font-bebas {
+      font-family: 'Bebas Neue', sans-serif;
+    }
+    .font-alumni {
+      font-family: 'Alumni Sans', sans-serif;
+    }
+    .font-chivo {
+      font-family: 'Chivo Mono', monospace;
+    }
+    .cover-gradient {
+      background: linear-gradient(to top, #000000 0%, #000000 39%, rgba(0, 0, 0, 0) 100%);
+    }
+    .cover-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 128px;
+      line-height: 120px;
+      color: #ffffff;
+      text-shadow: 0px 0px 20px rgba(0, 0, 0, 1.0);
+    }
+    .cover-title strong,
+    .cover-title b,
+    .cover-title .highlight {
+      color: #f59e0b; /* text-amber-500 */
+      font-weight: 400;
+      font-style: normal;
+    }
+    .cover-subtitle {
+      font-family: 'Alumni Sans', sans-serif;
+      font-size: 60px;
+      line-height: 1.1;
+      color: #ffffff;
+    }
+    .logo-container {
+      position: absolute;
+      top: 60px;
+      left: 87px;
+      z-index: 10;
+    }
+    .logo {
+      max-height: 70px;
+      max-width: 260px;
+      object-fit: contain;
+    }
+  </style>
+</head>
+<body>
+  <div class="w-[1080px] h-[1350px] relative bg-black overflow-hidden">
+    {{#if logo}}
+    <div class="logo-container">
+      <img src="{{logo}}" class="logo" alt="Logo" />
+    </div>
+    {{/if}}
+
+    <img 
+      class="w-[1080px] h-[1350px] left-0 top-[-63px] absolute object-cover" 
+      src="{{#if cover_image}}{{cover_image}}{{else}}https://placehold.co/1080x1350{{/if}}" 
+      alt="Cover Background" 
+    />
+
+    <div class="w-[1080px] h-[1042px] left-0 top-[308px] absolute cover-gradient"></div>
+
+    <div class="w-[906px] left-[87px] top-[728px] absolute inline-flex flex-col justify-end items-start gap-3.5">
+      <div class="self-stretch justify-end">
+        <div class="cover-title">
+          {{{title}}}
+        </div>
+      </div>
+
+      {{#if subtitle}}
+      <div class="justify-start cover-subtitle">
+        {{{subtitle}}}
+      </div>
+      {{/if}}
+
+      <div class="self-stretch pt-3.5 inline-flex justify-start items-center gap-6">
+        <div class="flex-1 h-[4px] bg-white"></div>
+        <div class="justify-center text-orange-300 text-lg font-normal font-chivo tracking-wider">
+          {{#if cta_text}}{{cta_text}}{{else}}Read More{{/if}}
+        </div>
+        <div class="flex justify-start items-center gap-2.5">
+          <div class="w-14 h-[4px] bg-white"></div>
+          <div class="w-[6px] h-[6px] bg-white"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

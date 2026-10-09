@@ -3,6 +3,7 @@ import { runCarouselDarkPipeline, carouselDarkTemplateConfig, generateCarouselDa
 import { runCarouselMultiImagesPipeline, carouselMultiImagesTemplateConfig, generateCarouselMultiImagesMedia } from './agents/pipelines/image/poros.perjuangan/carousel_multi_images.js';
 import { runSinglePagePipeline, singlePageTemplateConfig, generateSinglePageMedia } from './agents/pipelines/image/poros.perjuangan/single_page.js';
 import { runTitleOnlyPipeline, titleOnlyTemplateConfig, generateTitleOnlyMedia } from './agents/pipelines/video/poros.perjuangan/title_only.js';
+import { runCarouselAnalysisPipeline, carouselAnalysisTemplateConfig, generateCarouselAnalysisMedia } from './agents/pipelines/image/aa.geopolitik/carousel_analysis.js';
 
 export type AlbumStrategy = 'first_only' | 'all_as_slides' | 'distribute_to_slides' | 'first_video_only' | 'ignore';
 
@@ -59,5 +60,10 @@ export const TEMPLATES: Record<string, TemplateConfig> = {
     ...titleOnlyTemplateConfig,
     runPipeline: runTitleOnlyPipeline,
     regenerateMedia: generateTitleOnlyMedia
+  },
+  [carouselAnalysisTemplateConfig.id]: {
+    ...carouselAnalysisTemplateConfig,
+    runPipeline: runCarouselAnalysisPipeline,
+    regenerateMedia: generateCarouselAnalysisMedia
   }
 };

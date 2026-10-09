@@ -16,6 +16,10 @@ import {
   generateSinglePageMedia,
   singlePageTemplateConfig,
 } from '../../src/agents/pipelines/image/poros.perjuangan/single_page.js';
+import {
+  carouselAnalysisTemplateConfig,
+  generateCarouselAnalysisMedia,
+} from '../../src/agents/pipelines/image/aa.geopolitik/carousel_analysis.js';
 import * as media from '../../src/media.js';
 import * as queue from '../../src/db/queue.js';
 import * as curator from '../../src/agents/image-curator/index.js';
@@ -501,6 +505,80 @@ describe('Carousel Pipelines Workflow Tests', () => {
 
       // Telegram notified
       expect(mockTelegram.sendPhoto).toHaveBeenCalled();
+    });
+  });
+  describe('Carousel Analysis (AA Geopolitik) Workflow', () => {
+    it('verifies carouselAnalysisTemplateConfig configuration', () => {
+      expect(carouselAnalysisTemplateConfig.id).toBe('image:aa.geopolitik:carousel_analysis');
+      expect(carouselAnalysisTemplateConfig.requiredEditorialAgents).toEqual(['research', 'opinion']);
+      expect(carouselAnalysisTemplateConfig.slidesComposition).toEqual({ news: 2, opinion: 2 });
+    });
+
+    it('generates media payload for carousel_analysis matching Handlebars templates', async () => {
+      const mockTemplateData = {
+        title: 'Geopolitik Itu **BUKAN Cuma Perang Agama!**',
+        subtitle: 'Banyak yang Masih Salah Paham',
+        coverImageUrl: 'https://mock-s3.pelita.tech/cover.jpg',
+        source_name: 'Foreign Policy',
+        source_url: 'https://foreignpolicy.com/geopolitics-analysis',
+        slides: [
+          {
+            type: 'news',
+            title: 'Apa sih sebenarnya **geopolitik?**',
+            text: 'Singkatnya, geopolitik adalah cara pandang terhadap **wilayah dan sumber daya**.',
+          },
+          {
+            type: 'opinion',
+            title: 'Perebutan **Akses Strategis**',
+            text: 'Negara-negara besar bergerak demi **mengamankan jalur logistik global**.',
+          },
+        ],
+      };
+
+      const mockSettings = {
+        logoImageUrl: 'https://mock-s3.pelita.tech/logo.png',
+      };
+
+      vi.mocked(media.generateMedia).mockResolvedValueOnce([
+        'https://renderer.pelita.tech/cover.png',
+        'https://renderer.pelita.tech/slide-1.png',
+        'https://renderer.pelita.tech/slide-2.png',
+        'https://renderer.pelita.tech/source-qr.png',
+      ]);
+
+      const result = await generateCarouselAnalysisMedia(mockTemplateData, mockSettings);
+
+      expect(media.generateMedia).toHaveBeenCalledWith(
+        '/render/image/aa.geopolitik/carousel_analysis',
+        expect.objectContaining({
+          viewport: { width: 1080, height: 1350 },
+          pages: expect.arrayContaining([
+            expect.objectContaining({
+              file: 'cover',
+              context: expect.objectContaining({
+                cover_image: 'https://mock-s3.pelita.tech/cover.jpg',
+                subtitle: 'Banyak yang Masih Salah Paham',
+              }),
+            }),
+            expect.objectContaining({
+              file: 'slide',
+              context: expect.objectContaining({
+                cover_image: 'https://mock-s3.pelita.tech/cover.jpg',
+              }),
+            }),
+            expect.objectContaining({
+              file: 'source_qr',
+              context: expect.objectContaining({
+                source_name: 'Foreign Policy',
+                source_domain: 'foreignpolicy.com',
+              }),
+            }),
+          ]),
+        })
+      );
+
+      expect(result).toHaveLength(4);
+      expect(result[0].url).toBe('https://renderer.pelita.tech/cover.png');
     });
   });
 });

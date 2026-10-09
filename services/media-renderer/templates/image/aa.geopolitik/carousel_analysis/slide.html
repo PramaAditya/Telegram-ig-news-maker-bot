@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1080, height=1350, initial-scale=1.0">
+  <title>Slide - AA Geopolitik</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alumni+Sans:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Bebas+Neue&family=Chivo+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 1080px;
+      height: 1350px;
+      background-color: #000000;
+      color: #ffffff;
+      overflow: hidden;
+      position: relative;
+    }
+    .font-bebas {
+      font-family: 'Bebas Neue', sans-serif;
+    }
+    .font-alumni {
+      font-family: 'Alumni Sans', sans-serif;
+    }
+    .font-chivo {
+      font-family: 'Chivo Mono', monospace;
+    }
+    .slide-gradient {
+      background: linear-gradient(to top, #000000 0%, #000000 39%, rgba(0, 0, 0, 0) 100%);
+    }
+    .slide-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 96px;
+      line-height: 89px;
+      color: #ffffff;
+    }
+    .slide-title strong,
+    .slide-title b,
+    .slide-title .highlight {
+      color: #f59e0b; /* text-amber-500 */
+      font-weight: 400;
+      font-style: normal;
+    }
+    .slide-body {
+      font-family: 'Alumni Sans', sans-serif;
+      font-size: 60px;
+      line-height: 1.15;
+      color: #ffffff;
+    }
+    .slide-body strong,
+    .slide-body b {
+      font-weight: 600;
+      color: #ffffff;
+    }
+    .slide-body p {
+      margin: 0;
+    }
+    .slide-body p:not(:last-child) {
+      margin-bottom: 20px;
+    }
+    .logo-container {
+      position: absolute;
+      top: 60px;
+      left: 73px;
+      z-index: 10;
+    }
+    .logo {
+      max-height: 60px;
+      max-width: 240px;
+      object-fit: contain;
+    }
+    .slide-counter {
+      position: absolute;
+      top: 65px;
+      right: 73px;
+      z-index: 10;
+      font-family: 'Chivo Mono', monospace;
+      font-size: 22px;
+      color: #9ca3af;
+      letter-spacing: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="w-[1080px] h-[1350px] relative bg-black overflow-hidden">
+    {{#if logo}}
+    <div class="logo-container">
+      <img src="{{logo}}" class="logo" alt="Logo" />
+    </div>
+    {{/if}}
+
+    {{#if slide_number}}
+    <div class="slide-counter">
+      {{slide_number}}
+    </div>
+    {{/if}}
+
+    <img 
+      class="w-[1080px] h-[1350px] left-0 top-[-174px] absolute object-cover" 
+      src="{{#if slide_image}}{{slide_image}}{{else if cover_image}}{{cover_image}}{{else}}https://placehold.co/1080x1350{{/if}}" 
+      alt="Slide Background" 
+    />
+
+    <div class="w-[1080px] h-[810px] left-0 top-[540px] absolute slide-gradient"></div>
+
+    <div class="w-[934px] left-[73px] top-[569px] absolute inline-flex flex-col justify-start items-start gap-5">
+      {{#if title}}
+      <div class="self-stretch justify-start slide-title">
+        {{{title}}}
+      </div>
+      {{/if}}
+
+      <div class="self-stretch justify-start slide-body">
+        {{{text}}}
+      </div>
+    </div>
+  </div>
+</body>
+</html>
