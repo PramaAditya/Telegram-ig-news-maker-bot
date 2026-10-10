@@ -86,16 +86,6 @@
       max-width: 240px;
       object-fit: contain;
     }
-    .slide-counter {
-      position: absolute;
-      top: 65px;
-      right: 73px;
-      z-index: 10;
-      font-family: 'Chivo Mono', monospace;
-      font-size: 22px;
-      color: #9ca3af;
-      letter-spacing: 2px;
-    }
   </style>
 </head>
 <body>
@@ -106,11 +96,6 @@
     </div>
     {{/if}}
 
-    {{#if slide_number}}
-    <div class="slide-counter">
-      {{slide_number}}
-    </div>
-    {{/if}}
 
     <img 
       class="w-[1080px] h-[1350px] left-0 top-[-174px] absolute object-cover" 

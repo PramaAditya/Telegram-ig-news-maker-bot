@@ -153,7 +153,6 @@ export async function generateCarouselAnalysisMedia(templateData: any, settings:
     }
   });
 
-  const totalSlides = templateData.slides?.length || 0;
   if (templateData.slides && Array.isArray(templateData.slides)) {
     templateData.slides.forEach((slide: any, index: number) => {
       if (slide && typeof slide === 'object' && (slide.type === 'image' || (!slide.type && slide.imageUrl))) {
@@ -174,8 +173,7 @@ export async function generateCarouselAnalysisMedia(templateData: any, settings:
             cover_image: templateData.coverImageUrl,
             slide_image: slide?.slide_image || templateData.coverImageUrl,
             title: rawTitle,
-            text: marked.parse(rawText),
-            slide_number: `${index + 1}/${totalSlides}`
+            text: marked.parse(rawText)
           }
         });
       }
