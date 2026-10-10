@@ -43,9 +43,8 @@ async function main() {
   });
 
   const slideHtmlReal = compileSlide({
-    title: 'Apa sih sebenarnya <strong>geopolitik?</strong>',
-    text: 'Singkatnya, geopolitik adalah sebuah cara pandang untuk melihat <strong>hubungan antara wilayah (teritori), sumber daya, dan akses strategis</strong>.<br/>Konsep ini melihat <strong>secara realistis</strong> bagaimana negara-negara bertindak demi <strong>mengamankan keuntungan di suatu wilayah.</strong>',
-    cover_image: realCoverImage,
+    title: 'APA SIH SEBENARNYA <strong>ANARKI GLOBAL?</strong>',
+    text: 'Bayangkan sebuah panggung dunia yang bekerja tanpa <strong>kepala sekolah atau polisi tertinggi</strong>.<br/>Hubungan antarnegara pada dasarnya bergerak dalam kondisi <strong>anarki internasional</strong>, tempat setiap aktor bertindak mandiri demi mengamankan <strong>teritori dan akses sumber daya strategis</strong>.<br/>Dalam kacamata realis, negara beroperasi lewat prinsip <strong>self-help</strong>. Setiap langkah diplomasi selalu dihitung berdasarkan kalkulasi untung-rugi keamanan.',
   });
 
   console.log('Launching Puppeteer...');

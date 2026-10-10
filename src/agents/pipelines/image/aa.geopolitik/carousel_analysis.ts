@@ -6,7 +6,7 @@ import { uploadToS3 } from '../../../../s3.js';
 import { generateMedia } from '../../../../media.js';
 import { insertQueueItem } from '../../../../db/queue.js';
 import { marked } from 'marked';
-import { imageEditor } from '../../../../utils/imageEditor/index.js';
+import { imageEditor, imageGenerator } from '../../../../utils/imageEditor/index.js';
 import { buildPromptContextFromInsights } from '../../../editorial/registry.js';
 
 export const carouselAnalysisTemplateConfig = {
@@ -243,13 +243,20 @@ export async function runCarouselAnalysisPipeline(
   }
 
   if (!coverImageUrl) {
-    console.log(`[Phase 2] Generating cover visual with prompt: "${contentParams.image_prompt}"...`);
+    const heroMode: '4K-Enhance' | 'Dark-Dramatize' = context.heroStyle === '4K-Enhance' ? '4K-Enhance' : 'Dark-Dramatize';
+    console.log(`[Phase 2] Generating cover visual with imageEditor (Mode: ${heroMode}, Prompt: "${contentParams.image_prompt}")...`);
     try {
-      const generatedBuffer = await imageEditor.generateImage(contentParams.image_prompt);
-      const uploadedUrl = await uploadToS3(generatedBuffer, 'image/jpeg', '.jpg');
-      if (uploadedUrl) coverImageUrl = uploadedUrl;
+      const coverResult = await imageEditor({
+        mode: heroMode,
+        image: imageMediaItems.length > 0 ? imageMediaItems[0].buffer : null,
+        scrapedImageUrl: context.scrapedImageUrl,
+        searchQuery: contentParams.title,
+        prompt: heroMode === '4K-Enhance' ? undefined : contentParams.image_prompt,
+        uploadToS3: true,
+      });
+      if (coverResult?.url) coverImageUrl = coverResult.url;
     } catch (imgErr) {
-      console.warn('Failed to generate image via imageEditor, falling back to placeholder:', imgErr);
+      console.warn('Failed to generate cover via imageEditor, falling back to placeholder:', imgErr);
       coverImageUrl = 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?q=80&w=1080&auto=format&fit=crop';
     }
   }
@@ -263,6 +270,34 @@ export async function runCarouselAnalysisPipeline(
       }
     }
   }
+  // Phase 2.5: Auto Generate Contextual Images for Each Slide
+  await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '🖼️ Menghasilkan visual latar untuk setiap slide...'));
+  console.log(`[Phase 2.5] Generating atmospheric visual backgrounds for ${contentParams.slides.length} slides...`);
+  
+  const slideImages: string[] = [];
+  for (let i = 0; i < contentParams.slides.length; i++) {
+    const slide = contentParams.slides[i];
+    if (extraImageUrls[i]) {
+      slideImages.push(extraImageUrls[i]);
+      continue;
+    }
+
+    const slidePrompt = slide.image_prompt || `${slide.title} geopolitical documentary photography, atmospheric dark lighting, high contrast chiaroscuro, cinematic void background`;
+    try {
+      console.log(`[Phase 2.5] Generating image for slide ${i + 1}: "${slidePrompt}"`);
+      const slideResult = await imageGenerator({
+        prompt: slidePrompt,
+        style: 'dramatic',
+        aspectRatio: '4:5',
+        uploadToS3: true,
+      });
+      slideImages.push(slideResult.url || coverImageUrl);
+    } catch (slideErr) {
+      console.warn(`[Phase 2.5] Failed to generate image for slide ${i + 1}, using cover fallback:`, slideErr);
+      slideImages.push(coverImageUrl);
+    }
+  }
+
 
   // Phase 3: Highlight Enhancement
   await withRetry(() => telegram.editMessageText(statusMsg.chat.id, statusMsg.message_id, undefined, '✨ Menambahkan highlight teks...'));
@@ -284,11 +319,12 @@ RULES:
     }
   };
 
-  const enhancedSlides = await Promise.all(contentParams.slides.map(async (slide) => {
+  const enhancedSlides = await Promise.all(contentParams.slides.map(async (slide, idx) => {
     const bolded = await highlightText(slide.text);
     return {
       ...slide,
-      text: censorText(bolded, bannedWords)
+      text: censorText(bolded, bannedWords),
+      slide_image: slideImages[idx] || coverImageUrl
     };
   }));
 
@@ -419,7 +455,8 @@ THE 8-SLIDE STORY ARC (Follow this exact progression):
   const slideSchema = z.object({
     type: z.literal('opinion').default('opinion'),
     title: z.string().describe('Slide heading in Bebas Neue. Bold words with <strong> for amber accent.'),
-    text: z.string().describe('Analytical body paragraph in Alumni Sans (exactly 2 short paragraphs separated by <br/>).')
+    text: z.string().describe('Analytical body paragraph in Alumni Sans (exactly 2 short paragraphs separated by <br/>).'),
+    image_prompt: z.string().optional().describe('Atmospheric visual prompt for this slide background, e.g. "chess board on world map", "satellite orbital view of earth", "newsroom broadcast screens", "middle east borders map", "thinker silhouette". NO TEXT.')
   });
 
   const schema = z.object({

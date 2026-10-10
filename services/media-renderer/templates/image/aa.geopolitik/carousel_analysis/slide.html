@@ -106,17 +106,51 @@
 
     <div class="w-[1080px] h-[810px] left-0 top-[540px] absolute slide-gradient"></div>
 
-    <div class="w-[934px] left-[73px] top-[569px] absolute inline-flex flex-col justify-start items-start gap-5">
+    <div id="slideContent" class="w-[934px] left-[73px] top-[569px] absolute flex flex-col justify-start items-start gap-4">
       {{#if title}}
-      <div class="self-stretch justify-start slide-title">
+      <div id="slideTitle" class="self-stretch justify-start slide-title">
         {{{title}}}
       </div>
       {{/if}}
 
-      <div class="self-stretch justify-start slide-body">
+      <div id="slideBody" class="self-stretch justify-start slide-body">
         {{{text}}}
       </div>
     </div>
   </div>
+
+  <script>
+    function fitText() {
+      const body = document.getElementById('slideBody');
+      const title = document.getElementById('slideTitle');
+      if (!body) return;
+
+      const maxHeight = 700;
+      let bodyFontSize = 60;
+
+      if (title && title.offsetHeight > 190) {
+        title.style.fontSize = '76px';
+        title.style.lineHeight = '72px';
+      }
+
+      const getTotalHeight = () => {
+        const tH = title ? title.offsetHeight : 0;
+        const bH = body.scrollHeight;
+        return tH + bH + 20;
+      };
+
+      while (getTotalHeight() > maxHeight && bodyFontSize > 24) {
+        bodyFontSize -= 1;
+        body.style.fontSize = bodyFontSize + 'px';
+        body.style.lineHeight = '1.16';
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', fitText);
+    } else {
+      fitText();
+    }
+  </script>
 </body>
 </html>
