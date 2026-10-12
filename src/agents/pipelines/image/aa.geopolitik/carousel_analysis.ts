@@ -422,6 +422,7 @@ CRITICAL TONE & GRAMMAR RULES:
 5. Each slide body text MUST contain EXACTLY 2 short paragraphs (1-2 punchy sentences each), separated by a single "<br/>".
 6. Bold around 20-30% of pivotal keywords, actor names, and strategic concepts using markdown: **keyword**.
 7. Slide titles MUST be punchy uppercase phrases (3-5 words), highlighting the key punchy word with <strong>...</strong> (this turns amber in the Bebas Neue font).
+8. PRESERVE DIRECT QUOTES VERBATIM: If the user input contains a direct quote (kutipan pidato/tokoh) in quotation marks ("..."), YOU MUST KEEP THE EXACT QUOTE in quotation marks ("..."). DO NOT paraphrase or convert direct quotes into indirect narrative summary! Let the raw words of the quote stand out.
 
 HOW TO STRUCTURE THE CAROUSEL:
 
@@ -445,7 +446,7 @@ If the user only provides a general topic, headline, or URL without a slide-by-s
   const slideSchema = z.object({
     type: z.literal('opinion').default('opinion'),
     title: z.string().describe('Slide heading in Bebas Neue. Bold words with <strong> for amber accent.'),
-    text: z.string().describe('Analytical body paragraph in Alumni Sans (exactly 2 short paragraphs separated by <br/>).'),
+    text: z.string().describe('Body paragraph in Alumni Sans (either 2 short paragraphs separated by <br/>, OR 1 direct quote block in quotes followed by 1 short commentary paragraph).'),
     image_prompt: z.string().optional().describe('Atmospheric visual prompt for this slide background, e.g. "chess board on world map", "satellite orbital view of earth", "newsroom broadcast screens", "middle east borders map", "thinker silhouette". NO TEXT.')
   });
 
