@@ -423,34 +423,24 @@ CRITICAL TONE & GRAMMAR RULES:
 6. Bold around 20-30% of pivotal keywords, actor names, and strategic concepts using markdown: **keyword**.
 7. Slide titles MUST be punchy uppercase phrases (3-5 words), highlighting the key punchy word with <strong>...</strong> (this turns amber in the Bebas Neue font).
 
-THE 8-SLIDE STORY ARC (Follow this exact progression):
-- Cover:
-  * title: Provocative main headline in proper Title Casing with <strong>...</strong> on the punchy word. Example: "Geopolitik Itu <strong>BUKAN Cuma Perang Agama!</strong>"
-  * subtitle: Punchy Alumni Sans subtitle framing the angle or misconception. Example: "Banyak yang Masih Salah Paham"
-- Slide 1 (opinion - Landasan Konseptual / Definisi):
-  * title: Exploratory opening question, e.g. "APA SIH SEBENARNYA <strong>GEOPOLITIK?</strong>"
-  * text: Paragraf 1: Definisi operasional membumi (hubungan wilayah/teritori, sumber daya, dan akses strategis). <br/> Paragraf 2: Cara pandang realistis bagaimana negara bertindak mengamankan keuntungan.
-- Slide 2 (opinion - De-mistifikasi / Meluruskan Anggapan Dangkal):
-  * title: Rejecting shallow perception, e.g. "BUKAN SEKADAR <strong>GEOGRAFI BIASA</strong>"
-  * text: Paragraf 1: Menolak anggapan bahwa ini cuma soal letak gunung/benua. <br/> Paragraf 2: Ruang dan geografi yang terus diatur, diubah, dan dikuasai oleh aktivitas manusia/negara demi tujuan tertentu.
-- Slide 3 (opinion - Cara Kerja Dunia & Media / Reduksionisme):
-  * title: Pattern of media simplification, e.g. "KEBIASAAN <strong>MENYEDERHANAKAN DUNIA</strong>"
-  * text: Paragraf 1: Kompleksitas politik global yang disederhanakan media memakai label geografis/kategoris. <br/> Paragraf 2: Media membagi kawan vs lawan agar dunia terlihat mudah dipahami.
-- Slide 4 (opinion - Fenomena Oversimplifikasi Publik):
-  * title: Public trap, e.g. "FENOMENA <strong>OVERSIMPLIFIKASI DI SEKITAR KITA</strong>"
-  * text: Paragraf 1: Mengaitkan ke kebiasaan di sekitar kita ("Nah, kebiasaan inilah..."). <br/> Paragraf 2: Terjebak mereduksi isu rumit jadi sekadar isu tunggal/agama, menciptakan pandangan hitam-putih yang mengabaikan kenyataan.
-- Slide 5 (opinion - Studi Kasus Empiris & Aktor Lapangan):
-  * title: Real case study name, e.g. "KASUS <strong>SURIAH DAN YAMAN</strong>"
-  * text: Paragraf 1: Contoh nyata konflik dan bagaimana sering keliru dibingkai semata perseteruan sentimen. <br/> Paragraf 2: Aktor-aktor riil yang terlibat, aliansi, dan motif perebutan pengaruh nyata di balik layar.
-- Slide 6 (opinion - Kritik Teori Populer / Bedah Narasi):
-  * title: Critiquing popular theories, e.g. "BAHAYA TEORI <strong>'BENTURAN PERADABAN'</strong>"
-  * text: Paragraf 1: Bahaya mengabaikan sejarah, kolonialisme masa lalu, dan perebutan energi. <br/> Paragraf 2: Kritik para ahli terhadap simplifikasi yang menjadikan satu faktor sebagai kambing hitam.
-- Slide 7 (opinion - Geopolitik Populer & Budaya Konsumsi):
-  * title: Pop-culture presence, e.g. "GEOPOLITIK ADA DI <strong>MEDIA YANG KITA KONSUMSI</strong>"
-  * text: Paragraf 1: Pengenalan konsep "geopolitik populer" yang membentuk persepsi publik. <br/> Paragraf 2: Film, internet, medsos, dan berita yang secara tidak sadar menyetir cara pandang kita terhadap wilayah dan identitasnya.
-- Slide 8 (opinion - Refleksi & Urgensi Berpikir Kritis):
-  * title: The closing punchline question, e.g. "KENAPA KITA <strong>HARUS PAHAM?</strong>"
-  * text: Paragraf 1: Penegasan pentingnya kemampuan berpikir geopolitik. <br/> Paragraf 2: Output untuk pembaca: menjadi warga yang kritis, bijak, dan tidak mudah terprovokasi oleh informasi yang menyederhanakan kerumitan dunia.
+HOW TO STRUCTURE THE CAROUSEL:
+
+[RULE 1: EXPLICIT USER INPUT / DRAFT BYPASS]
+If the user's input already provides specific points, a raw draft, slide-by-slide text (e.g. "Slide 1: ... Slide 2: ..."), specific analogies (e.g. "ruang kelas tanpa guru", quotes, specific conflicts, or custom arguments):
+-> DO NOT force the default generic story arc below!
+-> STRICTLY prioritize and preserve the user's core ideas, analogies, quotes, and specific case studies.
+-> Your job is simply to rewrite, polish, and format their specific thoughts into exactly 1 Cover + 8 Body Slides following the required styling (Bebas Neue uppercase titles with <strong>...</strong> amber highlights, 2 short paragraphs per slide separated by "<br/>", markdown **bold** highlights, and tailored visual image prompts).
+
+[RULE 2: AUTONOMOUS TOPIC-ONLY MODE]
+If the user only provides a general topic, headline, or URL without a slide-by-slide draft:
+-> Create a dynamic, engaging 8-slide geopolitical essay arc tailored uniquely to that subject.
+-> DO NOT be formulaic or repetitive across different posts. Adapt the flow to the specific topic:
+   * Cover: Provocative title with <strong>...</strong> on the punchy word + intrigue subtitle.
+   * Slide 1-2: Hook & Reframe / The Deconstruction (question the mainstream illusion or lay out the raw premise).
+   * Slide 3-4: The Core Mechanism / Interests (unveil the real material interests: geographic chokepoints, supply chains, energy, or sovereignty).
+   * Slide 5-6: Empirical Case / Power Dynamics (concrete countries, proxy networks, or strategic trade-offs).
+   * Slide 7-8: Critical Implication & The Reality Check (why it matters to the reader, and a punchy thought-provoking takeaway).
+-> Vary your title patterns and transitions so every carousel feels fresh, original, and deeply insightful.
 `;
   const slideSchema = z.object({
     type: z.literal('opinion').default('opinion'),
