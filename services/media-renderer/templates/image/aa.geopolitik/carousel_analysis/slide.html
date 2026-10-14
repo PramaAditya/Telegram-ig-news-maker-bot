@@ -39,7 +39,7 @@
     .slide-title {
       font-family: 'Bebas Neue', sans-serif;
       font-size: 96px;
-      line-height: 89px;
+      line-height: 0.93;
       color: #ffffff;
       text-shadow: 0px 4px 20px rgba(0, 0, 0, 0.95);
     }
@@ -106,50 +106,73 @@
 
     <div class="w-[1080px] h-[810px] left-0 top-[540px] absolute slide-gradient"></div>
 
-    <div id="slideContent" class="w-[934px] left-[73px] top-[569px] absolute flex flex-col justify-start items-start gap-4">
+    <div id="slideContent" class="w-[934px] h-[700px] left-[73px] top-[569px] absolute flex flex-col justify-start items-start gap-5">
       {{#if title}}
-      <div id="slideTitle" class="self-stretch justify-start slide-title">
+      <div id="slideTitle" class="self-stretch justify-start slide-title shrink-0">
         {{{title}}}
       </div>
       {{/if}}
 
-      <div id="slideBody" class="self-stretch justify-start slide-body">
-        {{{text}}}
+      <div id="slideBodyWrapper" class="self-stretch flex-1 min-h-0 w-full relative overflow-hidden">
+        <div id="slideBody" class="w-full slide-body">
+          {{{text}}}
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    function fitText() {
-      const body = document.getElementById('slideBody');
-      const title = document.getElementById('slideTitle');
-      if (!body) return;
+    function binarySearchFontSize(el, maxWidth, maxHeight, minSize, maxSize, lineHeightRatio) {
+      let low = minSize;
+      let high = maxSize;
+      let best = minSize;
 
-      const maxHeight = 700;
-      let bodyFontSize = 60;
-
-      if (title && title.offsetHeight > 190) {
-        title.style.fontSize = '76px';
-        title.style.lineHeight = '72px';
+      while (high - low >= 0.5) {
+        const mid = (low + high) / 2;
+        el.style.fontSize = mid + 'px';
+        if (lineHeightRatio) {
+          el.style.lineHeight = String(lineHeightRatio);
+        }
+        if (el.scrollHeight <= maxHeight && el.scrollWidth <= maxWidth) {
+          best = mid;
+          low = mid;
+        } else {
+          high = mid;
+        }
       }
 
-      const getTotalHeight = () => {
-        const tH = title ? title.offsetHeight : 0;
-        const bH = body.scrollHeight;
-        return tH + bH + 20;
-      };
-
-      while (getTotalHeight() > maxHeight && bodyFontSize > 24) {
-        bodyFontSize -= 1;
-        body.style.fontSize = bodyFontSize + 'px';
-        body.style.lineHeight = '1.16';
-      }
+      el.style.fontSize = best.toFixed(1) + 'px';
+      return best;
     }
 
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', fitText);
-    } else {
-      fitText();
+    function fitText() {
+      const container = document.getElementById('slideContent');
+      const title = document.getElementById('slideTitle');
+      const bodyWrapper = document.getElementById('slideBodyWrapper');
+      const body = document.getElementById('slideBody');
+      if (!container || !body || !bodyWrapper) return;
+
+      const maxWidth = container.clientWidth;
+      const totalBoundaryHeight = container.clientHeight; // 700px
+
+      // 1. Fit Title within max 2 lines (~185px height) between [64px, 104px]
+      if (title) {
+        binarySearchFontSize(title, maxWidth, 185, 64, 104, 0.93);
+      }
+
+      // 2. Calculate remaining boundary height for Body and fill it to the max between [28px, 76px]
+      const gap = 20; // gap-5 = 20px
+      const titleHeight = title ? title.offsetHeight + gap : 0;
+      const availableBodyHeight = Math.max(200, totalBoundaryHeight - titleHeight);
+      bodyWrapper.style.height = availableBodyHeight + 'px';
+
+      binarySearchFontSize(body, maxWidth, availableBodyHeight, 28, 76, 1.15);
+    }
+
+    window.addEventListener('DOMContentLoaded', fitText);
+    window.addEventListener('load', fitText);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fitText);
     }
   </script>
 </body>
